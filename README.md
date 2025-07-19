@@ -1,2 +1,5 @@
 이동 : 방향키 <br>
-게임 실행 : PYTHONIOENCODING=utf-8 python3 /home/dogsinatas/python_project/dungeon/Start.py
+게임 실행 : PYTHONIOENCODING=utf-8 python3 Start.py<br>
+
+한글 메시지가 제대로 출력이 안되네요<br>
+바이브 코딩으로 만든 심시풀이 땅콩 던전 크롤 게임입니다. <br>
