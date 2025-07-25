@@ -1,12 +1,15 @@
 # data_manager.py
 
 import os
+import re
 
 # 아이템 데이터 파일 경로
 ITEM_DATA_FILE = os.path.join(os.path.dirname(__file__), "items.txt")
+# 몬스터 데이터 파일 경로 추가
+MONSTER_DATA_FILE = os.path.join(os.path.dirname(__file__), "monster_data.txt")
 
 class ItemDefinition:
-    """아이템의 정의(템플릿)를 저장하는 클래스."""
+    """아���템의 정의(템플릿)를 저장하는 클래스."""
     def __init__(self, item_id, name, usage_type, effect_type, value):
         self.id = item_id
         self.name = name
@@ -17,7 +20,22 @@ class ItemDefinition:
     def __repr__(self):
         return f"ItemDefinition(id={self.id}, name={self.name}, usage_type={self.usage_type}, effect_type={self.effect_type}, value={self.value})"
 
+class MonsterDefinition:
+    """몬스터의 정의(템플릿)를 저장하는 클래스."""
+    def __init__(self, monster_id, name, hp, attack, defense, level, exp_given):
+        self.id = monster_id
+        self.name = name
+        self.hp = hp
+        self.attack = attack
+        self.defense = defense
+        self.level = level
+        self.exp_given = exp_given
+
+    def __repr__(self):
+        return f"MonsterDefinition(id={self.id}, name={self.name}, hp={self.hp}, attack={self.attack}, defense={self.defense}, level={self.level}, exp_given={self.exp_given})"
+
 _item_definitions = {} # 아이템 정의를 저장할 전역 딕셔너리
+_monster_definitions = {} # 몬스터 정의를 저장할 전역 딕셔너리
 
 def load_item_definitions(ui_instance=None):
     """items.txt 파일에서 아이템 정의를 로드합니다."""
@@ -70,7 +88,6 @@ def get_item_definition(item_id):
         return _item_definitions[item_id]
 
     # 동적 열쇠 ID 형식인지 확인 (예: "1F_Key", "12F_Key")
-    import re
     match = re.match(r'(\d+)F_Key', item_id)
     if match:
         level = int(match.group(1))
@@ -86,10 +103,22 @@ def get_item_definition(item_id):
     # 어디에도 해당하지 않으면 None을 반환
     return None
 
+def get_monster_definition(monster_id):
+    """지정된 ID의 몬스터 정의를 반환합니다."""
+    if not _monster_definitions:
+        load_monster_definitions()
+    return _monster_definitions.get(monster_id)
+
 # 스크립트 실행 시 자동으로 아이템 정의 로드
 if __name__ == "__main__":
     definitions = load_item_definitions()
     print("로드된 아이템 정의:")
     for item_id, item_def in definitions.items():
         print(item_def)
+    
+    monster_defs = load_monster_definitions()
+    print("\n로드된 몬스터 정의:")
+    for monster_id, monster_def in monster_defs.items():
+        print(monster_def)
+
 

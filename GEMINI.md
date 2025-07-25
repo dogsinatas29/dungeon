@@ -1,0 +1,94 @@
+# Gemini 프로젝트: 던전 크롤러
+
+이 파일은 Gemini AI 에이전트가 이 파이썬 기반 던전 크롤러 게임 개발을 효과적으로 지원하기 위한 지침을 제공합니다.
+
+## 프로젝트 개요
+
+이것은 클래식한 터미널 기반 로그라이크 게임입니다. 주 진입점은 `dungeon/Start.py`이며, 게임 로직은 `dungeon/` 디렉토리 내의 여러 모듈(player, map, combat, UI 등)으로 분리되어 있습니다.
+
+## 주요 파일
+
+-   `dungeon/Start.py`: 주 진입점, 게임 시작 및 메인 메뉴 처리.
+-   `dungeon/game.py`: 메인 게임 루프 포함.
+-   `dungeon/player.py`: `Player` 클래스 정의.
+-   `dungeon/dungeon_map.py`: `DungeonMap` 클래스 정의.
+-   `dungeon/ui.py`: ANSI 이스케이프 코드를 사용하여 모든 터미널 UI 렌더링 처리.
+-   `dungeon/data_manager.py`: 텍스트 파일에서 아이템과 같은 게임 데이터 로드.
+-   `game_data/`: 게임 저장 파일(JSON)이 저장되는 디렉토리.
+
+## 개발 가이드라인
+
+-   **코딩 스타일**: 파이썬 코드에 대해 PEP 8 표준을 준수합니다. 가능하다면 `black`과 같은 자동 포맷터를 사용하세요.
+-   **의존성**: 이 프로젝트는 `readchar` 라이브러리를 사용합니다. 현재 다른 외부 라이브러리는 필요하지 않습니다.
+-   **UI**: 모든 UI 구성 요소는 `dungeon/ui.py`에서 렌더링됩니다. 게임의 외형 변경은 해당 파일에서 이루어져야 합니다. UI는 화면 깜빡임을 최소화하기 위해 더블 버퍼링 기술을 사용합니다.
+-   **게임 데이터**: 플레이어 및 맵 데이터는 `game_data/` 디렉토리에 JSON 파일로 저장됩니다. 저장 파일과의 하위 호환성을 유지하기 위해 `player.py` 및 `dungeon_map.py`의 `to_dict` 및 `from_dict` 메서드를 수정할 때 주의해야 합니다.
+
+## 일반적인 명령어
+
+-   **게임 실행**:
+    ```bash
+    python3 /home/dogsinatas/python_project/dungeon/Start.py
+    ```
+-   **저장 데이터 삭제**:
+    ```bash
+    rm -rf /home/dogsinatas/python_project/dungeon/game_data/*
+    ```
+
+## 에이전트 지침
+
+-   코드를 수정할 때 항상 다른 모듈 간의 관심사 분리를 유지하세요.
+-   UI를 변경하기 전에 `dungeon/ui.py`를 검토하여 더블 버퍼링 및 렌더링 로직을 이해하세요.
+-   새로운 게임 기능(예: 새 아이템, 스킬)을 추가할 때 데이터 로딩(`data_manager.py`) 및 게임 루프(`game.py`)와 올바르게 통합되었는지 확인하세요.
+
+## 에이전트 상호작용 규칙
+-   모든 대화는 한글로 진행됩니다.
+-   사용자가 "gemini.md"라고 입력하면 "GEMINI.md"로 인식합니다.
+
+## 게임 데이터 정의
+
+### 스탯 (Stats)
+-   **HP (체력)**: 캐릭터/몬스터의 생명력. 0이 되면 사망합니다.
+-   **MP (마력)**: 스킬 사용에 필요한 자원.
+-   **ATT (공격력)**: 공격 시 상대에게 입히는 데미지에 영향을 줍니다.
+-   **DEF (방어력)**: 상대의 공격으로부터 받는 데미지를 감소시킵니다.
+
+### 레벨 (LV) 및 경험치 (EXP)
+-   **LV (레벨)**: 캐릭터/몬스터의 전반적인 강함을 나타냅니다. 레벨이 오르면 HP, MP, ATT, DEF 스탯에 보정치가 적용됩니다.
+-   **EXP (경험치)**: 몬스터를 처치하면 획득합니다. 일정량의 경험치를 모으면 레벨업을 합니다.
+
+### 몬스터 표시 및 상호작용
+-   **맵 표시**: 몬스터의 이름 첫 글자(예: '오크'는 '오')로 맵에 표시됩니다.
+-   **접근 메시지**: 플레이어가 몬스터로부터 3칸 이내로 접근하면 메시지 로그에 "[몬스터 이름](LV)을(를) 만났습니다."와 같은 메시지가 표시됩니다.
+
+## 최근 변경 사항 요약
+
+### 1. `GEMINI.md` 업데이트
+-   **게임 데이터 정의 추가**: 캐릭터 및 몬스터의 스탯(HP, MP, ATT, DEF), 레벨(LV) 및 경험치(EXP)에 대한 정의를 추가했습니다.
+-   **몬스터 표시 및 상호작용 규칙 추가**: 몬스터가 맵에 이름의 첫 글자로 표시되며, 플레이어가 3칸 이내로 접근 시 메시지 로그에 몬스터 정보가 표시되는 규칙을 추가했습니다.
+
+### 2. `monster_data.txt` 파일 생성
+-   몬스터의 ID, 이름, HP, ATT, DEF, LV, EXP_GIVEN을 정의하는 `monster_data.txt` 파일을 새로 생성했습니다. (예: `GOBLIN,고블린,20,5,1,1,10`)
+
+### 3. `data_manager.py` 수정
+-   `MONSTER_DATA_FILE` 경로를 추가했습니다.
+-   `MonsterDefinition` 클래스를 새로 정의하여 몬스터 데이터를 구조화했습니다.
+-   `load_monster_definitions` 함수를 추가하여 `monster_data.txt` 파일에서 몬스터 정의를 로드하도록 했습니다.
+-   `get_monster_definition` 함수를 추가하여 특정 ID의 몬스터 정의를 반환하도록 했습니다.
+
+### 4. `monster.py` 수정
+-   `data_manager` 모듈을 임포트했습니다.
+-   `Monster` 클래스의 `__init__` 메서드를 수정하여 `monster_id`를 인자로 받을 수 있도록 했습니다. `monster_id`가 제공되면 `data_manager.get_monster_definition`을 통해 몬스터의 스탯(HP, ATT, DEF, LV, EXP_GIVEN)을 로드하도록 변경했습니다.
+-   `to_dict` 및 `from_dict` 메서드에 `exp_given` 속성을 추가하여 몬스터 데이터 저장 및 로드 시 경험치 정보를 포함하도록 했습니다.
+
+### 5. `player.py` 수정
+-   `Player` 클래스에 `exp` (현재 경험치) 및 `exp_to_next_level` (다음 레벨업에 필요한 경험치) 속성을 추가했습니다.
+-   `to_dict` 및 `from_dict` 메서드에 `exp`와 `exp_to_next_level` 속성을 추가하여 플레이어 데이터 저장 및 로드 시 경험치 정보를 포함하도록 했습니다.
+
+### 6. `dungeon_map.py` 수정
+-   `data_manager` 모듈을 임포트했습니다.
+-   `place_monsters` 함수에 `monster_definitions` 인자를 추가하고, 이 정의를 사용하여 맵에 몬스터를 배치할 때 무작위로 몬스터 ID를 선택하여 `Monster` 객체를 생성하도록 변경했습니다.
+
+### 7. `game.py` 수정
+-   `run_game` 함수 시작 부분에서 `data_manager.load_monster_definitions`를 호출하여 몬스터 정의를 로드하도록 했습니다.
+-   `get_or_create_map` 헬퍼 함수에 `monster_defs` 인자를 추가하고, 맵 생성 시 `dungeon_map.place_monsters` 함수에 이 정의를 전달하도록 했습니다.
+-   플레이어 이동 후, 주변 3칸 이내에 몬스터가 있을 경우 메시지 로그에 `"[몬스터 이름](LV:레벨)을(를) 만났습니다."` 형식의 메시지를 출력하는 로직을 추가했습니다.
