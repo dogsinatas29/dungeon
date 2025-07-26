@@ -58,9 +58,7 @@ def create_new_game(ui_instance):
     
     sys.stdout.write(ANSI.cursor_to(prompt_y - 2, prompt_x) + "=== 새 게임 시작 ===")
     
-    # name = get_line_input(ui_instance, prompt_y, prompt_x, "플레이어 이름을 입력하세요: ")
-    name = "test"
-    sys.stdout.write(ANSI.cursor_to(prompt_y, prompt_x) + f"플레이어 이름을 test                ")
+    name = get_line_input(ui_instance, prompt_y, prompt_x, "플레이어 이름을 입력하세요: ")
 
 
     if not name:
@@ -143,8 +141,7 @@ def main_menu():
         sys.stdout.write(ANSI.cursor_to(start_y + len(menu_items) + 1, ui.terminal_width // 2 - len(prompt) // 2) + prompt)
         sys.stdout.flush()
         
-        # choice = readchar.readkey()
-        choice = '1'
+        choice = readchar.readkey()
         
         if choice == '1':
             start_game(ui, new_game=True)
