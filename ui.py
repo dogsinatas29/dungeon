@@ -209,25 +209,44 @@ class UI:
         # 1. 맵 그리기
         if player and dungeon_map:
             for y_vp in range(self.MAP_VIEWPORT_HEIGHT):
-                # 각 줄의 시작 위치로 커서 이동
-                output_buffer.append(f"\033[{self.map_viewport_y_start + y_vp + 1};{self.map_viewport_x_start + 1}H")
-                for x_vp in range(self.MAP_VIEWPORT_WIDTH):
+                line_buffer = []
+                current_width = 0
+                x_vp = 0
+                while current_width < self.MAP_VIEWPORT_WIDTH and x_vp < self.MAP_VIEWPORT_WIDTH:
                     map_x, map_y = camera_x + x_vp, camera_y + y_vp
                     
                     char_code = ' '
                     if 0 <= map_x < dungeon_map.width and 0 <= map_y < dungeon_map.height:
                         char_code = dungeon_map.get_tile_for_display(map_x, map_y, player.x, player.y)
                     
+                    char_width = get_str_width(char_code)
+                    
+                    # 뷰포트 너비를 초과하면 나머지 공간을 공백으로 채움
+                    if current_width + char_width > self.MAP_VIEWPORT_WIDTH:
+                        line_buffer.append(' ' * (self.MAP_VIEWPORT_WIDTH - current_width))
+                        current_width = self.MAP_VIEWPORT_WIDTH
+                        continue
+
                     # UI 모듈에서 색상 결정
                     color = ANSI.WHITE
                     if char_code == '@': color = ANSI.CYAN
-                    elif char_code == 'M': color = ANSI.YELLOW
+                    elif char_code in ['고', '슬']: color = ANSI.YELLOW # 몬스터 이름 첫 글자
                     elif char_code == 'S': color = ANSI.CYAN
                     elif char_code == 'E' or char_code == 'X': color = ANSI.MAGENTA
                     elif char_code == 'R': color = ANSI.GREEN
                     elif char_code == 'I': color = ANSI.RED
                     
-                    output_buffer.append(f"{color}{char_code}{ANSI.RESET}")
+                    line_buffer.append(f"{color}{char_code}{ANSI.RESET}")
+                    current_width += char_width
+                    x_vp += 1
+                
+                # 남은 공간이 있다면 공백으로 채움
+                if current_width < self.MAP_VIEWPORT_WIDTH:
+                    line_buffer.append(' ' * (self.MAP_VIEWPORT_WIDTH - current_width))
+
+                # 각 줄의 시작 위치로 커서 이동 후 한 줄 출력
+                output_buffer.append(f"\033[{self.map_viewport_y_start + y_vp + 1};{self.map_viewport_x_start + 1}H")
+                output_buffer.append("".join(line_buffer))
 
         # 2. 상태바 그리기
         if player:
