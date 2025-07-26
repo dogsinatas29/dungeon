@@ -141,19 +141,21 @@ class DungeonMap:
     def move_player(self, dx, dy):
         new_x, new_y = self.player_x + dx, self.player_y + dy
 
-        # Check for monster at the target location
+        # 1. 이동하려는 타일이 이동 가능한지 먼저 확인합니다.
+        if not self.can_move(dx, dy):
+            return False, "이동할 수 없습니다."
+
+        # 2. 이동 가능한 타일이라면, 해당 위치에 몬스터가 있는지 확인합니다.
         for monster in self.monsters:
             if not monster.dead and monster.x == new_x and monster.y == new_y:
-                # Don't move, return the monster to initiate combat
+                # 몬스터가 있으면 이동하지 않고, 전투를 위해 몬스터 객체를 반환합니다.
                 return False, monster
 
-        if self.can_move(dx, dy):
-            self.player_x += dx
-            self.player_y += dy
-            self.reveal_tiles(self.player_x, self.player_y)
-            return True, "이동했습니다."
-        
-        return False, "이동할 수 없습니다."
+        # 3. 이동 가능하고 몬스터도 없으면, 플레이어를 이동시킵니다.
+        self.player_x += dx
+        self.player_y += dy
+        self.reveal_tiles(self.player_x, self.player_y)
+        return True, "이동했습니다."
 
     def get_tile(self, x, y):
         if (x, y) in self.room_entrances: return ROOM_ENTRANCE
