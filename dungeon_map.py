@@ -136,7 +136,7 @@ class DungeonMap:
         if not (0 <= new_x < self.width and 0 <= new_y < self.height):
             return False
         target_tile = self.get_tile(new_x, new_y)
-        return target_tile in [FLOOR, ITEM_TILE, EXIT_NORMAL, EXIT_LOCKED, ROOM_ENTRANCE]
+        return target_tile in [FLOOR, ITEM_TILE, EXIT_NORMAL, EXIT_LOCKED, ROOM_ENTRANCE, START]
 
     def move_player(self, dx, dy):
         new_x, new_y = self.player_x + dx, self.player_y + dy
@@ -159,6 +159,7 @@ class DungeonMap:
         if (x, y) in self.room_entrances: return ROOM_ENTRANCE
         if (x, y) in self.items_on_map: return ITEM_TILE
         if (x, y) == (self.exit_x, self.exit_y): return self.exit_type
+        if (x, y) == (self.start_x, self.start_y): return START
         return self.map_data[y][x]
 
     def get_tile_for_display(self, x, y, player_x, player_y):
