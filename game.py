@@ -103,6 +103,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                 player_action_taken = True
                 ui_instance.add_message(f"{monster.name}과(와) 전투 시작!")
 
+                damage, is_critical = combat.calculate_damage(player, monster)
                 ui_instance.add_message(f"{player.name}의 공격!")
                 if is_critical:
                     ui_instance.add_message("💥치명타!💥")
@@ -114,9 +115,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                     ui_instance.add_message(f"{monster.name}을(를) 물리쳤습니다!")
                     # (Add EXP gain logic here later)
                 else:
-                    # Monster attacks player
                     damage, is_critical = combat.calculate_damage(monster, player)
-                    
                     ui_instance.add_message(f"{monster.name}의 공격!")
                     if is_critical:
                         ui_instance.add_message("💥치명타!💥")
