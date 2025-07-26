@@ -6,6 +6,9 @@
 
 이것은 클래식한 터미널 기반 로그라이크 게임입니다. 주 진입점은 `dungeon/Start.py`이며, 게임 로직은 `dungeon/` 디렉토리 내의 여러 모듈(player, map, combat, UI 등)으로 분리되어 있습니다.
 
+## Git 저장소
+-   https://github.com/dogsinatas29/dungeon
+
 ## 주요 파일
 
 -   `dungeon/Start.py`: 주 진입점, 게임 시작 및 메인 메뉴 처리.
