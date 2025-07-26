@@ -257,7 +257,8 @@ class UI:
             hp_bar = f"HP: {player.hp}/{player.max_hp}"
             mp_bar = f"MP: {player.mp}/{player.max_mp}"
             level_info = f"Lv: {player.level}"
-            status_text = pad_str_to_width(f"{hp_bar} | {mp_bar} | {level_info}", self.MAP_VIEWPORT_WIDTH)
+            exp_info = f"EXP: {player.exp}/{player.exp_to_next_level}"
+            status_text = pad_str_to_width(f"{hp_bar} | {mp_bar} | {level_info} | {exp_info}", self.MAP_VIEWPORT_WIDTH)
             output_buffer.append(f"\033[{self.status_bar_y_start + 1};{self.map_viewport_x_start + 1}H{status_text}")
 
             current_floor, current_room_index = player.dungeon_level

@@ -113,7 +113,14 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
 
                 if monster.dead:
                     ui_instance.add_message(f"{monster.name}을(를) 물리쳤습니다!")
-                    # (Add EXP gain logic here later)
+                    
+                    # 경험치 획득
+                    exp_gained = monster.exp_given + (monster.level * 2)
+                    ui_instance.add_message(f"{exp_gained}의 경험치를 획득했습니다!")
+                    
+                    leveled_up, level_up_message = player.gain_exp(exp_gained)
+                    if leveled_up:
+                        ui_instance.add_message(level_up_message)
                 else:
                     damage, is_critical = combat.calculate_damage(monster, player)
                     ui_instance.add_message(f"{monster.name}의 공격!")
