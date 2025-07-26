@@ -132,7 +132,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
         
         elif action == 'q':
             game_over_flag = True
-            ui_instance.add_message("게임을 종료합니다.")
+            ui_instance.add_message("게임을 저장하고 메인 메뉴로 돌아갑니다.")
         # (Other actions like skills, inventory...)
 
         # --- Monster Turn ---

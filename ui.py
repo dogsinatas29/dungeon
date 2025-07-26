@@ -231,6 +231,10 @@ class UI:
 
         # 2. 상태바 그리기
         if player:
+            # 단축키 정보 추가
+            key_info_text = pad_str_to_width("[q: 저장 후 종료]", self.MAP_VIEWPORT_WIDTH)
+            output_buffer.append(f"\033[{self.status_bar_y_start};{self.map_viewport_x_start + 1}H{key_info_text}")
+
             hp_bar = f"HP: {player.hp}/{player.max_hp}"
             mp_bar = f"MP: {player.mp}/{player.max_mp}"
             level_info = f"Lv: {player.level}"
