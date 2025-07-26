@@ -55,7 +55,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
     game_over_flag = False
     ui_instance.clear_screen()
     # (Initial UI setup)
-    readchar.readkey()
+    # readchar.readkey()
     ui_instance.clear_screen() 
 
     # --- Main Game Loop ---
@@ -82,7 +82,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
         elif action == readchar.key.RIGHT: dx, dy = 1, 0
 
         if dx != 0 or dy != 0:
-            moved, message = dungeon_map.move_player(dx, dy)
+            moved, result = dungeon_map.move_player(dx, dy) # result can be a message or a monster
             if moved:
                 player_action_taken = True
                 # 이동에 성공했을 때만 player 객체의 좌표를 동기화합니다.
@@ -96,7 +96,33 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                         if distance <= 3:
                             ui_instance.add_message(f"{monster.name}(LV:{monster.level})을(를) 만났습니다.")
 
-            ui_instance.add_message(message)
+            if isinstance(result, str): # It's a message
+                 ui_instance.add_message(result)
+            elif result is not None: # It's a monster, initiate combat
+                monster = result
+                player_action_taken = True
+                ui_instance.add_message(f"{monster.name}과(와) 전투 시작!")
+
+                ui_instance.add_message(f"{player.name}의 공격!")
+                if is_critical:
+                    ui_instance.add_message("💥치명타!💥")
+                
+                monster.take_damage(damage)
+                ui_instance.add_message(f"{monster.name}에게 {damage}의 데미지를 입혔습니다.")
+
+                if monster.dead:
+                    ui_instance.add_message(f"{monster.name}을(를) 물리쳤습니다!")
+                    # (Add EXP gain logic here later)
+                else:
+                    # Monster attacks player
+                    damage, is_critical = combat.calculate_damage(monster, player)
+                    
+                    ui_instance.add_message(f"{monster.name}의 공격!")
+                    if is_critical:
+                        ui_instance.add_message("💥치명타!💥")
+
+                    player.take_damage(damage)
+                    ui_instance.add_message(f"{player.name}에게 {damage}의 데미지를 입혔습니다.")
         
         elif action == 'f':
             # 디버그용 안개 토글 키
@@ -112,9 +138,60 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
 
         # --- Monster Turn ---
         if player_action_taken and player.is_alive():
-            # (Monster AI logic)
-            pass
+            for monster in dungeon_map.monsters:
+                if monster.dead:
+                    continue
 
+                action_taken_by_monster = False
+                distance_to_player = abs(monster.x - player.x) + abs(monster.y - player.y)
+
+                # 1. 도망 로직 (최우선)
+                if monster.move_type == 'COWARD' and monster.hp < monster.max_hp / 3:
+                    # 플레이어로부터 멀어지는 방향 계산
+                    mdx, mdy = 0, 0
+                    if player.x < monster.x: mdx = 1
+                    elif player.x > monster.x: mdx = -1
+                    if player.y < monster.y: mdy = 1
+                    elif player.y > monster.y: mdy = -1
+                    
+                    # 가장 멀어지는 방향으로 이동 시도
+                    if mdx != 0 and mdy != 0 and dungeon_map.is_walkable_for_monster(monster.x + mdx, monster.y + mdy):
+                        monster.x += mdx; monster.y += mdy; action_taken_by_monster = True
+                    elif mdx != 0 and dungeon_map.is_walkable_for_monster(monster.x + mdx, monster.y):
+                        monster.x += mdx; action_taken_by_monster = True
+                    elif mdy != 0 and dungeon_map.is_walkable_for_monster(monster.x, monster.y + mdy):
+                        monster.y += mdy; action_taken_by_monster = True
+
+                if action_taken_by_monster: continue
+
+                # 2. 추격 로직
+                is_hostile = monster.move_type == 'AGGRESSIVE' or monster.is_provoked
+                if is_hostile and distance_to_player <= 8:
+                    # 플레이어 방향으로 이동
+                    mdx, mdy = 0, 0
+                    if player.x < monster.x: mdx = -1
+                    elif player.x > monster.x: mdx = 1
+                    if player.y < monster.y: mdy = -1
+                    elif player.y > monster.y: mdy = 1
+
+                    if mdx != 0 and mdy != 0 and dungeon_map.is_walkable_for_monster(monster.x + mdx, monster.y + mdy):
+                        monster.x += mdx; monster.y += mdy; action_taken_by_monster = True
+                    elif mdx != 0 and dungeon_map.is_walkable_for_monster(monster.x + mdx, monster.y):
+                        monster.x += mdx; action_taken_by_monster = True
+                    elif mdy != 0 and dungeon_map.is_walkable_for_monster(monster.x, monster.y + mdy):
+                        monster.y += mdy; action_taken_by_monster = True
+                
+                if action_taken_by_monster: continue
+
+                # 3. 배회 로직 (위 조건에 해당하지 않을 경우)
+                if monster.move_type in ['PASSIVE', 'AGGRESSIVE']:
+                    if random.random() < 0.5: # 50% 확률로 이동
+                        mdx, mdy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
+                        new_mx, new_my = monster.x + mdx, monster.y + mdy
+                        if dungeon_map.is_walkable_for_monster(new_mx, new_my):
+                            monster.x = new_mx
+                            monster.y = new_my
+        
         if not player.is_alive():
             game_over_flag = True
             ui_instance.add_message("당신은 패배했습니다...")

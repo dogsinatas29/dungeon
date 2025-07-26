@@ -12,6 +12,8 @@ class Player:
         self.exp_to_next_level = 100 # 다음 레벨업에 필요한 경험치 추가
         self.attack = 10  # 공격력 추가
         self.defense = 5   # 방어력 추가
+        self.critical_chance = 0.05  # 치명타 확률 (기본 5%)
+        self.critical_damage_multiplier = 1.5  # 치명타 데미지 배율 (기본 150%)
         self.x = 0 
         self.y = 0 
         self.skills = {
@@ -73,6 +75,8 @@ class Player:
             'exp_to_next_level': self.exp_to_next_level, # 다음 레벨업 경험치 저장
             'attack': self.attack,
             'defense': self.defense,
+            'critical_chance': self.critical_chance,
+            'critical_damage_multiplier': self.critical_damage_multiplier,
             'x': self.x, 
             'y': self.y, 
             'skills': self.skills, 
@@ -95,6 +99,8 @@ class Player:
         player.exp_to_next_level = data.get('exp_to_next_level', 100) # 다음 레벨업 경험치 로드
         player.attack = data.get('attack', 10)
         player.defense = data.get('defense', 5)
+        player.critical_chance = data.get('critical_chance', 0.05)
+        player.critical_damage_multiplier = data.get('critical_damage_multiplier', 1.5)
         player.x = data.get('x', 0) 
         player.y = data.get('y', 0) 
         player.skills = data.get('skills', {}) 

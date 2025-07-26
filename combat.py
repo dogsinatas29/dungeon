@@ -1,10 +1,29 @@
 # combat.py
+import random
 
 def calculate_damage(attacker, defender):
-    """공격자와 방어자의 능력치를 기반으로 최종 데미지를 계산합니다."""
+    """
+    공격자와 방어자의 능력치를 기반으로 최종 데미지를 계산합니다.
+    치명타 발생 시 데미지를 증폭시키고, 치명타 여부를 함께 반환합니다.
+    """
+    is_critical = False
+    # 치명타 발동 여부 확인 (attacker에 critical_chance 속성이 있다고 가정)
+    if hasattr(attacker, 'critical_chance') and random.random() < attacker.critical_chance:
+        is_critical = True
+
+    # 기본 데미지 계산
     damage = attacker.attack - defender.defense
+
+    # 치명타 발생 시 데미지 증폭
+    if is_critical:
+        # attacker에 critical_damage_multiplier 속성이 있다고 가정
+        multiplier = getattr(attacker, 'critical_damage_multiplier', 1.5)
+        damage = int(damage * multiplier)
+
     # 최소 데미지는 1로 보장
-    return max(1, damage)
+    final_damage = max(1, damage)
+
+    return final_damage, is_critical
 
 def use_skill_in_combat(player, skill_name, target_monster=None, ui_instance=None):
     if skill_name not in player.skills:

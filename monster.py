@@ -16,6 +16,9 @@ class Monster:
                 self.defense = monster_def.defense
                 self.level = monster_def.level
                 self.exp_given = monster_def.exp_given
+                self.critical_chance = monster_def.critical_chance
+                self.critical_damage_multiplier = monster_def.critical_damage_multiplier
+                self.move_type = monster_def.move_type
             else:
                 # 정의를 찾을 수 없으면 기본값 사용 (경고 메시지 추가 가능)
                 self.name = name if name else "알 수 없는 몬스터"
@@ -25,6 +28,9 @@ class Monster:
                 self.defense = defense if defense else 2
                 self.level = level if level else 1
                 self.exp_given = exp_given if exp_given else 10
+                self.critical_chance = 0.05  # 기본값
+                self.critical_damage_multiplier = 1.5  # 기본값
+                self.move_type = 'STATIONARY' # 기본값
                 if self.ui_instance:
                     self.ui_instance.add_message(f"경고: 몬스터 정의 '{monster_id}'를 찾을 수 없습니다. 기본값 사용.")
         else:
@@ -36,14 +42,19 @@ class Monster:
             self.defense = defense if defense else 2
             self.level = level if level else 1
             self.exp_given = exp_given if exp_given else 10
+            self.critical_chance = 0.05  # 기본값
+            self.critical_damage_multiplier = 1.5  # 기본값
+            self.move_type = 'STATIONARY' # 기본값
 
         self.x = x
         self.y = y
         self.char = self.name[0] # 이름의 첫 글자를 표시
         self.dead = False
+        self.is_provoked = False # 피격 시 True로 변경되는 상태
 
     def take_damage(self, amount):
         self.hp -= amount
+        self.is_provoked = True # 피해를 입으면 도발 상태가 됨
         if self.hp <= 0:
             self.hp = 0
             self.dead = True
@@ -70,6 +81,10 @@ class Monster:
             "attack": self.attack, "defense": self.defense,
             "level": self.level,
             "exp_given": self.exp_given, # 경험치 저장
+            "critical_chance": self.critical_chance,
+            "critical_damage_multiplier": self.critical_damage_multiplier,
+            "move_type": self.move_type,
+            "is_provoked": self.is_provoked,
             "dead": self.dead
         }
 
@@ -85,6 +100,10 @@ class Monster:
             exp_given=data.get('exp_given', 10) # 경험치 로드
         )
         monster.max_hp = data.get('max_hp', monster.hp)
+        monster.critical_chance = data.get('critical_chance', 0.05)
+        monster.critical_damage_multiplier = data.get('critical_damage_multiplier', 1.5)
+        monster.move_type = data.get('move_type', 'STATIONARY')
+        monster.is_provoked = data.get('is_provoked', False)
         monster.dead = data.get('dead', False)
         return monster
 

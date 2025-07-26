@@ -22,7 +22,7 @@ class ItemDefinition:
 
 class MonsterDefinition:
     """몬스터의 정의(템플릿)를 저장하는 클래스."""
-    def __init__(self, monster_id, name, hp, attack, defense, level, exp_given):
+    def __init__(self, monster_id, name, hp, attack, defense, level, exp_given, critical_chance, critical_damage_multiplier, move_type):
         self.id = monster_id
         self.name = name
         self.hp = hp
@@ -30,9 +30,15 @@ class MonsterDefinition:
         self.defense = defense
         self.level = level
         self.exp_given = exp_given
+        self.critical_chance = critical_chance
+        self.critical_damage_multiplier = critical_damage_multiplier
+        self.move_type = move_type
 
     def __repr__(self):
-        return f"MonsterDefinition(id={self.id}, name={self.name}, hp={self.hp}, attack={self.attack}, defense={self.defense}, level={self.level}, exp_given={self.exp_given})"
+        return (f"MonsterDefinition(id={self.id}, name={self.name}, hp={self.hp}, attack={self.attack}, "
+                f"defense={self.defense}, level={self.level}, exp_given={self.exp_given}, "
+                f"critical_chance={self.critical_chance}, critical_damage_multiplier={self.critical_damage_multiplier}, "
+                f"move_type={self.move_type})")
 
 _item_definitions = {} # 아이템 정의를 저장할 전역 딕셔너리
 _monster_definitions = {} # 몬스터 정의를 저장할 전역 딕셔너리
@@ -108,6 +114,52 @@ def get_monster_definition(monster_id):
     if not _monster_definitions:
         load_monster_definitions()
     return _monster_definitions.get(monster_id)
+
+def load_monster_definitions(ui_instance=None):
+    """monster_data.txt 파일에서 몬스터 정의를 로드합니다."""
+    if _monster_definitions: # 이미 로드된 경우 다시 로드하지 않음
+        return _monster_definitions
+
+    if not os.path.exists(MONSTER_DATA_FILE):
+        if ui_instance:
+            ui_instance.add_message(f"오류: 몬스터 데이터 파일이 존재하지 않습니다: {MONSTER_DATA_FILE}")
+        else:
+            print(f"오류: 몬스터 데이터 파일이 존재하지 않습니다: {MONSTER_DATA_FILE}")
+        return {}
+
+    with open(MONSTER_DATA_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'): # 빈 줄 또는 주석 건너뛰기
+                continue
+            
+            parts = [p.strip() for p in line.split(',')]
+            
+            # 필드 개수에 따라 하위 호환성 유지
+            if len(parts) >= 10: # 이동 타입 포함
+                monster_id, name, hp, attack, defense, level, exp_given, crit_chance, crit_mult, move_type = parts[:10]
+                _monster_definitions[monster_id] = MonsterDefinition(
+                    monster_id, name, int(hp), int(attack), int(defense), int(level), int(exp_given),
+                    float(crit_chance), float(crit_mult), move_type
+                )
+            elif len(parts) >= 9: # 치명타 데이터만 포함 (이동 타입 기본값)
+                monster_id, name, hp, attack, defense, level, exp_given, crit_chance, crit_mult = parts[:9]
+                _monster_definitions[monster_id] = MonsterDefinition(
+                    monster_id, name, int(hp), int(attack), int(defense), int(level), int(exp_given),
+                    float(crit_chance), float(crit_mult), 'STATIONARY' # 기본값
+                )
+            elif len(parts) >= 7: # 치명타, 이동 타입 모두 미포함 (기본값 사용)
+                monster_id, name, hp, attack, defense, level, exp_given = parts[:7]
+                _monster_definitions[monster_id] = MonsterDefinition(
+                    monster_id, name, int(hp), int(attack), int(defense), int(level), int(exp_given),
+                    critical_chance=0.05, critical_damage_multiplier=1.5, move_type='STATIONARY' # 기본값
+                )
+            else:
+                if ui_instance:
+                    ui_instance.add_message(f"경고: 잘못된 형식의 몬스터 데이터 줄: {line}")
+                else:
+                    print(f"경고: 잘못된 형식의 몬스터 데이터 줄: {line}")
+    return _monster_definitions
 
 # 스크립트 실행 시 자동으로 아이템 정의 로드
 if __name__ == "__main__":

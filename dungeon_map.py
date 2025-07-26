@@ -139,11 +139,20 @@ class DungeonMap:
         return target_tile in [FLOOR, ITEM_TILE, EXIT_NORMAL, EXIT_LOCKED, ROOM_ENTRANCE]
 
     def move_player(self, dx, dy):
+        new_x, new_y = self.player_x + dx, self.player_y + dy
+
+        # Check for monster at the target location
+        for monster in self.monsters:
+            if not monster.dead and monster.x == new_x and monster.y == new_y:
+                # Don't move, return the monster to initiate combat
+                return False, monster
+
         if self.can_move(dx, dy):
             self.player_x += dx
             self.player_y += dy
             self.reveal_tiles(self.player_x, self.player_y)
             return True, "이동했습니다."
+        
         return False, "이동할 수 없습니다."
 
     def get_tile(self, x, y):
@@ -173,6 +182,20 @@ class DungeonMap:
 
     def calculate_num_rooms(self, floor):
         return self.BASE_NUM_ROOMS + (floor - 1) // self.ROOM_COUNT_LEVEL_INTERVAL
+
+    def is_walkable_for_monster(self, x, y):
+        """몬스터가 해당 위치로 이동할 수 있는지 확인합니다."""
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            return False  # 맵 범위를 벗어남
+        if self.map_data[y][x] not in [FLOOR, START, EXIT_NORMAL, ROOM_ENTRANCE]:
+            return False  # 벽이나 기타 장애물
+        if (x, y) == (self.player_x, self.player_y):
+            return False  # 플레이어 위치
+        for m in self.monsters:
+            if not m.dead and m.x == x and m.y == y:
+                return False  # 다른 몬스터 위치
+        return True
+
     def _generate_empty_map(self):
         return [[INNER_WALL for _ in range(self.width)] for _ in range(self.height)]
     def _generate_random_map(self):
