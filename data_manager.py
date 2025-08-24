@@ -9,16 +9,20 @@ ITEM_DATA_FILE = os.path.join(os.path.dirname(__file__), "items.txt")
 MONSTER_DATA_FILE = os.path.join(os.path.dirname(__file__), "monster_data.txt")
 
 class ItemDefinition:
-    """아���템의 정의(템플릿)를 저장하는 클래스."""
-    def __init__(self, item_id, name, usage_type, effect_type, value):
+    """아이템의 정의(템플릿)를 저장하는 클래스."""
+    def __init__(self, item_id, name, item_type, equip_slot, effect_type, value):
         self.id = item_id
         self.name = name
-        self.usage_type = usage_type  # 'AUTO', 'MANUAL', 'EQUIP'
-        self.effect_type = effect_type # 'KEY', 'HP_RECOVER', 'MP_RECOVER', 'ATTACK', 'DEFENSE', 'NONE'
-        self.value = value # 열쇠 개수, 회복량, 공격력/방어력 증가량 등
+        self.item_type = item_type    # EQUIP, SKILLBOOK, CONSUMABLE, ETC
+        self.equip_slot = equip_slot  # WEAPON, SHIELD, HELMET, ARMOR, GLOVES, BOOTS, NECKLACE, RING, NONE
+        self.effect_type = effect_type # HP_RECOVER, MP_RECOVER, ATTACK, DEFENSE, KEY, NONE
+        self.value = value             # 회복량, 공격력/방어력 증가량 등
 
     def __repr__(self):
-        return f"ItemDefinition(id={self.id}, name={self.name}, usage_type={self.usage_type}, effect_type={self.effect_type}, value={self.value})"
+        return (
+            f"ItemDefinition(id={self.id}, name={self.name}, item_type={self.item_type}, "
+            f"equip_slot={self.equip_slot}, effect_type={self.effect_type}, value={self.value})"
+        )
 
 class MonsterDefinition:
     """몬스터의 정의(템플릿)를 저장하는 클래스."""
@@ -36,10 +40,12 @@ class MonsterDefinition:
         self.move_type = move_type
 
     def __repr__(self):
-        return (f"MonsterDefinition(id={self.id}, name={self.name}, symbol={self.symbol}, hp={self.hp}, attack={self.attack}, "
-                f"defense={self.defense}, level={self.level}, exp_given={self.exp_given}, "
-                f"critical_chance={self.critical_chance}, critical_damage_multiplier={self.critical_damage_multiplier}, "
-                f"move_type={self.move_type})")
+        return (
+            f"MonsterDefinition(id={self.id}, name={self.name}, symbol={self.symbol}, hp={self.hp}, attack={self.attack}, "
+            f"defense={self.defense}, level={self.level}, exp_given={self.exp_given}, "
+            f"critical_chance={self.critical_chance}, critical_damage_multiplier={self.critical_damage_multiplier}, "
+            f"move_type={self.move_type})"
+        )
 
 _item_definitions = {} # 아이템 정의를 저장할 전역 딕셔너리
 _monster_definitions = {} # 몬스터 정의를 저장할 전역 딕셔너리
@@ -62,22 +68,21 @@ def load_item_definitions(ui_instance=None):
             if not line or line.startswith('#'): # 빈 줄 또는 주석 건너뛰기
                 continue
             
-            parts = line.split(',')
-            if len(parts) >= 5: # 최소 5개의 필드 확인
-                item_id = parts[0].strip()
-                name = parts[1].strip()
-                usage_type = parts[2].strip().upper()
-                effect_type = parts[3].strip().upper()
-                value = parts[4].strip()
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 6: # 최소 6개의 필드 확인
+                item_id, name, item_type, equip_slot, effect_type, value_str = parts[:6]
 
-                # 숫자로 변환 가능한 값은 변환
-                if value.isdigit():
-                    value = int(value)
-                elif value.replace('.', '', 1).isdigit(): # float 값도 고려
-                    value = float(value)
-                # 그 외의 값은 문자열로 유지
+                # 값 변환
+                try:
+                    value = float(value_str)
+                    if value.is_integer():
+                        value = int(value)
+                except ValueError:
+                    value = value_str # 숫자로 변환할 수 없으면 문자열로 유지
 
-                _item_definitions[item_id] = ItemDefinition(item_id, name, usage_type, effect_type, value)
+                _item_definitions[item_id] = ItemDefinition(
+                    item_id, name, item_type.upper(), equip_slot.upper(), effect_type.upper(), value
+                )
             else:
                 if ui_instance:
                     ui_instance.add_message(f"경고: 잘못된 형식의 아이템 데이터 줄: {line}")
@@ -102,9 +107,10 @@ def get_item_definition(item_id):
         return ItemDefinition(
             item_id=item_id,
             name=f"{level}층 열쇠",
-            usage_type='AUTO',  # 줍는 즉시 적용되는 아이템
-            effect_type='KEY',  # 효과 유형은 'KEY'
-            value=0             # 특별한 값은 없음
+            item_type='ETC',
+            equip_slot='NONE',
+            effect_type='KEY',
+            value=0
         )
 
     # 어디에도 해당하지 않으면 None을 반환
@@ -167,5 +173,3 @@ if __name__ == "__main__":
     print("\n로드된 몬스터 정의:")
     for monster_id, monster_def in monster_defs.items():
         print(monster_def)
-
-
