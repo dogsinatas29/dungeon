@@ -1,3 +1,5 @@
+<img width="1220" height="932" alt="image" src="https://github.com/user-attachments/assets/f21aa500-6c43-4fde-91a4-7e1ccdc6b9cc" />
+
 이동 : 방향키 <br>
 게임 실행 : python3 Start.py<br>
 
