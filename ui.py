@@ -107,12 +107,47 @@ class UI:
             sys.stdout.write(f"{ANSI.cursor_to(draw_y, self.map_viewport_x_start)}{''.join(line_to_write)}")
 
     def _draw_player_status(self, player):
-        status_text = (f"HP: {player.hp}/{player.max_hp} | MP: {player.mp}/{player.max_mp} | "
-                       f"ATT: {player.attack} ({player.base_att}+{player.att_bonus}) | "
-                       f"DEF: {player.defense} ({player.base_def}+{player.def_bonus}) | "
-                       f"Lv: {player.level} | EXP: {player.exp}/{player.exp_to_next_level}")
-        padded_status = pad_str_to_width(status_text, self.terminal_width - 1)
-        sys.stdout.write(f"{ANSI.cursor_to(self.status_bar_y_start, self.map_viewport_x_start)}{padded_status}")
+        y_start = self.status_bar_y_start
+        x_start = self.map_viewport_x_start
+        
+        # 이전 상태 표시줄을 지웁니다.
+        for i in range(10): # 충분한 라인을 지웁니다.
+             self.write_at(y_start + i, x_start, " " * self.MAP_VIEWPORT_WIDTH)
+
+        bar_width = 20  # 막대 그래프의 너비
+
+        def draw_bar(current, max_val, color):
+            if max_val == 0:
+                percent = 0
+            else:
+                percent = current / max_val
+            filled_len = int(percent * bar_width)
+            empty_len = bar_width - filled_len
+            return f"{color}{'█' * filled_len}{ANSI.WHITE}{'█' * empty_len}{ANSI.RESET}"
+
+        # HP, MP, Stamina
+        hp_text = pad_str_to_width(f"HP: {player.hp}/{player.max_hp}", 18)
+        hp_bar = draw_bar(player.hp, player.max_hp, ANSI.RED)
+        self.write_at(y_start, x_start, f"{hp_text} {hp_bar}")
+
+        mp_text = pad_str_to_width(f"MP: {player.mp}/{player.max_mp}", 18)
+        mp_bar = draw_bar(player.mp, player.max_mp, ANSI.BLUE)
+        self.write_at(y_start + 1, x_start, f"{mp_text} {mp_bar}")
+
+        stamina_text = pad_str_to_width(f"Stamina: {player.stamina}/{player.max_stamina}", 18)
+        stamina_bar = draw_bar(player.stamina, player.max_stamina, ANSI.YELLOW)
+        self.write_at(y_start + 2, x_start, f"{stamina_text} {stamina_bar}")
+
+        # Other stats
+        other_stats = [
+            f"ATT: {player.attack} ({player.base_att}+{player.att_bonus})",
+            f"DEF: {player.defense} ({player.base_def}+{player.def_bonus})",
+            f"Lv: {player.level}",
+            f"EXP: {player.exp}/{player.exp_to_next_level}"
+        ]
+        for i, line in enumerate(other_stats):
+            padded_line = pad_str_to_width(line, self.MAP_VIEWPORT_WIDTH)
+            self.write_at(y_start + 3 + i, x_start, padded_line)
 
     def _draw_message_log(self):
         y, x, w = self.message_log_y_start, self.message_log_x_start, self.message_log_width
