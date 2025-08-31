@@ -9,6 +9,7 @@ import Start
 import data_manager
 import combat
 import random
+from items import Item
 
 def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_definitions, ui_instance):
     
@@ -35,6 +36,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
     last_entrance_position = {}
     inventory_open = False
     inventory_cursor_pos = 0
+    inventory_active_tab = 'item' # 'item', 'equipment', 'book'
 
     all_dungeon_maps = {}
     if all_dungeon_maps_data_from_save_raw:
@@ -56,25 +58,42 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
         camera['x'] = max(0, min(player.x - map_viewport_width // 2, dungeon_map.width - map_viewport_width))
         camera['y'] = max(0, min(player.y - map_viewport_height // 2, dungeon_map.height - map_viewport_height))
 
-        ui_instance.draw_game_screen(player, dungeon_map, dungeon_map.monsters, camera['x'], camera['y'], inventory_open, inventory_cursor_pos)
+        ui_instance.draw_game_screen(player, dungeon_map, dungeon_map.monsters, camera['x'], camera['y'], 
+                                     inventory_open, inventory_cursor_pos, inventory_active_tab)
 
         action = readchar.readkey()
         player_action_taken = False
         current_floor, current_room_index = current_dungeon_level
 
         if inventory_open:
-            inventory_items = list(player.inventory.keys())
+            # 현재 탭에 맞는 아이템 목록 가져오기
+            if inventory_active_tab == 'item':
+                inventory_items = list(player.inventory.items.values())
+            elif inventory_active_tab == 'equipment':
+                inventory_items = list(player.inventory.equipment_items.values())
+            else: # 'book'
+                inventory_items = list(player.inventory.skill_books.values())
+
             if action == readchar.key.UP:
                 inventory_cursor_pos = (inventory_cursor_pos - 1) % len(inventory_items) if inventory_items else 0
             elif action == readchar.key.DOWN:
                 inventory_cursor_pos = (inventory_cursor_pos + 1) % len(inventory_items) if inventory_items else 0
-            elif action == 'e' and inventory_items:
-                selected_item_id = inventory_items[inventory_cursor_pos]
-                message = player.equip(selected_item_id)
+            elif action == '1':
+                inventory_active_tab = 'item'
+                inventory_cursor_pos = 0
+            elif action == '2':
+                inventory_active_tab = 'equipment'
+                inventory_cursor_pos = 0
+            elif action == '3':
+                inventory_active_tab = 'book'
+                inventory_cursor_pos = 0
+            elif action == 'e' and inventory_items and inventory_active_tab == 'equipment':
+                selected_item_data = inventory_items[inventory_cursor_pos]
+                message = player.equip(selected_item_data['item'])
                 ui_instance.add_message(message)
                 # 아이템 장착/해제 후 커서 위치 조정
-                if not player.inventory: inventory_cursor_pos = 0
-                elif inventory_cursor_pos >= len(player.inventory): inventory_cursor_pos = len(player.inventory) - 1
+                if not inventory_items: inventory_cursor_pos = 0
+                elif inventory_cursor_pos >= len(inventory_items): inventory_cursor_pos = len(inventory_items) - 1
 
             elif action == 'i':
                 inventory_open = False
@@ -83,6 +102,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
             if action == 'i':
                 inventory_open = True
                 inventory_cursor_pos = 0
+                inventory_active_tab = 'item'
                 continue
 
             dx, dy = 0, 0
@@ -98,6 +118,7 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
             if dx != 0 or dy != 0:
                 moved, result = dungeon_map.move_player(dx, dy)
                 if moved:
+                    player.stamina -= 1
                     player_action_taken = True
                     player.x, player.y = dungeon_map.player_x, dungeon_map.player_y
                     for monster in dungeon_map.monsters:
@@ -142,7 +163,9 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                     if m.dead and m.x == player.x and m.y == player.y and m.loot:
                         item_def = item_definitions.get(m.loot)
                         if item_def:
-                            player.add_item(m.loot, item_def.name)
+                            # Item 객체를 생성하여 추가
+                            item_obj = Item.from_definition(item_def)
+                            player.add_item(item_obj)
                             ui_instance.add_message(f"{item_def.name}을(를) 주웠습니다.")
                             m.loot = None
                             looted = True
@@ -158,21 +181,28 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
             for monster in dungeon_map.monsters:
                 if monster.dead: continue
                 # Monster AI logic... (omitted for brevity, assuming it's complex and correct)
+        elif not player_action_taken:
+            if player.stamina < player.max_stamina:
+                player.stamina += 1
         
         if not player.is_alive():
             game_over_flag = True
             dungeon_map.player_tombstone = (player.x, player.y)
-            ui_instance.add_message("당신은 패배했습니다... 아무 키나 눌러 계속하세요.")
-            ui_instance.draw_game_screen(player, dungeon_map, dungeon_map.monsters, camera['x'], camera['y'], False)
+            if player.stamina <= 0:
+                ui_instance.add_message("스태미너가 모두 소진되어 사망했습니다...")
+            else:
+                ui_instance.add_message("당신은 패배했습니다... 아무 키나 눌러 계속하세요.")
+            ui_instance.draw_game_screen(player, dungeon_map, dungeon_map.monsters, camera['x'], camera['y'], False, 0, 'item')
             readchar.readkey()
             continue
 
-        item_data = dungeon_map.items_on_map.pop((player.x, player.y), None)
-        if item_data:
-            item_def = item_definitions.get(item_data['id'])
-            name = item_def.name if item_def else item_data['id']
-            player.add_item(item_data['id'], name, item_data['qty'])
-            ui_instance.add_message(f"{name}을(를) 획득했습니다!")
+        item_data_on_map = dungeon_map.items_on_map.pop((player.x, player.y), None)
+        if item_data_on_map:
+            item_def = item_definitions.get(item_data_on_map['id'])
+            if item_def:
+                item_obj = Item.from_definition(item_def)
+                player.add_item(item_obj, item_data_on_map['qty'])
+                ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
 
         # Level transition logic... (omitted for brevity)
 

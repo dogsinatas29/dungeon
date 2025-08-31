@@ -1,5 +1,6 @@
 # player.py
 import data_manager
+from inventory import Inventory
 
 class Player:
     def __init__(self, name, hp=100, mp=50, x=0, y=0, level=1, dungeon_level=(1, 0)):
@@ -14,6 +15,8 @@ class Player:
         self.hp = hp
         self.max_mp = mp
         self.mp = mp
+        self.max_stamina = 100
+        self.stamina = 100
         self.base_att = 10
         self.base_def = 5
         
@@ -31,15 +34,17 @@ class Player:
         
         # 기타
         self.dungeon_level = dungeon_level
-        self.inventory = {}
+        self.inventory = Inventory()
         self.skills = {}
         self.item_quick_slots = {i: None for i in range(1, 6)}
         self.skill_quick_slots = {i: None for i in range(6, 11)}
-        self.equipment = {
-            "WEAPON": None, "SHIELD": None, "HELMET": None, "ARMOR": None,
-            "GLOVES": None, "BOOTS": None, "NECKLACE": None, "RING": None
-        }
+        # self.equipment는 이제 self.inventory.equipped로 대체됩니다.
         self.is_provoked = False
+
+    @property
+    def equipment(self):
+        """인벤토리 객체의 장착 상태를 직접 참조합니다."""
+        return self.inventory.equipped
 
     @property
     def attack(self):
@@ -53,74 +58,46 @@ class Player:
 
     def is_alive(self):
         """플레이어가 살아있는지 여부를 반환합니다."""
-        return self.hp > 0
+        return self.hp > 0 and self.stamina > 0
 
-    def add_item(self, item_id, item_name, qty=1):
+    def add_item(self, item_to_add, qty=1):
         """인벤토리에 아이템을 추가합니다."""
-        if item_id in self.inventory:
-            self.inventory[item_id]['qty'] += qty
-        else:
-            self.inventory[item_id] = {'name': item_name, 'qty': qty}
-        return True
+        return self.inventory.add_item(item_to_add, qty)
 
-    def remove_item(self, item_id, qty=1):
+    def remove_item(self, item_to_remove, qty=1):
         """인벤토리에서 아이템을 제거합니다."""
-        if item_id in self.inventory and self.inventory[item_id]['qty'] >= qty:
-            self.inventory[item_id]['qty'] -= qty
-            if self.inventory[item_id]['qty'] <= 0:
-                del self.inventory[item_id]
-            return True
-        return False
+        return self.inventory.remove_item(item_to_remove, qty)
 
     def get_item_quantity(self, item_id):
         """인벤토리에서 특정 아이템의 개수를 반환합니다."""
-        return self.inventory.get(item_id, {}).get('qty', 0)
+        return self.inventory.get_item_quantity(item_id)
 
-    def equip(self, item_id):
+    def equip(self, equipment_item):
         """아이템을 장착합니다."""
-        item_def = data_manager.get_item_definition(item_id)
-        if not item_def or item_def.item_type != 'EQUIP':
-            return "장착할 수 없는 아이템입니다."
-
-        slot = item_def.equip_slot
-        if slot == 'NONE':
-            return "이 아이템은 장착 부위가 없습니다."
-
-        # 이미 해당 슬롯에 아이템이 있다면 해제
-        if self.equipment.get(slot):
-            self.unequip(slot)
-
-        # 인벤토리에서 아이템 제거 후 장착
-        if self.remove_item(item_id):
-            self.equipment[slot] = item_id
-            self._update_stats_from_equipment()
-            return f"{item_def.name}을(를) 장착했습니다."
-        else:
-            return "인벤토리에 해당 아이템이 없습니다."
+        unequipped_item, message = self.inventory.equip(equipment_item)
+        if unequipped_item is not None or "장착했습니다" in message:
+             self._update_stats_from_equipment()
+        return message
 
     def unequip(self, slot):
         """지정된 슬롯의 아이템을 해제합니다."""
-        item_id = self.equipment.get(slot)
-        if not item_id:
-            return "해당 부위에 장착한 아이템이 없습니다."
-
-        item_def = data_manager.get_item_definition(item_id)
-        self.equipment[slot] = None
-        self.add_item(item_id, item_def.name)
-        self._update_stats_from_equipment()
-        return f"{item_def.name}을(를) 해제했습니다."
+        item_to_unequip = self.inventory.unequip(slot)
+        if item_to_unequip:
+            self._update_stats_from_equipment()
+            return f"{item_to_unequip.name}을(를) 해제했습니다."
+        return "해당 부위에 장착한 아이템이 없습니다."
 
     def _update_stats_from_equipment(self):
         """장비에 따라 스탯 보너스를 다시 계산합니다."""
         self.att_bonus = 0
         self.def_bonus = 0
-        for item_id in self.equipment.values():
-            if item_id:
-                item_def = data_manager.get_item_definition(item_id)
-                if item_def.effect_type == 'ATTACK':
-                    self.att_bonus += item_def.value
-                elif item_def.effect_type == 'DEFENSE':
-                    self.def_bonus += item_def.value
+        for item in self.equipment.values():
+            if item:
+                # 이제 item은 item_id가 아닌 Item 객체입니다.
+                if item.effect_type == 'ATTACK':
+                    self.att_bonus += item.value
+                elif item.effect_type == 'DEFENSE':
+                    self.def_bonus += item.value
 
     def take_damage(self, damage):
         """플레이어가 데미지를 입습니다."""
@@ -164,13 +141,15 @@ class Player:
         return {
             'name': self.name, 'x': self.x, 'y': self.y, 'hp': self.hp,
             'max_hp': self.max_hp, 'mp': self.mp, 'max_mp': self.max_mp,
+            'stamina': self.stamina, 'max_stamina': self.max_stamina,
             'level': self.level, 'exp': self.exp, 'exp_to_next_level': self.exp_to_next_level,
             'base_att': self.base_att, 'base_def': self.base_def,
             'att_bonus': self.att_bonus, 'def_bonus': self.def_bonus,
             'critical_chance': self.critical_chance, 'critical_damage_multiplier': self.critical_damage_multiplier,
-            'inventory': self.inventory, 'skills': self.skills, 'dungeon_level': self.dungeon_level,
+            'inventory': self.inventory.to_dict(),  # Inventory 객체의 to_dict 호출
+            'skills': self.skills, 'dungeon_level': self.dungeon_level,
             'item_quick_slots': self.item_quick_slots, 'skill_quick_slots': self.skill_quick_slots,
-            'equipment': self.equipment
+            # 'equipment'는 inventory에 포함되므로 중복 저장할 필요 없음
         }
 
     @classmethod
@@ -183,6 +162,8 @@ class Player:
         )
         player.max_hp = data.get('max_hp', player.hp)
         player.max_mp = data.get('max_mp', player.mp)
+        player.stamina = data.get('stamina', 100)
+        player.max_stamina = data.get('max_stamina', 100)
         player.exp = data.get('exp', 0)
         player.exp_to_next_level = data.get('exp_to_next_level', 100)
         player.base_att = data.get('base_att', 10)
@@ -191,14 +172,17 @@ class Player:
         player.def_bonus = data.get('def_bonus', 0)
         player.critical_chance = data.get('critical_chance', 0.05)
         player.critical_damage_multiplier = data.get('critical_damage_multiplier', 1.5)
-        player.inventory = data.get('inventory', {})
+        
+        # Inventory 객체 복원
+        inventory_data = data.get('inventory')
+        if inventory_data:
+            player.inventory = Inventory.from_dict(inventory_data)
+        else:
+            player.inventory = Inventory()
+
         player.skills = data.get('skills', {})
         player.item_quick_slots = data.get('item_quick_slots', {i: None for i in range(1, 6)})
         player.skill_quick_slots = data.get('skill_quick_slots', {i: None for i in range(6, 11)})
-        player.equipment = data.get('equipment', {
-            "WEAPON": None, "SHIELD": None, "HELMET": None, "ARMOR": None,
-            "GLOVES": None, "BOOTS": None, "NECKLACE": None, "RING": None
-        })
         
         # 로드 후 스탯 재계산
         player._update_stats_from_equipment()

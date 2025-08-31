@@ -66,7 +66,8 @@ class UI:
         if len(self.message_log) > self.message_log_max_lines:
             self.message_log.pop(0)
 
-    def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y, inventory_open=False, inventory_cursor_pos=0):
+    def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y, 
+                         inventory_open=False, inventory_cursor_pos=0, inventory_active_tab='item'):
         self.clear_screen()
         
         self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y)
@@ -75,7 +76,7 @@ class UI:
         self._draw_quick_slots(player)
 
         if inventory_open:
-            self._draw_inventory(player, inventory_cursor_pos)
+            self._draw_inventory(player, inventory_cursor_pos, inventory_active_tab)
 
         sys.stdout.flush()
 
