@@ -68,21 +68,59 @@ class Inventory:
                 all_items_list.append(section[item_id])
         return all_items_list
 
+    def get_items_by_tab(self, tab):
+        """탭 이름에 따라 해당 카테고리의 아이템 리스트를 반환합니다."""
+        if tab == 'all':
+            all_items_list = []
+            all_items_list.extend(self.items.values())
+            all_items_list.extend(self.equipment_items.values())
+            all_items_list.extend(self.scrolls.values())
+            all_items_list.extend(self.skill_books.values())
+            return sorted(all_items_list, key=lambda x: x['item'].name) # 이름순으로 정렬
+        elif tab == 'item':
+            return sorted(list(self.items.values()), key=lambda x: x['item'].name)
+        elif tab == 'equipment':
+            return sorted(list(self.equipment_items.values()), key=lambda x: x['item'].name)
+        elif tab == 'scroll':
+            return sorted(list(self.scrolls.values()), key=lambda x: x['item'].name)
+        elif tab == 'skill_book':
+            return sorted(list(self.skill_books.values()), key=lambda x: x['item'].name)
+        return []
+
     def equip(self, equipment_item):
         """장비를 장착합니다."""
         if not isinstance(equipment_item, Equipment):
             return None, "장비 아이템이 아닙니다."
 
-        slot = equipment_item.slot
-        if slot not in self.equipped:
-            return None, "알 수 없는 장비 부위입니다."
+        # 영문 slot을 한글로 변환
+        slot_map = {
+            "HELMET": "투구", "ARMOR": "갑옷", "WEAPON": "무기",
+            "SHIELD": "방패", "GLOVES": "장갑", "BOOTS": "신발",
+            "NECKLACE": "목걸이", "RING": "반지" # 반지는 RING1, RING2 처리 필요
+        }
+        
+        # 기본 slot 변환
+        slot_kor = slot_map.get(equipment_item.slot.upper())
+
+        # RING의 경우 RING1, RING2 순차적으로 장착
+        if equipment_item.slot.upper() == "RING":
+            if self.equipped.get("반지1") is None:
+                slot_kor = "반지1"
+            elif self.equipped.get("반지2") is None:
+                slot_kor = "반지2"
+            else:
+                # 반지가 모두 찼을 경우, 첫 번째 반지와 교체
+                slot_kor = "반지1"
+
+        if not slot_kor or slot_kor not in self.equipped:
+            return None, f"알 수 없는 장비 부위입니다: {equipment_item.slot}"
 
         # 이미 장착된 아이템 해제
         unequipped_item = None
-        if self.equipped[slot]:
-            unequipped_item = self.unequip(slot)
+        if self.equipped[slot_kor]:
+            unequipped_item = self.unequip(slot_kor)
 
-        self.equipped[slot] = equipment_item
+        self.equipped[slot_kor] = equipment_item
         self.remove_item(equipment_item) # 인벤토리에서 장착한 아이템 제거
         
         return unequipped_item, f"{equipment_item.name}을(를) 장착했습니다."

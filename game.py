@@ -60,6 +60,10 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
     game_over_flag = False
     ui_instance.clear_screen()
 
+    # --- 시간/턴 기반 시스템 변수 ---
+    turn_count = 0
+    rest_turn_count = 0
+
     # 게임 루프
     running = True
     while running:
@@ -132,7 +136,10 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                          inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
                     else:
                          ui_instance.add_message("아이템을 버릴 수 없습니다.")
-                # 퀵슬롯 로직 (생략)
+                elif key in "12345":
+                    slot_num = int(key)
+                    message = player.assign_item_to_quickslot(selected_item_obj, slot_num)
+                    ui_instance.add_message(message)
 
             if key == 'i':
                 inventory_open = False
@@ -189,7 +196,6 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                         leveled_up, level_up_message = player.gain_exp(exp_gained)
                         if leveled_up: ui_instance.add_message(level_up_message)
                 elif moved:
-                    player.stamina -= 1
                     player_action_taken = True
                     player.x, player.y = dungeon_map.player_x, dungeon_map.player_y
                     
@@ -209,6 +215,23 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                 elif isinstance(result, str):
                      ui_instance.add_message(result)
             
+            # 퀵슬롯 로직 추가
+            elif key in "12345":
+                slot_num = int(key)
+                item_id = player.item_quick_slots.get(slot_num)
+                if not item_id:
+                    ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
+                else:
+                    # 인벤토리에서 실제 아이템 객체 찾기
+                    item_to_use = player.inventory.find_item_by_id(item_id)
+                    if not item_to_use:
+                        ui_instance.add_message(f"'{item_id}' 아이템이 인벤토리에 없습니다.")
+                    else:
+                        used, message = player.use_item(item_to_use)
+                        ui_instance.add_message(message)
+                        if used:
+                            player_action_taken = True
+            
             elif key in ['v', 't']:
                 status_text = "ON" if dungeon_map.toggle_fog() else "OFF"
                 ui_instance.add_message(f"전장의 안개(Fog of War) 토글: {status_text}")
@@ -222,6 +245,14 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                 ui_instance.add_message("게임을 저장하고 메인 메뉴로 돌아갑니다.")
 
         # --- 턴 종료 후 처리 (몬스터 AI, 플레이어 상태 등) ---
+        if player_action_taken:
+            turn_count += 1
+            rest_turn_count = 0 # 행동했으므로 휴식 카운트 초기화
+
+            # 10턴(1분)마다 스태미너 0.1 감소
+            if turn_count > 0 and turn_count % 10 == 0:
+                player.stamina = max(0, player.stamina - 0.1)
+
         # 플레이어가 행동했거나, 메뉴를 조작했다면 몬스터 턴 진행
         if (player_action_taken or is_in_menu) and player.is_alive():
             for monster in dungeon_map.monsters:

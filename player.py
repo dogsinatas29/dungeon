@@ -15,8 +15,8 @@ class Player:
         self.hp = hp
         self.max_mp = mp
         self.mp = mp
-        self.max_stamina = 100
-        self.stamina = 100
+        self.max_stamina = 100.0
+        self.stamina = 100.0
         self.base_att = 10
         self.base_def = 5
         
@@ -86,6 +86,44 @@ class Player:
             self._update_stats_from_equipment()
             return f"{item_to_unequip.name}을(를) 해제했습니다."
         return "해당 부위에 장착한 아이템이 없습니다."
+
+    def drop_item(self, item_to_drop, qty=1):
+        """인벤토리에서 아이템을 버립니다."""
+        # Inventory.remove_item은 성공 시 True를 반환
+        if self.inventory.remove_item(item_to_drop, qty):
+            return f"{item_to_drop.name}을(를) 버렸습니다."
+        return "아이템을 버리는 데 실패했습니다."
+
+    def assign_item_to_quickslot(self, item, slot):
+        """아이템 또는 스크롤을 퀵슬롯 1-5번에 등록합니다."""
+        if not (1 <= slot <= 5):
+            return "아이템 퀵슬롯은 1-5번만 가능합니다."
+        self.item_quick_slots[slot] = item.id
+        return f"퀵슬롯 {slot}번에 {item.name}을(를) 등록했습니다."
+
+    def assign_skill_to_quickslot(self, skill_book, slot):
+        """스킬북을 퀵슬롯 6-0번에 등록합니다."""
+        slot_key = slot if slot != 0 else 10 # 0번 키는 10번 인덱스로 처리
+        if not (6 <= slot_key <= 10):
+            return "스킬 퀵슬롯은 6-0번만 가능합니다."
+        self.skill_quick_slots[slot_key] = skill_book.id
+        return f"퀵슬롯 {slot}번에 {skill_book.name}을(를) 등록했습니다."
+
+    def use_item(self, item):
+        """소모품 아이템을 사용합니다."""
+        if not hasattr(item, 'effect_type'):
+            return False, f"{item.name}은(는) 사용할 수 없는 아이템입니다."
+
+        if item.effect_type == 'HP_RECOVER':
+            self.restore_hp(item.value)
+            self.remove_item(item, 1)
+            return True, f"{item.name}을(를) 사용하여 HP를 {item.value}만큼 회복했습니다."
+        elif item.effect_type == 'MP_RECOVER':
+            self.restore_mp(item.value)
+            self.remove_item(item, 1)
+            return True, f"{item.name}을(를) 사용하여 MP를 {item.value}만큼 회복했습니다."
+        
+        return False, f"{item.name}은(는) 아직 사용할 수 없습니다."
 
     def _update_stats_from_equipment(self):
         """장비에 따라 스탯 보너스를 다시 계산합니다."""
@@ -162,8 +200,8 @@ class Player:
         )
         player.max_hp = data.get('max_hp', player.hp)
         player.max_mp = data.get('max_mp', player.mp)
-        player.stamina = data.get('stamina', 100)
-        player.max_stamina = data.get('max_stamina', 100)
+        player.stamina = float(data.get('stamina', 100.0))
+        player.max_stamina = float(data.get('max_stamina', 100.0))
         player.exp = data.get('exp', 0)
         player.exp_to_next_level = data.get('exp_to_next_level', 100)
         player.base_att = data.get('base_att', 10)

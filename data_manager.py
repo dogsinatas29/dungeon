@@ -10,18 +10,21 @@ MONSTER_DATA_FILE = os.path.join(os.path.dirname(__file__), "monster_data.txt")
 
 class ItemDefinition:
     """아이템의 정의(템플릿)를 저장하는 클래스."""
-    def __init__(self, item_id, name, item_type, equip_slot, effect_type, value):
+    def __init__(self, item_id, name, item_type, equip_slot, effect_type, value, description="", req_level=0):
         self.id = item_id
         self.name = name
         self.item_type = item_type    # EQUIP, SKILLBOOK, CONSUMABLE, ETC
         self.equip_slot = equip_slot  # WEAPON, SHIELD, HELMET, ARMOR, GLOVES, BOOTS, NECKLACE, RING, NONE
         self.effect_type = effect_type # HP_RECOVER, MP_RECOVER, ATTACK, DEFENSE, KEY, NONE
         self.value = value             # 회복량, 공격력/방어력 증가량 등
+        self.description = description
+        self.req_level = req_level
 
     def __repr__(self):
         return (
             f"ItemDefinition(id={self.id}, name={self.name}, item_type={self.item_type}, "
-            f"equip_slot={self.equip_slot}, effect_type={self.effect_type}, value={self.value})"
+            f"equip_slot={self.equip_slot}, effect_type={self.effect_type}, value={self.value}, "
+            f"description={self.description}, req_level={self.req_level})"
         )
 
 class MonsterDefinition:
@@ -71,6 +74,8 @@ def load_item_definitions(ui_instance=None):
             parts = [p.strip() for p in line.split(',')]
             if len(parts) >= 6: # 최소 6개의 필드 확인
                 item_id, name, item_type, equip_slot, effect_type, value_str = parts[:6]
+                req_level_str = parts[6] if len(parts) > 6 else "0"
+                description = parts[7] if len(parts) > 7 else ""
 
                 # 값 변환
                 try:
@@ -79,9 +84,15 @@ def load_item_definitions(ui_instance=None):
                         value = int(value)
                 except ValueError:
                     value = value_str # 숫자로 변환할 수 없으면 문자열로 유지
+                
+                try:
+                    req_level = int(req_level_str)
+                except ValueError:
+                    req_level = 0
+
 
                 _item_definitions[item_id] = ItemDefinition(
-                    item_id, name, item_type.upper(), equip_slot.upper(), effect_type.upper(), value
+                    item_id, name, item_type.upper(), equip_slot.upper(), effect_type.upper(), value, description, req_level
                 )
             else:
                 if ui_instance:

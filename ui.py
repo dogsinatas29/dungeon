@@ -37,7 +37,8 @@ class UI:
     def __init__(self):
         self.terminal_width, self.terminal_height = shutil.get_terminal_size()
         self.message_log = []
-        self.message_log_max_lines = 5
+        self.full_message_log = [] # 전체 메시지 기록
+        self.message_log_max_lines = 1 # 화면에 표시될 최대 줄 수
         
         self.MAP_VIEWPORT_WIDTH = 60
         self.MAP_VIEWPORT_HEIGHT = 20
@@ -46,15 +47,15 @@ class UI:
 
         self.status_bar_y_start = self.map_viewport_y_start + self.MAP_VIEWPORT_HEIGHT
         
-        self.message_log_x_start = self.map_viewport_x_start + self.MAP_VIEWPORT_WIDTH + 2
-        self.message_log_y_start = self.map_viewport_y_start
-        self.message_log_width = self.terminal_width - self.message_log_x_start - 2
-        self.message_log_height = 10
-
-        self.quick_slot_x_start = self.message_log_x_start
-        self.quick_slot_y_start = self.message_log_y_start + self.message_log_height + 1
-        self.quick_slot_width = self.message_log_width
+        # --- 오른쪽 사이드바 레이아웃 ---
+        self.sidebar_x_start = self.map_viewport_x_start + self.MAP_VIEWPORT_WIDTH + 2
+        self.sidebar_width = self.terminal_width - self.sidebar_x_start - 2
         
+        self.message_log_y_start = self.map_viewport_y_start
+        self.equipment_y_start = self.message_log_y_start + 3 # 메시지 로그(제목+1줄) 다음
+        self.inventory_y_start = self.equipment_y_start + 10 # 장비(제목+8줄) 다음
+        self.skills_y_start = self.inventory_y_start + 7 # 인벤토리(제목+5줄) 다음
+
         sys.stdout.write(ANSI.HIDE_CURSOR)
         self.clear_screen()
 
@@ -62,21 +63,25 @@ class UI:
         sys.stdout.write("\033[2J\033[H")
 
     def add_message(self, msg):
-        self.message_log.append(msg)
+        self.full_message_log.append(msg) # 전체 로그에 추가
+        self.message_log.append(msg) # 화면 표시용 로그에 추가
         if len(self.message_log) > self.message_log_max_lines:
             self.message_log.pop(0)
 
     def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y, 
-                         inventory_open=False, inventory_cursor_pos=0, inventory_active_tab='item'):
+                         inventory_open=False, inventory_cursor_pos=0, 
+                         inventory_active_tab='item', inventory_scroll_offset=0,
+                         log_viewer_open=False, log_viewer_scroll_offset=0):
         self.clear_screen()
         
         self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y)
         self._draw_player_status(player)
-        self._draw_message_log()
-        self._draw_quick_slots(player)
+        self._draw_sidebar(player)
 
         if inventory_open:
-            self._draw_inventory(player, inventory_cursor_pos, inventory_active_tab)
+            self._draw_inventory(player, inventory_active_tab, inventory_cursor_pos, inventory_scroll_offset)
+        elif log_viewer_open:
+            self._draw_full_log_viewer(log_viewer_scroll_offset)
 
         sys.stdout.flush()
 
@@ -126,7 +131,7 @@ class UI:
             empty_len = bar_width - filled_len
             return f"{color}{'█' * filled_len}{ANSI.WHITE}{'█' * empty_len}{ANSI.RESET}"
 
-        # HP, MP, Stamina
+        # HP, MP, Stamina, EXP
         hp_text = pad_str_to_width(f"HP: {player.hp}/{player.max_hp}", 18)
         hp_bar = draw_bar(player.hp, player.max_hp, ANSI.RED)
         self.write_at(y_start, x_start, f"{hp_text} {hp_bar}")
@@ -138,80 +143,191 @@ class UI:
         stamina_text = pad_str_to_width(f"Stamina: {player.stamina}/{player.max_stamina}", 18)
         stamina_bar = draw_bar(player.stamina, player.max_stamina, ANSI.YELLOW)
         self.write_at(y_start + 2, x_start, f"{stamina_text} {stamina_bar}")
+        
+        exp_text = pad_str_to_width(f"EXP: {player.exp}/{player.exp_to_next_level}", 18)
+        exp_bar = draw_bar(player.exp, player.exp_to_next_level, ANSI.GREEN)
+        self.write_at(y_start + 3, x_start, f"{exp_text} {exp_bar}")
 
         # Other stats
-        other_stats = [
-            f"ATT: {player.attack} ({player.base_att}+{player.att_bonus})",
-            f"DEF: {player.defense} ({player.base_def}+{player.def_bonus})",
-            f"Lv: {player.level}",
-            f"EXP: {player.exp}/{player.exp_to_next_level}"
-        ]
-        for i, line in enumerate(other_stats):
-            padded_line = pad_str_to_width(line, self.MAP_VIEWPORT_WIDTH)
-            self.write_at(y_start + 3 + i, x_start, padded_line)
-
-    def _draw_message_log(self):
-        y, x, w = self.message_log_y_start, self.message_log_x_start, self.message_log_width
-        sys.stdout.write(f"{ANSI.cursor_to(y, x)}{pad_str_to_width('--- 메시지 로그 ---', w, align='center')}")
-        for i, msg in enumerate(self.message_log):
-            if y + 1 + i < self.message_log_y_start + self.message_log_height:
-                sys.stdout.write(f"{ANSI.cursor_to(y + 1 + i, x)}{pad_str_to_width(f' {msg}', w)}")
-
-    def _draw_quick_slots(self, player):
-        y, x, w = self.quick_slot_y_start, self.quick_slot_x_start, self.quick_slot_width
+        other_stats_line1 = f"ATT: {player.attack} ({player.base_att}+{player.att_bonus})   DEF: {player.defense} ({player.base_def}+{player.def_bonus})"
+        other_stats_line2 = f"Lv: {player.level}"
         
-        self.write_at(y, x, pad_str_to_width('--- 아이템 퀵슬롯 ---', w, align='center'))
-        for i in range(1, 6):
-            slot_item = player.item_quick_slots.get(i)
-            item_name = player.inventory.get(slot_item, {}).get('name', '비어있음') if slot_item else '비어있음'
-            text = f"{i}: {item_name}"
-            self.write_at(y + i, x, pad_str_to_width(text, w))
+        self.write_at(y_start + 4, x_start, pad_str_to_width(other_stats_line1, self.MAP_VIEWPORT_WIDTH))
+        self.write_at(y_start + 5, x_start, pad_str_to_width(other_stats_line2, self.MAP_VIEWPORT_WIDTH))
 
-        skill_y_start = y + 7
-        self.write_at(skill_y_start, x, pad_str_to_width('--- 스킬 퀵슬롯 ---', w, align='center'))
+    def _draw_sidebar(self, player):
+        x = self.sidebar_x_start
+        w = self.sidebar_width
+
+        # --- 1. Message Log ---
+        msg_y = self.message_log_y_start
+        self.write_at(msg_y, x, pad_str_to_width('--- 메시지 로그 ---', w, align='center'))
+        if self.message_log:
+            last_message = self.message_log[-1]
+            self.write_at(msg_y + 1, x, pad_str_to_width(f' {last_message}', w))
+
+        # --- 2. Equipment ---
+        eq_y = self.equipment_y_start
+        self.write_at(eq_y, x, pad_str_to_width('--- 장비 ---', w, align='center'))
+        
+        equipment_slots = {
+            "머리": "투구", "몸통": "갑옷", "장갑": "장갑", "신발": "신발",
+            "손1": "무기", "손2방패": "방패", 
+            "액세서리1": "목걸이", "액세서리2": "반지1"
+        }
+        
+        for i, (display_name, slot_key) in enumerate(equipment_slots.items()):
+            item = player.equipment.get(slot_key)
+            item_name = item.name if item else "비어있음"
+            text = f"{display_name}: {item_name}"
+            self.write_at(eq_y + 1 + i, x, pad_str_to_width(text, w))
+
+        # --- 3. Inventory (Item Quick Slots) ---
+        inv_y = self.inventory_y_start
+        self.write_at(inv_y, x, pad_str_to_width('--- 인벤토리 ---', w, align='center'))
+        for i in range(1, 6):
+            item_id = player.item_quick_slots.get(i)
+            item_name = "비어있음"
+            if item_id:
+                item_def = data_manager.get_item_definition(item_id)
+                if item_def:
+                    item_name = item_def.name
+            text = f"{i}: {item_name}"
+            self.write_at(inv_y + 1 + (i-1), x, pad_str_to_width(text, w))
+
+        # --- 4. Skills ---
+        skill_y = self.skills_y_start
+        self.write_at(skill_y, x, pad_str_to_width('--- 스킬 ---', w, align='center'))
         skill_slots = list(range(6, 10)) + [0]
         for i, slot_num in enumerate(skill_slots):
-            slot_skill = player.skill_quick_slots.get(slot_num)
-            skill_name = player.skills.get(slot_skill, {}).get('name', '비어있음') if slot_skill else '비어있음'
+            skill_id = player.skill_quick_slots.get(slot_num)
+            skill_name = "비어있음"
+            if skill_id:
+                skill_def = data_manager.get_item_definition(skill_id)
+                if skill_def:
+                    skill_name = skill_def.name
             text = f"{slot_num}: {skill_name}"
-            self.write_at(skill_y_start + 1 + i, x, pad_str_to_width(text, w))
+            self.write_at(skill_y + 1 + i, x, pad_str_to_width(text, w))
 
-    def _draw_inventory(self, player, cursor_pos=0):
-        win_w, win_h = 54, 18
+    def _draw_inventory(self, player, active_tab='item', cursor_pos=0, scroll_offset=0):
+        win_w, win_h = 60, 20
         win_x = self.map_viewport_x_start + (self.MAP_VIEWPORT_WIDTH - win_w) // 2
         win_y = self.map_viewport_y_start + (self.MAP_VIEWPORT_HEIGHT - win_h) // 2
-
-        # Draw border and clear area
-        self.write_at(win_y, win_x, "┌" + "─" * (win_w - 2) + "┐")
+        
+        # --- 창 그리기 ---
+        border = "┌" + "─" * (win_w - 2) + "┐"
+        middle = "│" + " " * (win_w - 2) + "│"
+        self.write_at(win_y, win_x, border)
         for i in range(win_h - 2):
-            self.write_at(win_y + 1 + i, win_x, "│" + " " * (win_w - 2) + "│")
+            self.write_at(win_y + 1 + i, win_x, middle)
         self.write_at(win_y + win_h - 1, win_x, "└" + "─" * (win_w - 2) + "┘")
+
+        # --- 탭 그리기 ---
+        tabs = {'item': 'a:Item', 'equipment': 'b:Equip', 'scroll': 'c:Scroll', 'skill_book': 'd:Skill', 'all': 'z:All'}
+        tab_x_start = win_x + 2
+        for tab_key, tab_text in tabs.items():
+            display_text = f" {tab_text} "
+            if tab_key == active_tab:
+                display_text = f"[{tab_text}]"
+            self.write_at(win_y + 1, tab_x_start, display_text)
+            tab_x_start += get_str_width(display_text) + 1 # 탭 간격 추가
+
+        # --- 아이템 목록 그리기 ---
+        list_y_start = win_y + 3
+        list_height = win_h - 6
         
-        # Titles
-        self.write_at(win_y, win_x + 2, " 인벤토리 ")
-        self.write_at(win_y, win_x + 28, " 장비 ")
+        items_to_display = player.inventory.get_items_by_tab(active_tab)
 
-        # Equipment section
-        equip_slots = ["WEAPON", "SHIELD", "HELMET", "ARMOR", "GLOVES", "BOOTS", "NECKLACE", "RING"]
-        for i, slot in enumerate(equip_slots):
-            item_id = player.equipment.get(slot)
-            item_name = data_manager.get_item_definition(item_id).name if item_id else "---"
-            self.write_at(win_y + 2 + i, win_x + 29, f"{slot:<8}: {item_name}")
-
-        # Inventory section
-        inventory_items = list(player.inventory.items())
-        if not inventory_items:
-            self.write_at(win_y + 2, win_x + 2, "비어 있음")
+        if not items_to_display:
+            self.write_at(list_y_start, win_x + 2, "해당 아이템이 없습니다.")
         else:
-            for i, (item_id, item_data) in enumerate(inventory_items):
-                if i < win_h - 4:
-                    prefix = "> " if i == cursor_pos else "  "
-                    item_text = f"{prefix}{item_data['name']}: {item_data['qty']}개"
-                    self.write_at(win_y + 2 + i, win_x + 2, pad_str_to_width(item_text, 25))
+            for i in range(list_height):
+                item_index = scroll_offset + i
+                if item_index >= len(items_to_display):
+                    break
+
+                item_data = items_to_display[item_index]
+                item_obj = item_data['item']
+                
+                prefix = "> " if item_index == cursor_pos else "  "
+                
+                # 형식: 아이템 이름x개수 : 효과
+                item_text = f"{prefix}{item_obj.name} x{item_data['qty']}"
+                desc_text = f": {item_obj.description}"
+                
+                # 너비를 고려하여 텍스트 자르기
+                available_width = win_w - 4
+                full_text = item_text + desc_text
+                if get_str_width(full_text) > available_width:
+                    full_text = pad_str_to_width(full_text, available_width)[:available_width]
+
+                self.write_at(list_y_start + i, win_x + 2, pad_str_to_width(full_text, available_width))
+
+        # --- 스크롤바 (선택적) ---
+        if len(items_to_display) > list_height:
+            scrollbar_height = list_height
+            thumb_size = max(1, int(scrollbar_height * list_height / len(items_to_display)))
+            thumb_pos = int(scrollbar_height * scroll_offset / len(items_to_display))
+            for i in range(scrollbar_height):
+                char = "█" if thumb_pos <= i < thumb_pos + thumb_size else "░"
+                self.write_at(list_y_start + i, win_x + win_w - 2, char)
+
+        # --- 안내문 ---
+        instructions = "[↑↓]이동 [e]장착 [R]버리기 [1-0]퀵슬롯 [i]닫기"
+        self.write_at(win_y + win_h - 2, win_x + (win_w - get_str_width(instructions)) // 2, instructions)
+
+    def _draw_full_log_viewer(self, scroll_offset=0):
+        win_w, win_h = 70, 22
+        win_x = (self.terminal_width - win_w) // 2
+        win_y = (self.terminal_height - win_h) // 2
         
-        # Instructions
-        instructions = "[↑↓] 이동 [e] 장착/해제 [i] 닫기"
-        self.write_at(win_y + win_h - 2, win_x + (win_w - len(instructions)) // 2, instructions)
+        # --- 창 그리기 ---
+        border = "┌" + "─" * (win_w - 2) + "┐"
+        middle = "│" + " " * (win_w - 2) + "│"
+        self.write_at(win_y, win_x, border)
+        for i in range(win_h - 2):
+            self.write_at(win_y + 1 + i, win_x, middle)
+        self.write_at(win_y + win_h - 1, win_x, "└" + "─" * (win_w - 2) + "┘")
+
+        # --- 제목 ---
+        title = "전체 메시지 로그"
+        self.write_at(win_y, win_x + (win_w - len(title)) // 2, title)
+
+        # --- 로그 내용 그리기 ---
+        list_y_start = win_y + 2
+        list_height = win_h - 4
+        
+        # 최신 메시지가 아래에 오도록 로그를 역순으로 표시
+        logs_to_display = self.full_message_log
+        
+        if not logs_to_display:
+            self.write_at(list_y_start, win_x + 2, "표시할 메시지가 없습니다.")
+        else:
+            # 스크롤 오프셋에 맞춰 표시할 로그 선택
+            start_index = max(0, len(logs_to_display) - list_height - scroll_offset)
+            end_index = max(0, len(logs_to_display) - scroll_offset)
+            
+            visible_logs = logs_to_display[start_index:end_index]
+
+            for i, log_msg in enumerate(visible_logs):
+                self.write_at(list_y_start + i, win_x + 2, pad_str_to_width(log_msg, win_w - 4))
+
+        # --- 스크롤바 (선택적) ---
+        if len(logs_to_display) > list_height:
+            scrollbar_height = list_height
+            thumb_size = max(1, int(scrollbar_height * list_height / len(logs_to_display)))
+            
+            # 스크롤 위치 계산 (최신 항목이 맨 아래에 오므로 역으로 계산)
+            thumb_pos = int(scrollbar_height * (len(logs_to_display) - list_height - scroll_offset) / len(logs_to_display))
+            thumb_pos = scrollbar_height - thumb_size - thumb_pos # 역방향
+
+            for i in range(scrollbar_height):
+                char = "█" if thumb_pos <= i < thumb_pos + thumb_size else "░"
+                self.write_at(list_y_start + i, win_x + win_w - 2, char)
+
+        # --- 안내문 ---
+        instructions = "[↑↓]스크롤 [m]닫기"
+        self.write_at(win_y + win_h - 2, win_x + (win_w - get_str_width(instructions)) // 2, instructions)
 
     def show_main_menu(self):
         self.clear_screen()
