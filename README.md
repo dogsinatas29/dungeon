@@ -1,3 +1,14 @@
+---
+
+### 🚨 면책 조항 (Disclaimer)
+
+이 프로젝트에 포함된 모든 정보는 정보 제공의 목적으로만 제공됩니다. 이 프로젝트는 '있는 그대로(AS IS)' 제공되며, 어떠한 명시적 또는 묵시적 보증도 하지 않습니다. 이 프로젝트의 사용으로 인해 발생하는 모든 직접적, 간접적, 부수적, 또는 결과적 손해에 대해 저작권자 또는 기여자는 어떠한 책임도 지지 않습니다.
+
+이 프로젝트는 법률 자문을 제공하지 않으며, 법률 관련 내용은 전문가와 상담하시기 바랍니다.
+
+---
+
+
 <img width="1220" height="932" alt="image" src="https://github.com/user-attachments/assets/f21aa500-6c43-4fde-91a4-7e1ccdc6b9cc" />
 <img width="1220" height="932" alt="image" src="https://github.com/user-attachments/assets/35e1b3a7-08e7-4943-b08a-592089e1646f" />
 
