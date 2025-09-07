@@ -154,6 +154,15 @@ class DungeonMap:
         self.reveal_tiles(self.player_x, self.player_y)
         return True, "이동했습니다."
 
+    def move_monster(self, monster, dx, dy):
+        """지정된 몬스터를 이동시킵니다."""
+        new_x, new_y = monster.x + dx, monster.y + dy
+        if self.is_walkable_for_monster(new_x, new_y):
+            monster.x = new_x
+            monster.y = new_y
+            return True
+        return False
+
     def get_tile(self, x, y):
         if (x, y) in self.room_entrances: return ROOM_ENTRANCE
         if (x, y) in self.items_on_map: return ITEM_TILE
