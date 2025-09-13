@@ -243,23 +243,32 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                         
                         # 2-2. 메인 맵에서 다음 층으로 이동
                         else:
+                            should_descend = False
                             if dungeon_map.exit_type == EXIT_LOCKED:
                                 required_keys = dungeon_map.required_key_count
                                 player_keys = player.get_item_quantity(dungeon_map.required_key_id)
                                 if player_keys >= required_keys:
-                                    # player.remove_item(아이템객체) 이므로 아이템을 찾아서 전달해야 함
                                     key_item_to_remove = player.inventory.find_item_by_id(dungeon_map.required_key_id)
                                     if key_item_to_remove:
                                         player.remove_item(key_item_to_remove, required_keys)
-                                    ui_instance.add_message(f"열쇠 {required_keys}개를 사용하여 다음 층으로 이동합니다.")
-                                    # >> 층 이동 로직 실행 <<
+                                    
+                                    dungeon_map.exit_type = EXIT_NORMAL # 문을 영구적으로 엽니다.
+                                    ui_instance.add_message(f"열쇠 {required_keys}개를 사용하여 문을 열었습니다. 이제 이 문은 항상 열려있습니다.")
+                                    should_descend = True
                                 else:
                                     ui_instance.add_message(f"다음 층으로 가려면 열쇠가 {required_keys}개 필요합니다. (현재: {player_keys}개)")
-                                    player.x -= dx; player.y -= dy # 이동 취소
+                                    player.x -= dx; player.y -= dy
                                     dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
                             else: # EXIT_NORMAL
-                                ui_instance.add_message("다음 층으로 이동합니다.")
-                                # >> 층 이동 로직 실행 <<
+                                should_descend = True
+
+                            if should_descend:
+                                ui_instance.add_message(f"{current_floor + 1}층으로 내려갑니다.")
+                                current_dungeon_level = (current_floor + 1, 0)
+                                dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
+                                player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
+                                dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
+                                dungeon_map.reveal_tiles(player.x, player.y)
                 elif isinstance(result, str):
                      ui_instance.add_message(result)
             
