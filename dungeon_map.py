@@ -88,6 +88,12 @@ class DungeonMap:
         self._place_start_and_exit()
         self._place_room_entrances()
 
+        # 방이 있으면 출구를 잠그고, 필요한 열쇠 수를 설정
+        if self.room_entrances:
+            self.exit_type = EXIT_LOCKED
+            self.required_key_id = "KEY_DUNGEON_1"
+            self.required_key_count = len(self.room_entrances)
+
     def _generate_sub_room(self):
         growth_multiplier = (self.floor - 1) // self.ROOM_GROWTH_LEVEL_INTERVAL
         self.width = self.BASE_ROOM_WIDTH + growth_multiplier * self.ROOM_GROWTH_AMOUNT

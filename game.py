@@ -212,6 +212,54 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                             item_obj = Item.from_definition(item_def)
                             player.add_item(item_obj, item_data_on_map['qty'])
                             ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
+
+                    # 방/레벨 전환 로직
+                    player_pos = (player.x, player.y)
+                    
+                    # 1. 방으로 들어가는 경우 (열쇠 없이)
+                    if player_pos in dungeon_map.room_entrances:
+                        room_index = dungeon_map.room_entrances[player_pos]
+                        last_entrance_position[current_dungeon_level] = player_pos
+                        current_dungeon_level = (current_floor, room_index)
+                        dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
+                        player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
+                        dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
+                        dungeon_map.reveal_tiles(player.x, player.y)
+                        ui_instance.add_message(f"{current_floor}층 {room_index}번 방으로 이동했습니다.")
+
+                    # 2. 방에서 나가거나 다음 층으로 이동하는 경우
+                    elif player_pos == (dungeon_map.exit_x, dungeon_map.exit_y):
+                        # 2-1. 방에서 메인 맵으로 돌아옴
+                        if current_room_index > 0:
+                            previous_level = (current_floor, 0)
+                            return_pos = last_entrance_position.get(previous_level)
+                            current_dungeon_level = previous_level
+                            dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
+                            if return_pos: player.x, player.y = return_pos
+                            else: player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
+                            dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
+                            dungeon_map.reveal_tiles(player.x, player.y)
+                            ui_instance.add_message(f"{current_floor}층의 중심으로 돌아왔습니다.")
+                        
+                        # 2-2. 메인 맵에서 다음 층으로 이동
+                        else:
+                            if dungeon_map.exit_type == EXIT_LOCKED:
+                                required_keys = dungeon_map.required_key_count
+                                player_keys = player.get_item_quantity(dungeon_map.required_key_id)
+                                if player_keys >= required_keys:
+                                    # player.remove_item(아이템객체) 이므로 아이템을 찾아서 전달해야 함
+                                    key_item_to_remove = player.inventory.find_item_by_id(dungeon_map.required_key_id)
+                                    if key_item_to_remove:
+                                        player.remove_item(key_item_to_remove, required_keys)
+                                    ui_instance.add_message(f"열쇠 {required_keys}개를 사용하여 다음 층으로 이동합니다.")
+                                    # >> 층 이동 로직 실행 <<
+                                else:
+                                    ui_instance.add_message(f"다음 층으로 가려면 열쇠가 {required_keys}개 필요합니다. (현재: {player_keys}개)")
+                                    player.x -= dx; player.y -= dy # 이동 취소
+                                    dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
+                            else: # EXIT_NORMAL
+                                ui_instance.add_message("다음 층으로 이동합니다.")
+                                # >> 층 이동 로직 실행 <<
                 elif isinstance(result, str):
                      ui_instance.add_message(result)
             
@@ -293,10 +341,13 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                             elif dy != 0 and dungeon_map.move_monster(monster, 0, dy):
                                 pass # y축으로 이동 성공
 
-        # 플레이어가 아무 행동도 안 하고 메뉴도 닫혀있을 때만 스태미너 회복
+        # 플레이어가 아무 행동도 안 하고 메뉴도 닫혀있을 때만 휴식으로 간주
         elif not player_action_taken and not is_in_menu:
-            if player.stamina < player.max_stamina:
-                player.stamina += 1
+            rest_turn_count += 1
+            # 100턴(10분)마다 스태미너 1 회복
+            if rest_turn_count > 0 and rest_turn_count % 100 == 0:
+                if player.stamina < player.max_stamina:
+                    player.stamina = min(player.max_stamina, player.stamina + 1)
         
         if not player.is_alive():
             game_over_flag = True
