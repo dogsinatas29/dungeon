@@ -122,6 +122,10 @@ class Player:
             self.restore_mp(item.value)
             self.remove_item(item, 1)
             return True, f"{item.name}을(를) 사용하여 MP를 {item.value}만큼 회복했습니다."
+        elif item.effect_type == 'STAMINA_RECOVER':
+            self.restore_stamina(item.value)
+            self.remove_item(item, 1)
+            return True, f"{item.name}을(를) 사용하여 스태미나를 {item.value}만큼 회복했습니다."
         
         return False, f"{item.name}은(는) 아직 사용할 수 없습니다."
 
@@ -150,6 +154,10 @@ class Player:
     def restore_mp(self, amount):
         """플레이어의 MP를 회복시킵니다."""
         self.mp = min(self.mp + amount, self.max_mp)
+
+    def restore_stamina(self, amount):
+        """플레이어의 스태미나를 회복시킵니다."""
+        self.stamina = min(self.stamina + amount, self.max_stamina)
 
     def gain_exp(self, amount):
         """경험치를 얻고 레벨업을 확인합니다."""
