@@ -140,7 +140,7 @@ class UI:
         mp_bar = draw_bar(player.mp, player.max_mp, ANSI.BLUE)
         self.write_at(y_start + 1, x_start, f"{mp_text} {mp_bar}")
 
-        stamina_text = pad_str_to_width(f"Stamina: {player.stamina}/{player.max_stamina}", 18)
+        stamina_text = pad_str_to_width(f"Stamina: {int(player.stamina)}/{int(player.max_stamina)}", 18)
         stamina_bar = draw_bar(player.stamina, player.max_stamina, ANSI.YELLOW)
         self.write_at(y_start + 2, x_start, f"{stamina_text} {stamina_bar}")
         

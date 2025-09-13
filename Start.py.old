@@ -1,0 +1,257 @@
+# Start.py
+
+import os
+import json
+import sys
+import shutil
+import readchar
+from player import Player
+from dungeon_map import DungeonMap
+from ui import UI, ANSI, pad_str_to_width
+import game
+# from data_manager import load_monster_definitions # 이 라인을 주석 처리하여 ModuleNotFoundError를 방지합니다.
+
+# 게임 데이터 저장 경로
+SAVE_DIR = "game_data"
+PLAYER_SAVE_FILE = os.path.join(SAVE_DIR, "player_data.json")
+DUNGEON_MAPS_SAVE_FILE = os.path.join(SAVE_DIR, "all_dungeon_maps.json")
+
+# 아이템 정의 로드 (게임 시작 시 한 번만 로드)
+ITEM_DEFINITIONS = {}
+ITEMS_FILE = "items.txt"
+
+def load_item_definitions(ui_instance):
+    """
+    items.txt 파일을 로드하여 아이템 정의 딕셔너리를 반환합니다.
+    파일 형식: ID,Name,UsageType,EffectType,Value
+    """
+    items = {}
+    if not os.path.exists(ITEMS_FILE):
+        ui_instance.add_message(f"오류: 아이템 정의 파일 '{ITEMS_FILE}'을 찾을 수 없습니다.")
+        return items
+
+    with open(ITEMS_FILE, 'r', encoding='utf-8') as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            
+            try:
+                item_id, name, usage_type, effect_type, value_str = line.split(',')
+                value = float(value_str)
+                required_level = 1 # items.txt에 필요 레벨이 없으므로, 기본값 1로 설정
+
+                # 사용 타입에 따라 아이템 타입을 설정합니다.
+                if usage_type == "EQUIP":
+                    item_type = "equipment"
+                    description = f"공격력 +{int(value)}" if effect_type == "ATTACK" else f"방어력 +{int(value)}"
+                elif usage_type == "MANUAL":
+                    item_type = "consumable"
+                    if effect_type == "HP_RECOVER":
+                        description = f"HP를 {int(value)} 회복시켜줍니다."
+                    elif effect_type == "MP_RECOVER":
+                        description = f"MP를 {int(value)} 회복시켜줍니다."
+                    elif effect_type == "STAMINA_RECOVER":
+                        description = f"스태미나를 {int(value)} 회복시켜줍니다."
+                    else:
+                        description = f"알 수 없는 효과: {effect_type}"
+                elif usage_type == "AUTO":
+                    item_type = "key" # AUTO 타입은 열쇠로 가정
+                    description = "던전 열쇠입니다."
+                else:
+                    item_type = "misc"
+                    description = "알 수 없는 아이템입니다."
+                
+                items[item_id] = {
+                    "id": item_id,
+                    "name": name,
+                    "description": description,
+                    "item_type": item_type,
+                    "value": value,
+                    "required_level": required_level
+                }
+            except (ValueError, IndexError) as e:
+                ui_instance.add_message(f"오류: items.txt 파일의 {line_num}번째 줄에서 데이터를 파싱할 수 없습니다.")
+                print(f"디버그: 파싱 오류 - {e}")
+                continue
+    
+    return items
+
+def get_item_definition(item_id):
+    """주어진 ID의 아이템 정의를 반환합니다."""
+    return ITEM_DEFINITIONS.get(item_id)
+
+def create_save_directory():
+    """게임 데이터를 저장할 디렉토리를 생성합니다."""
+    os.makedirs(SAVE_DIR, exist_ok=True)
+
+def save_game_data(player, all_dungeon_maps, ui_instance):
+    """플레이어와 모든 던전 맵 데이터를 저장합니다."""
+    with open(PLAYER_SAVE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(player.to_dict(), f, ensure_ascii=False, indent=4)
+    
+    serializable_dungeon_maps = {f"{level[0]},{level[1]}": d_map.to_dict() for level, d_map in all_dungeon_maps.items()}
+    with open(DUNGEON_MAPS_SAVE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(serializable_dungeon_maps, f, ensure_ascii=False, indent=4)
+    
+    ui_instance.add_message("게임이 저장되었습니다!")
+
+def load_game_data():
+    """저장된 플레이어와 던전 맵 데이터를 로드합니다."""
+    player_data = None
+    all_dungeon_maps_data_raw = {}
+
+    if os.path.exists(PLAYER_SAVE_FILE):
+        with open(PLAYER_SAVE_FILE, 'r', encoding='utf-8') as f:
+            player_data = json.load(f)
+    
+    if os.path.exists(DUNGEON_MAPS_SAVE_FILE):
+        with open(DUNGEON_MAPS_SAVE_FILE, 'r', encoding='utf-8') as f:
+            all_dungeon_maps_data_raw = json.load(f)
+            # 딕셔너리의 키를 튜플로 다시 변환
+            all_dungeon_maps_data_raw = {tuple(map(int, k.split(','))): v for k, v in all_dungeon_maps_data_raw.items()}
+
+    return player_data, all_dungeon_maps_data_raw
+
+def main_menu():
+    ui = UI()
+    ui.clear_screen()
+    sys.stdout.write(ANSI.HIDE_CURSOR)
+
+    try:
+        while True: # 이 루프가 메뉴 화면을 계속 유지하고 입력을 기다리게 합니다.
+            ui.draw_main_layout()
+
+            menu_items = [
+                "=== 던전 탐험 게임 ===",
+                "",
+                "1. 새 게임",
+                "2. 이어하기",
+                "3. 종료",
+            ]
+
+            start_y = ui.terminal_height // 2 - len(menu_items) // 2
+
+            for i, item in enumerate(menu_items):
+                padded_item = pad_str_to_width(item, ui.terminal_width, align='center')
+                sys.stdout.write(ANSI.cursor_to(start_y + i, 0) + padded_item)
+
+            prompt = "선택: "
+            sys.stdout.write(ANSI.cursor_to(start_y + len(menu_items) + 1, ui.terminal_width // 2 - len(prompt) // 2) + prompt)
+            sys.stdout.flush()
+            
+            choice = readchar.readkey()
+            
+            player_data_for_game = None
+            maps_data_for_game = {}
+
+            if choice == '1':
+                if os.path.exists(SAVE_DIR):
+                    shutil.rmtree(SAVE_DIR)
+                create_save_directory()
+                player = Player(name="용사", hp=100, mp=50, level=1)
+                player_data_for_game = player.to_dict()
+                maps_data_for_game = {}
+            
+            elif choice == '2':
+                player_data, all_dungeon_maps = load_game_data()
+                if player_data and all_dungeon_maps:
+                    player_data_for_game = player_data
+                    maps_data_for_game = all_dungeon_maps
+                else:
+                    ui.add_message("저장된 게임이 없습니다. 새 게임을 시작해주세요.")
+                    ui.display_messages()
+                    import time
+                    time.sleep(2)
+                    continue # 메뉴 루프로 돌아감
+            
+            elif choice == '3':
+                ui.clear_screen()
+                sys.stdout.write(ANSI.SHOW_CURSOR)
+                sys.exit()
+            
+            else:
+                continue # 잘못된 입력 처리
+
+            # '1' 또는 '2'를 선택했고, 플레이 데이터가 준비된 경우 게임 실행
+            if player_data_for_game:
+                status, final_player, final_maps = game.run_game(
+                    player_data_for_game, 
+                    maps_data_for_game, 
+                    ITEM_DEFINITIONS, 
+                    ui
+                )
+                
+                # 게임 종료 후 'q'로 나왔을 때만 저장
+                if status == "QUIT":
+                    save_game_data(final_player, final_maps, ui)
+
+                ui.clear_messages()
+
+    except Exception as e:
+        ui.clear_screen()
+        sys.stdout.write(ANSI.SHOW_CURSOR)
+        import traceback
+        print("\n" + "="*30)
+        print("메인 메뉴 실행 중 예외 발생!")
+        print(f"오류 유형: {type(e).__name__}")
+        print(f"오류 메시지: {e}")
+        print("Traceback:")
+        traceback.print_exc()
+        print("="*30)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    if not sys.stdin.isatty():
+        print("오류: 이 게임은 대화형 터미널에서 실행해야 합니다.")
+        sys.exit(1)
+
+    try:
+        print("[1/6] 스크립트 시작...")
+        
+        create_save_directory()
+        print("[2/6] 저장 디렉토리 생성 완료.")
+        
+        # UI 객체 생성 시 발생할 수 있는 오류를 따로 처리합니다.
+        try:
+            ui = UI()
+            print("[3/6] UI 객체 생성 완료.")
+        except Exception as e:
+            # UI 객체 생성 실패 시, 커서를 복원하고 오류 메시지를 출력한 후 종료합니다.
+            sys.stdout.write(ANSI.SHOW_CURSOR)
+            print("\n" + "="*30)
+            print("UI 객체 생성 중 예외 발생!")
+            print("터미널 환경이 게임 실행에 적합하지 않을 수 있습니다.")
+            print(f"오류 유형: {type(e).__name__}")
+            print(f"오류 메시지: {e}")
+            print("="*30)
+            sys.exit(1)
+
+        print("[4/6] 아이템 정의 로드 시도...")
+        ITEM_DEFINITIONS = load_item_definitions(ui)
+        if not ITEM_DEFINITIONS:
+            print("오류: 아이템 정의를 로드하지 못했습니다. items.txt 파일을 확인해주세요.")
+            if ui.message_log:
+                ui.display_messages()
+            sys.exit(1)
+        print(f"[4/6] 아이템 정의 {len(ITEM_DEFINITIONS)}개 로드 완료.")
+        
+        # 몬스터 정의 로드 함수가 없으므로 호출을 주석 처리하고,
+        # 관련 import 문도 삭제하여 ModuleNotFoundError를 방지합니다.
+        # print("[5/6] 몬스터 정의 로드 완료.")
+
+        print("[5/6] 메인 메뉴 진입...")
+        main_menu()
+
+    except Exception as e:
+        sys.stdout.write(ANSI.SHOW_CURSOR)
+        import traceback
+        print("\n" + "="*30)
+        print("게임 실행 중 예외 발생!")
+        print(f"오류 유형: {type(e).__name__}")
+        print(f"오류 메시지: {e}")
+        print("Traceback:")
+        traceback.print_exc()
+        print("="*30)
+        sys.exit(1)
