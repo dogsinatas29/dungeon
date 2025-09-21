@@ -19,6 +19,7 @@ class Monster:
                 self.critical_chance = monster_def.critical_chance
                 self.critical_damage_multiplier = monster_def.critical_damage_multiplier
                 self.move_type = monster_def.move_type
+                self.original_move_type = self.move_type
             else:
                 self.name = name if name else "알 수 없는 몬스터"
                 self.symbol = symbol if symbol else '?'
@@ -31,6 +32,7 @@ class Monster:
                 self.critical_chance = 0.05
                 self.critical_damage_multiplier = 1.5
                 self.move_type = 'STATIONARY'
+                self.original_move_type = self.move_type
                 if self.ui_instance:
                     self.ui_instance.add_message(f"경고: 몬스터 정의 '{monster_id}'를 찾을 수 없습니다. 기본값 사용.")
         else:
@@ -45,6 +47,7 @@ class Monster:
             self.critical_chance = 0.05
             self.critical_damage_multiplier = 1.5
             self.move_type = 'STATIONARY'
+            self.original_move_type = self.move_type
 
         self.x = x
         self.y = y
@@ -84,6 +87,7 @@ class Monster:
             "critical_chance": self.critical_chance,
             "critical_damage_multiplier": self.critical_damage_multiplier,
             "move_type": self.move_type,
+            "original_move_type": self.original_move_type,
             "is_provoked": self.is_provoked,
             "dead": self.dead,
             "loot": self.loot
@@ -105,6 +109,7 @@ class Monster:
         monster.critical_chance = data.get('critical_chance', 0.05)
         monster.critical_damage_multiplier = data.get('critical_damage_multiplier', 1.5)
         monster.move_type = data.get('move_type', 'STATIONARY')
+        monster.original_move_type = data.get('original_move_type', 'AGGRESSIVE') # 이전 저장 파일 호환성을 위해 기본값 설정
         monster.is_provoked = data.get('is_provoked', False)
         monster.dead = data.get('dead', False)
         monster.loot = data.get('loot', None)

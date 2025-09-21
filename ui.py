@@ -40,7 +40,7 @@ class UI:
         self.terminal_width, self.terminal_height = shutil.get_terminal_size()
         self.message_log = []
         self.full_message_log = [] # 전체 메시지 기록
-        self.message_log_max_lines = 1 # 화면에 표시될 최대 줄 수
+        self.message_log_max_lines = 3 # 화면에 표시될 최대 줄 수
         
         self.MAP_VIEWPORT_WIDTH = 60
         self.MAP_VIEWPORT_HEIGHT = 20
@@ -54,7 +54,7 @@ class UI:
         self.sidebar_width = self.terminal_width - self.sidebar_x_start - 2
         
         self.message_log_y_start = self.map_viewport_y_start
-        self.equipment_y_start = self.message_log_y_start + 3 # 메시지 로그(제목+1줄) 다음
+        self.equipment_y_start = self.message_log_y_start + 5 # 메시지 로그(제목+3줄) 다음
         self.inventory_y_start = self.equipment_y_start + 10 # 장비(제목+8줄) 다음
         self.skills_y_start = self.inventory_y_start + 7 # 인벤토리(제목+5줄) 다음
 
@@ -65,10 +65,52 @@ class UI:
         sys.stdout.write("\033[2J\033[H")
 
     def add_message(self, msg):
-        self.full_message_log.append(msg) # 전체 로그에 추가
-        self.message_log.append(msg) # 화면 표시용 로그에 추가
-        if len(self.message_log) > self.message_log_max_lines:
-            self.message_log.pop(0)
+        self.full_message_log.append(msg) # 전체 로그에는 원본 메시지 추가
+        
+        # 메시지 줄 바꿈 로직
+        max_width = self.sidebar_width - 2 # 양쪽 여백 고려
+        
+        words = msg.split(' ')
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            # 단어 자체의 길이가 최대 너비를 초과하는 경우 (예: 긴 아이템 이름)
+            while get_str_width(word) > max_width:
+                # 앞에서부터 max_width만큼 자름
+                part = ""
+                part_len = 0
+                for char in word:
+                    char_len = get_str_width(char)
+                    if part_len + char_len > max_width:
+                        break
+                    part += char
+                    part_len += char_len
+                
+                if current_line: # 현재 줄에 내용이 있으면 먼저 추가
+                    lines.append(current_line)
+                    current_line = ""
+
+                lines.append(part)
+                word = word[len(part):]
+
+            if get_str_width(current_line + ' ' + word) > max_width:
+                lines.append(current_line)
+                current_line = word
+            else:
+                if current_line:
+                    current_line += ' ' + word
+                else:
+                    current_line = word
+        
+        if current_line:
+            lines.append(current_line)
+
+        # 화면 표시용 로그에 추가
+        for line in lines:
+            self.message_log.append(line)
+            if len(self.message_log) > self.message_log_max_lines:
+                self.message_log.pop(0)
 
     def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y, 
                          inventory_open=False, inventory_cursor_pos=0, 
@@ -164,9 +206,12 @@ class UI:
         # --- 1. Message Log ---
         msg_y = self.message_log_y_start
         self.write_at(msg_y, x, pad_str_to_width('--- 메시지 로그 ---', w, align='center'))
-        if self.message_log:
-            last_message = self.message_log[-1]
-            self.write_at(msg_y + 1, x, pad_str_to_width(f' {last_message}', w))
+        # 메시지 로그 영역을 먼저 지웁니다.
+        for i in range(self.message_log_max_lines):
+            self.write_at(msg_y + 1 + i, x, " " * w)
+        # 메시지를 표시합니다.
+        for i, message in enumerate(self.message_log):
+            self.write_at(msg_y + 1 + i, x, pad_str_to_width(f' {message}', w))
 
         # --- 2. Equipment ---
         eq_y = self.equipment_y_start
@@ -299,7 +344,7 @@ class UI:
                 self.write_at(list_y_start + i, win_x + win_w - 2, char)
 
         # --- 안내문 ---
-        instructions = "[↑↓]이동 [e]퀵슬롯등록(빈곳) [u]사용 [R]버리기 [i]닫기"
+        instructions = "[↑↓]이동 [e]장착/퀵슬롯 [u]사용(소모품/스킬북) [R]버리기 [i]닫기"
         self.write_at(win_y + win_h - 2, win_x + (win_w - get_str_width(instructions)) // 2, instructions)
 
     def _draw_full_log_viewer(self, scroll_offset=0):

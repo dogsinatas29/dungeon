@@ -107,14 +107,14 @@ class Player:
         return f"퀵슬롯 {slot}번에 {item.name}을(를) 등록했습니다."
 
     def assign_skill_to_quickslot(self, skill_book, slot):
-        """스킬북을 퀵슬롯 6-0번에 등록하고, 스킬을 배웁니다."""
+        """배운 스킬을 퀵슬롯 6-0번에 등록합니다."""
         slot_key = slot if slot != 0 else 10 # 0번 키는 10번 인덱스로 처리
         if not (6 <= slot_key <= 10):
             return "스킬 퀵슬롯은 6-0번만 가능합니다."
         
-        # 스킬을 처음 배우는 경우, skills 딕셔너리에 추가
+        # 스킬을 배웠는지 먼저 확인
         if skill_book.id not in self.skills:
-            self.skills[skill_book.id] = {'level': 1, 'exp': 0}
+            return f"'{skill_book.name}' 스킬을 아직 배우지 않았습니다. 먼저 'u' 키로 사용하세요."
             
         self.skill_quick_slots[slot_key] = skill_book.id
         return f"퀵슬롯 {slot}번에 {skill_book.name}을(를) 등록했습니다."
@@ -132,18 +132,38 @@ class Player:
         return "모든 퀵슬롯이 가득 찼습니다."
 
     def assign_to_empty_skill_quickslot(self, skill_book):
-        """스킬북을 비어있는 스킬 퀵슬롯 6-0번에 등록합니다."""
+        """배운 스킬을 비어있는 스킬 퀵슬롯 6-0번에 등록합니다."""
+        # 스킬을 배웠는지 먼저 확인
+        if skill_book.id not in self.skills:
+            return f"'{skill_book.name}' 스킬을 아직 배우지 않았습니다. 먼저 'u' 키로 사용하세요."
+
         # 0번 키는 10번 인덱스로 사용
         for slot in list(range(6, 11)):
             if self.skill_quick_slots.get(slot) is None:
-                # 스킬을 처음 배우는 경우, skills 딕셔너리에 추가
-                if skill_book.id not in self.skills:
-                    self.skills[skill_book.id] = {'level': 1, 'exp': 0}
                 self.skill_quick_slots[slot] = skill_book.id
                 
                 display_slot = 0 if slot == 10 else slot
                 return f"퀵슬롯 {display_slot}번에 {skill_book.name}을(를) 등록했습니다."
         return "모든 스킬 퀵슬롯이 가득 찼습니다."
+
+    def acquire_skill_from_book(self, skill_book):
+        """스킬북을 획득하여 즉시 스킬을 배우거나 레벨업합니다."""
+        skill_id = skill_book.id
+        
+        # 스킬북의 요구 레벨 확인
+        if self.level < skill_book.req_level:
+            # 레벨이 부족하면 스킬북을 얻을 수 없음 (메시지 반환 후 아이템은 사라짐)
+            return f"레벨 {skill_book.req_level}이 되지 않아 '{skill_book.name}' 스킬북을 읽을 수 없습니다."
+
+        if skill_id in self.skills:
+            # 스킬 레벨업
+            self.skills[skill_id]['level'] += 1
+            new_level = self.skills[skill_id]['level']
+            return f"'{skill_book.name}' 스킬의 레벨이 올랐습니다! (Lv.{new_level - 1} -> Lv.{new_level})"
+        else:
+            # 새로운 스킬 배우기
+            self.skills[skill_id] = {'level': 1, 'exp': 0}
+            return f"새로운 스킬 '{skill_book.name}'을(를) 배웠습니다!"
 
     def use_item(self, item):
         """소모품 아이템을 사용하고, 개수가 0이 되면 퀵슬롯을 비웁니다."""

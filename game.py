@@ -234,8 +234,14 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                         item_def = data_manager.get_item_definition(item_data_on_map['id'])
                         if item_def:
                             item_obj = Item.from_definition(item_def)
-                            player.add_item(item_obj, item_data_on_map['qty'])
-                            ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
+                            
+                            # 스킬북인 경우 즉시 습득, 아니면 인벤토리에 추가
+                            if item_obj.item_type == 'SKILLBOOK':
+                                message = player.acquire_skill_from_book(item_obj)
+                                ui_instance.add_message(message)
+                            else:
+                                player.add_item(item_obj, item_data_on_map['qty'])
+                                ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
 
                     # 방/레벨 전환 로직
                     player_pos = (player.x, player.y)
@@ -345,6 +351,14 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
         if (player_action_taken or is_in_menu) and player.is_alive():
             for monster in dungeon_map.monsters:
                 if monster.dead: continue
+
+                # 몬스터 AI: 체력 상태에 따라 행동 유형 변경
+                if monster.max_hp > 0: # max_hp가 0인 경우 ZeroDivisionError 방지
+                    health_percentage = (monster.hp / monster.max_hp) * 100
+                    if health_percentage < 30:
+                        monster.move_type = 'COWARD'
+                    elif health_percentage >= 90:
+                        monster.move_type = monster.original_move_type
                 
                 # 플레이어가 메뉴 안에 있을 때도 몬스터는 공격할 수 있음
                 if abs(player.x - monster.x) <= 1 and abs(player.y - monster.y) <= 1:
