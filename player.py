@@ -98,34 +98,83 @@ class Player:
         """아이템 또는 스크롤을 퀵슬롯 1-5번에 등록합니다."""
         if not (1 <= slot <= 5):
             return "아이템 퀵슬롯은 1-5번만 가능합니다."
+        
+        # 중복 등록 방지
+        if item.id in self.item_quick_slots.values():
+            return "이미 다른 퀵슬롯에 등록된 아이템입니다."
+
         self.item_quick_slots[slot] = item.id
         return f"퀵슬롯 {slot}번에 {item.name}을(를) 등록했습니다."
 
     def assign_skill_to_quickslot(self, skill_book, slot):
-        """스킬북을 퀵슬롯 6-0번에 등록합니다."""
+        """스킬북을 퀵슬롯 6-0번에 등록하고, 스킬을 배웁니다."""
         slot_key = slot if slot != 0 else 10 # 0번 키는 10번 인덱스로 처리
         if not (6 <= slot_key <= 10):
             return "스킬 퀵슬롯은 6-0번만 가능합니다."
+        
+        # 스킬을 처음 배우는 경우, skills 딕셔너리에 추가
+        if skill_book.id not in self.skills:
+            self.skills[skill_book.id] = {'level': 1, 'exp': 0}
+            
         self.skill_quick_slots[slot_key] = skill_book.id
         return f"퀵슬롯 {slot}번에 {skill_book.name}을(를) 등록했습니다."
 
+    def assign_to_empty_quickslot(self, item):
+        """소모품을 비어있는 퀵슬롯 1-5번에 등록합니다."""
+        # 중복 등록 방지
+        if item.id in self.item_quick_slots.values():
+            return "이미 다른 퀵슬롯에 등록된 아이템입니다."
+
+        for slot in range(1, 6):
+            if self.item_quick_slots.get(slot) is None:
+                self.item_quick_slots[slot] = item.id
+                return f"퀵슬롯 {slot}번에 {item.name}을(를) 등록했습니다."
+        return "모든 퀵슬롯이 가득 찼습니다."
+
+    def assign_to_empty_skill_quickslot(self, skill_book):
+        """스킬북을 비어있는 스킬 퀵슬롯 6-0번에 등록합니다."""
+        # 0번 키는 10번 인덱스로 사용
+        for slot in list(range(6, 11)):
+            if self.skill_quick_slots.get(slot) is None:
+                # 스킬을 처음 배우는 경우, skills 딕셔너리에 추가
+                if skill_book.id not in self.skills:
+                    self.skills[skill_book.id] = {'level': 1, 'exp': 0}
+                self.skill_quick_slots[slot] = skill_book.id
+                
+                display_slot = 0 if slot == 10 else slot
+                return f"퀵슬롯 {display_slot}번에 {skill_book.name}을(를) 등록했습니다."
+        return "모든 스킬 퀵슬롯이 가득 찼습니다."
+
     def use_item(self, item):
-        """소모품 아이템을 사용합니다."""
-        if not hasattr(item, 'effect_type'):
+        """소모품 아이템을 사용하고, 개수가 0이 되면 퀵슬롯을 비웁니다."""
+        if not hasattr(item, 'effect_type') or item.item_type != 'CONSUMABLE':
             return False, f"{item.name}은(는) 사용할 수 없는 아이템입니다."
+
+        effect_applied = False
+        message = ""
 
         if item.effect_type == 'HP_RECOVER':
             self.restore_hp(item.value)
-            self.remove_item(item, 1)
-            return True, f"{item.name}을(를) 사용하여 HP를 {item.value}만큼 회복했습니다."
+            message = f"{item.name}을(를) 사용하여 HP를 {item.value}만큼 회복했습니다."
+            effect_applied = True
         elif item.effect_type == 'MP_RECOVER':
             self.restore_mp(item.value)
-            self.remove_item(item, 1)
-            return True, f"{item.name}을(를) 사용하여 MP를 {item.value}만큼 회복했습니다."
+            message = f"{item.name}을(를) 사용하여 MP를 {item.value}만큼 회복했습니다."
+            effect_applied = True
         elif item.effect_type == 'STAMINA_RECOVER':
             self.restore_stamina(item.value)
+            message = f"{item.name}을(를) 사용하여 스태미나를 {item.value}만큼 회복했습니다."
+            effect_applied = True
+        
+        if effect_applied:
             self.remove_item(item, 1)
-            return True, f"{item.name}을(를) 사용하여 스태미나를 {item.value}만큼 회복했습니다."
+            # 아이템을 사용한 후 개수가 0이 되었는지 확인
+            if self.get_item_quantity(item.id) <= 0:
+                # 모든 퀵슬롯을 확인하여 해당 아이템 ID를 가진 슬롯을 비움
+                for slot, item_id in self.item_quick_slots.items():
+                    if item_id == item.id:
+                        self.item_quick_slots[slot] = None
+            return True, message
         
         return False, f"{item.name}은(는) 아직 사용할 수 없습니다."
 

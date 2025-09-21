@@ -3,9 +3,11 @@
 import sys
 import shutil
 import re
+import readchar
 from typing import List
 from wcwidth import wcswidth
 import data_manager # 아이템 정의를 가져오기 위해 추가
+from items import Equipment, SkillBook # 상태 표시를 위해 클래스 임포트
 
 # 순환 참조 방지를 위해 타입 힌트를 문자열로 사용
 # from monster import Monster
@@ -184,15 +186,16 @@ class UI:
 
         # --- 3. Inventory (Item Quick Slots) ---
         inv_y = self.inventory_y_start
-        self.write_at(inv_y, x, pad_str_to_width('--- 인벤토리 ---', w, align='center'))
+        self.write_at(inv_y, x, pad_str_to_width('--- 퀵 슬롯 ---', w, align='center'))
         for i in range(1, 6):
             item_id = player.item_quick_slots.get(i)
-            item_name = "비어있음"
+            text = f"{i}: 비어있음"
             if item_id:
                 item_def = data_manager.get_item_definition(item_id)
                 if item_def:
-                    item_name = item_def.name
-            text = f"{i}: {item_name}"
+                    item_qty = player.get_item_quantity(item_id)
+                    text = f"{i}: {item_def.name} x{item_qty}"
+            
             self.write_at(inv_y + 1 + (i-1), x, pad_str_to_width(text, w))
 
         # --- 4. Skills ---
@@ -200,14 +203,22 @@ class UI:
         self.write_at(skill_y, x, pad_str_to_width('--- 스킬 ---', w, align='center'))
         skill_slots = list(range(6, 10)) + [0]
         for i, slot_num in enumerate(skill_slots):
-            skill_id = player.skill_quick_slots.get(slot_num)
-            skill_name = "비어있음"
+            actual_slot_num = 10 if slot_num == 0 else slot_num
+            skill_id = player.skill_quick_slots.get(actual_slot_num)
+            
+            text_to_display = f"{slot_num}: 비어있음"
             if skill_id:
-                skill_def = data_manager.get_item_definition(skill_id)
+                skill_def = data_manager.get_skill_definition(skill_id)
                 if skill_def:
-                    skill_name = skill_def.name
-            text = f"{slot_num}: {skill_name}"
-            self.write_at(skill_y + 1 + i, x, pad_str_to_width(text, w))
+                    skill_info = player.skills.get(skill_id, {'level': 1, 'exp': 0})
+                    skill_level = skill_info['level']
+                    skill_exp = skill_info['exp']
+                    exp_to_next_skill_level = skill_level * 100 # 다음 레벨 필요 경험치 (임시)
+                    
+                    # Ex) 6 : 휠 윈드 : Lv2 : 10/200
+                    text_to_display = f"{slot_num}: {skill_def.name}:Lv{skill_level}:{skill_exp}/{exp_to_next_skill_level}"
+
+            self.write_at(skill_y + 1 + i, x, pad_str_to_width(text_to_display, w))
 
     def _draw_inventory(self, player, active_tab='item', cursor_pos=0, scroll_offset=0):
         win_w, win_h = 60, 20
@@ -251,8 +262,23 @@ class UI:
                 
                 prefix = "> " if item_index == cursor_pos else "  "
                 
-                # 형식: 아이템 이름x개수 : 효과
-                item_text = f"{prefix}{item_obj.name} x{item_data['qty']}"
+                # --- 상태 표시 로직 ---
+                status_indicator = ""
+                # 1. 장비 아이템이 장착되었는지 확인
+                if isinstance(item_obj, Equipment):
+                    if item_obj in player.equipment.values():
+                        status_indicator = "(E)"
+                # 2. 퀵슬롯에 등록되었는지 확인
+                else:
+                    if isinstance(item_obj, SkillBook):
+                        if item_obj.skill_id in player.skill_quick_slots.values():
+                            status_indicator = "(Q)"
+                    elif item_obj.id in player.item_quick_slots.values():
+                        status_indicator = "(Q)"
+
+                # 형식: (상태) 아이템 이름x개수 : 효과
+                indicator_space = f"{status_indicator} " if status_indicator else ""
+                item_text = f"{prefix}{indicator_space}{item_obj.name} x{item_data['qty']}"
                 desc_text = f": {item_obj.description}"
                 
                 # 너비를 고려하여 텍스트 자르기
@@ -273,7 +299,7 @@ class UI:
                 self.write_at(list_y_start + i, win_x + win_w - 2, char)
 
         # --- 안내문 ---
-        instructions = "[↑↓]이동 [e]장착 [R]버리기 [1-0]퀵슬롯 [i]닫기"
+        instructions = "[↑↓]이동 [e]퀵슬롯등록(빈곳) [u]사용 [R]버리기 [i]닫기"
         self.write_at(win_y + win_h - 2, win_x + (win_w - get_str_width(instructions)) // 2, instructions)
 
     def _draw_full_log_viewer(self, scroll_offset=0):

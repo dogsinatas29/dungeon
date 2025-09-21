@@ -1,20 +1,4 @@
-현재 문제는 아이템 루팅시 아이템 획득 기능이 제대로 구현되어 있지 않음. 원인은 인터페이스 개편때문임
-치명적인 오류 발생: 'Player' object has no attribute 'add_item'
-Traceback (most recent call last):
-  File "/home/dogsinatas/python_project/dungeon/Start.py", line 178, in <module>
-    start_game(ui, new_game=True)
-    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
-  File "/home/dogsinatas/python_project/dungeon/Start.py", line 123, in start_game
-    game.run_game(player_data, all_dungeon_maps_data, ITEM_DEFINITIONS, ui_instance)
-    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/dogsinatas/python_project/dungeon/game.py", line 293, in run_game
-    player.add_item(item_id, item_def.name, item_data['qty'])
-    ^^^^^^^^^^^^^^^
-AttributeError: 'Player' object has no attribute 'add_item'
-
-이걸 고치면 아래의 작업을 진행할 것임 
-
-1. 인벤토리 작업 - 진행중
+1. 인벤토리 작업 - < 완료 >
 인벤토리를 열고 탭을 전환할때 1,2,3,4 대신 
 아이템은 a
 장비는 b
@@ -29,18 +13,45 @@ AttributeError: 'Player' object has no attribute 'add_item'
  스킬북은 특정 마법이 나가는 스킬이며 이걸 장착하려면 6,7,8,9,0번에 장착할 것
 
 
-
+< 아직 안됨 >
 인벤토리에서 아이템 리스트는 이렇게 출력하자
  아이템 이름x개수 : 효과 
 EX) 체력소회복포션 x 10 : 체력 회복 10 
 리스트는 상하로 스크롤 되게 구현하자
 
-
+<ITEM을 퀵 슬롯에 등록하는 것 아직 미구현>
 퀵 슬롯에서 아이템은 이렇게 표시하자
 슬롯번호 : 아이템 이름 X 개수 
 Ex) 1 : 체력소회복포션 X 10
 퀵 슬롯 역시 상하로 스크롤 되게 구현하자
+-> 진행중 > 인벤토리에서 Item을 등록할거야 인벤토리 부분을 퀵 슬롯으로 바꾸자. 그러면 더 직관적이 되겠지.      │
+│   여기서 1~5번까지 Item을 등록할거야 소모성 아이템들, 예를 들어 회복약들을 여기 등록할거야           │
+│   인벤토리에 풀포션이 들어 있다면 E를 누르면 순서대로 비어있는 슬롯부터 등록이 되. 1~5를             │
+│   사용하면 아이템이 사용되. 만약 등록되지 않은 아이템은 인벤토리에서 U 키를 누르면 사용할 수         │
+│   있게 할거야 인벤토리 단축키에도 U 키를 넣어줘  
 
+인터페이스는 구현되어 있지만 아직 퀵 슬롯에 등록이 안됨
+아이템 장비 스크롤 등이 모두 마찬가지임
+
++ 에러 발생
+키 없이 X 문에 접근하면 발생
+치명적인 오류 발생: 'Inventory' object has no attribute 'find_item_by_id'
+Traceback (most recent call last):                           
+  File "/home/dogsinatas/python_project/dungeon/Start.py", line 165, in <module>
+    main_menu()                                              
+    ~~~~~~~~~^^
+  File "/home/dogsinatas/python_project/dungeon/Start.py", line 155, in main_menu
+    start_game(ui, new_game=False)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/home/dogsinatas/python_project/dungeon/Start.py", line 123, in start_game
+    game.run_game(player_data, all_dungeon_maps_data, ITEM_DEFINITIONS, ui_instance)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dogsinatas/python_project/dungeon/game.py", line 266, in run_game
+    key_item_to_remove = player.inventory.find_item_by_id(dungeon_map.required_key_id)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'Inventory' object has no attribute 'find_item_by_id'
+
+< 완료 >
 메인 인터페이스의 퀵슬롯은 3가지로 나누자 -
 메시지 로그 창을 줄이고 
 --- 장비 ----
@@ -77,9 +88,12 @@ Ex) 1 : 체력소회복포션 X 10
 만약 방패를 장착한 경우 기존 장착된 방패를 해지하고 바로 후에 사용하는 무기를 쓸 것
 액세서리1,2 : 반지, 목걸이등의 액세서리 장착 가능 부위
 
+인벤토리에서 장비는 
+이름 X 개수 : 효과 추가 
+ex} 가죽 투구 X 1 : 방어력 + 1 등으로 출력
 
 
-인벤토리에서 스킬북은 이렇게 표시하자 
+인벤토리에 스킬북은 이렇게 표시하자 
  스킬북 이름 : 필요 레벨, 속성, 사용 수치, 필요 장비, 효과 
 EX) 휠윈드 : lv 13, MP-10, 쌍도끼, 주변 4방향 공격, 데미지 40
 

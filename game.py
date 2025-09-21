@@ -5,7 +5,6 @@ from player import Player
 from dungeon_map import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
 from ui import UI, ANSI
 import readchar
-import Start
 import data_manager
 import combat
 import random
@@ -16,17 +15,19 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
     
     monster_definitions = data_manager.load_monster_definitions(ui_instance)
 
-    def get_or_create_map(level, all_maps, ui, items_def, monster_defs):
+    def get_or_create_map(level, all_maps, ui, items_def, monster_defs, is_boss_room=False):
         if level in all_maps:
             d_map = all_maps[level]
             d_map.ui_instance = ui
             return d_map
         else:
-            d_map = DungeonMap(level, ui)
-            if level[1] > 0:
-                d_map.place_monsters(monster_defs, num_monsters=random.randint(1, 3))
-                d_map.place_random_items(items_def, num_items=random.randint(0, 2))
-            else:
+            d_map = DungeonMap(level, ui, is_boss_room=is_boss_room, monster_definitions=monster_defs)
+            if level[1] > 0: # 방인 경우
+                # 보스 방이 아닌 일반 방에만 몬스터와 아이템을 기본 배치
+                if not is_boss_room:
+                    d_map.place_monsters(monster_defs, num_monsters=random.randint(1, 3))
+                    d_map.place_random_items(items_def, num_items=random.randint(0, 2))
+            else: # 메인 맵인 경우
                 d_map.place_monsters(monster_defs)
                 d_map.place_random_items(items_def)
             all_maps[level] = d_map
@@ -128,8 +129,24 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
 
             if selected_item_obj:
                 if key in ('e', 'E'):
-                    message = player.equip(selected_item_obj)
+                    # 아이템 타입에 따라 장착 또는 퀵슬롯 등록
+                    if selected_item_obj.item_type == 'EQUIP':
+                        message = player.equip(selected_item_obj)
+                        ui_instance.add_message(message)
+                    elif selected_item_obj.item_type == 'SKILLBOOK':
+                        message = player.assign_to_empty_skill_quickslot(selected_item_obj)
+                        ui_instance.add_message(message)
+                    else: # CONSUMABLE, ETC 등 장비와 스킬북이 아닌 모든 아이템
+                        message = player.assign_to_empty_quickslot(selected_item_obj)
+                        ui_instance.add_message(message)
+
+                elif key in ('u', 'U'):
+                    used, message = player.use_item(selected_item_obj)
                     ui_instance.add_message(message)
+                    if used:
+                        # 아이템 사용 성공 시 커서 위치 조정
+                        inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
+
                 elif key in ('r', 'R'):
                     if player.drop_item(selected_item_obj, 1):
                          ui_instance.add_message(f"{selected_item_obj.name}을(를) 버렸습니다.")
@@ -140,6 +157,13 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                     slot_num = int(key)
                     message = player.assign_item_to_quickslot(selected_item_obj, slot_num)
                     ui_instance.add_message(message)
+                elif key in "67890":
+                    slot_num = int(key)
+                    if selected_item_obj.item_type == 'SKILLBOOK':
+                        message = player.assign_skill_to_quickslot(selected_item_obj, slot_num)
+                        ui_instance.add_message(message)
+                    else:
+                        ui_instance.add_message("스킬북만 스킬 퀵슬롯에 등록할 수 있습니다.")
 
             if key == 'i':
                 inventory_open = False
@@ -218,14 +242,21 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                     
                     # 1. 방으로 들어가는 경우 (열쇠 없이)
                     if player_pos in dungeon_map.room_entrances:
-                        room_index = dungeon_map.room_entrances[player_pos]
+                        room_info = dungeon_map.room_entrances[player_pos]
+                        room_index = room_info['id']
+                        is_boss = room_info.get('is_boss', False)
+
                         last_entrance_position[current_dungeon_level] = player_pos
                         current_dungeon_level = (current_floor, room_index)
-                        dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
+                        dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions, is_boss_room=is_boss)
                         player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
                         dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
                         dungeon_map.reveal_tiles(player.x, player.y)
-                        ui_instance.add_message(f"{current_floor}층 {room_index}번 방으로 이동했습니다.")
+                        
+                        message = f"{current_floor}층 {room_index}번 방으로 이동했습니다."
+                        if is_boss:
+                            message += " 으스스한 기운이 느껴집니다..."
+                        ui_instance.add_message(message)
 
                     # 2. 방에서 나가거나 다음 층으로 이동하는 경우
                     elif player_pos == (dungeon_map.exit_x, dungeon_map.exit_y):
@@ -371,6 +402,6 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
 
     sys.stdout.write(ANSI.SHOW_CURSOR)
     player.dungeon_level = current_dungeon_level
-    Start.save_game_data(player, all_dungeon_maps, ui_instance)
+    data_manager.save_game_data(player, all_dungeon_maps, ui_instance)
     
     return "DEATH" if not player.is_alive() else "QUIT"

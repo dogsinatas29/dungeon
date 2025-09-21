@@ -24,6 +24,8 @@ class Item:
             return Equipment.from_dict(data)
         elif class_name == 'Consumable':
             return Consumable.from_dict(data)
+        elif class_name == 'SkillBook':
+            return SkillBook.from_dict(data)
         
         # 기본 Item 객체 또는 다른 서브클래스 처리
         item = cls(
@@ -68,8 +70,19 @@ class Item:
                 required_level=getattr(definition, 'req_level', 0),
                 effect_type=getattr(definition, 'effect_type', 'NONE')
             )
-        # TODO: 다른 아이템 타입에 대한 처리 추가 (SKILL_BOOK, ETC 등)
-        else: # ETC, SKILLBOOK 등 다른 모든 타입
+        elif item_type == 'SKILLBOOK':
+            return SkillBook(
+                item_id=definition.id,
+                name=definition.name,
+                description=getattr(definition, 'description', ""),
+                item_type=item_type,
+                value=getattr(definition, 'value', 0),
+                required_level=getattr(definition, 'req_level', 0),
+                # items.txt에서 effect_type 필드를 skill_id로 사용
+                skill_id=getattr(definition, 'effect_type', 'NONE')
+            )
+        # TODO: 다른 아이템 타입에 대한 처리 추가 (ETC 등)
+        else: # ETC 등 다른 모든 타입
             return cls(
                 item_id=definition.id,
                 name=definition.name,
@@ -80,7 +93,7 @@ class Item:
 class Equipment(Item):
     """장비 아이템 클래스"""
     def __init__(self, item_id, name, description, item_type, value, required_level, effect_type, slot):
-        super().__init__(item_id, name, 'equipment', description)
+        super().__init__(item_id, name, item_type, description)
         self.value = value
         self.required_level = required_level
         self.effect_type = effect_type
@@ -112,7 +125,7 @@ class Equipment(Item):
 class Consumable(Item):
     """소모성 아이템 클래스"""
     def __init__(self, item_id, name, description, item_type, value, required_level, effect_type):
-        super().__init__(item_id, name, 'consumable', description)
+        super().__init__(item_id, name, item_type, description)
         self.value = value
         self.required_level = required_level
         self.effect_type = effect_type
@@ -157,7 +170,9 @@ class Key(Item):
 class SkillBook(Item):
     """스킬북 아이템 클래스"""
     def __init__(self, item_id, name, description, item_type, value, required_level, skill_id):
-        super().__init__(item_id, name, description, 'skill_book', value, required_level)
+        super().__init__(item_id, name, item_type, description)
+        self.value = value
+        self.required_level = required_level
         self.skill_id = skill_id
 
     def to_dict(self):

@@ -60,6 +60,13 @@ class Inventory:
                 return section[item_id]['qty']
         return 0
 
+    def find_item_by_id(self, item_id):
+        """인벤토리의 모든 섹션을 검색하여 ID가 일치하는 Item 객체를 반환합니다."""
+        for section in [self.items, self.equipment_items, self.scrolls, self.skill_books]:
+            if item_id in section:
+                return section[item_id]['item']
+        return None
+
     def get_all_items(self):
         """모든 카테고리의 아이템 리스트를 반환합니다."""
         all_items_list = []

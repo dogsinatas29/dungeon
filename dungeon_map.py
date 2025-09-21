@@ -36,7 +36,7 @@ class DungeonMap:
     ROOM_COUNT_LEVEL_INTERVAL = 3
     VIEW_RADIUS = 5
 
-    def __init__(self, dungeon_level_tuple, ui_instance=None, _is_loading=False):
+    def __init__(self, dungeon_level_tuple, ui_instance=None, _is_loading=False, is_boss_room=False, monster_definitions=None):
         self.ui_instance = ui_instance
         self.floor, self.room_index = dungeon_level_tuple
         self.width, self.height = 0, 0
@@ -54,12 +54,13 @@ class DungeonMap:
         self.room_entrances = {}
         self.fog_enabled = True # 안개 상태 변수 추가
         self.player_tombstone = None # 플레이어 무덤 위치
+        self.monster_definitions = monster_definitions # 몬스터 정의 저장
 
         if not _is_loading:
             if self.room_index == 0:
                 self._generate_main_map()
             else:
-                self._generate_sub_room()
+                self._generate_sub_room(is_boss_room=is_boss_room)
             
             self.reveal_tiles(self.player_x, self.player_y)
             self.is_generated = True
@@ -94,7 +95,7 @@ class DungeonMap:
             self.required_key_id = "KEY_DUNGEON_1"
             self.required_key_count = len(self.room_entrances)
 
-    def _generate_sub_room(self):
+    def _generate_sub_room(self, is_boss_room=False):
         growth_multiplier = (self.floor - 1) // self.ROOM_GROWTH_LEVEL_INTERVAL
         self.width = self.BASE_ROOM_WIDTH + growth_multiplier * self.ROOM_GROWTH_AMOUNT
         self.height = self.BASE_ROOM_HEIGHT + growth_multiplier * self.ROOM_GROWTH_AMOUNT
@@ -107,6 +108,34 @@ class DungeonMap:
         self.exit_x, self.exit_y = self.start_x, self.start_y
         self.exit_type = EXIT_NORMAL
         self.player_x, self.player_y = self.start_x, self.start_y
+        
+        if is_boss_room:
+            self._populate_boss_room()
+
+    def _populate_boss_room(self):
+        """보스 방에 몬스터를 배치합니다."""
+        if not self.monster_definitions: return # 몬스터 정의가 없으면 실행하지 않음
+
+        floor_tiles = [(x, y) for y in range(1, self.height - 1) for x in range(1, self.width - 1)]
+        
+        # 50% 확률로 보스 몬스터, 50% 확률로 몬스터 하우스
+        if random.random() < 0.5:
+            # 보스 몬스터 배치
+            if 'DRAGON' in self.monster_definitions:
+                x, y = self.width // 2, self.height // 2
+                self.monsters.append(Monster(x, y, self.ui_instance, monster_id='DRAGON'))
+        else:
+            # 몬스터 하우스
+            num_monsters = int(len(floor_tiles) * 0.5) # 바닥의 50%를 몬스터로 채움
+            monster_ids = [mid for mid in self.monster_definitions.keys() if mid != 'DRAGON']
+            if not monster_ids: return
+
+            for _ in range(num_monsters):
+                if not floor_tiles: break
+                x, y = random.choice(floor_tiles)
+                floor_tiles.remove((x,y))
+                monster_id = random.choice(monster_ids)
+                self.monsters.append(Monster(x, y, self.ui_instance, monster_id=monster_id))
 
     def _place_start_and_exit(self):
         while True:
@@ -127,12 +156,19 @@ class DungeonMap:
         floor_tiles = [(x, y) for y in range(self.height) for x in range(self.width) if self.map_data[y][x] == FLOOR]
         exclusions = {(self.start_x, self.start_y), (self.exit_x, self.exit_y)}
         
+        entrances = []
         for i in range(1, num_rooms + 1):
             if not floor_tiles: break
             pos = random.choice(floor_tiles)
             floor_tiles.remove(pos)
             if pos not in exclusions:
-                self.room_entrances[pos] = i
+                entrances.append(pos)
+                self.room_entrances[pos] = {'id': i, 'is_boss': False}
+
+        # 방이 하나라도 있으면, 그 중 하나를 보스 방으로 지정
+        if entrances:
+            boss_room_pos = random.choice(entrances)
+            self.room_entrances[boss_room_pos]['is_boss'] = True
 
     def move_player(self, dx, dy):
         new_x, new_y = self.player_x + dx, self.player_y + dy
@@ -207,7 +243,11 @@ class DungeonMap:
             color = ANSI.MAGENTA
         elif tile == ROOM_ENTRANCE:
             char = ROOM_ENTRANCE
-            color = ANSI.GREEN
+            # 보스 방 입구는 다른 색으로 표시
+            if self.room_entrances.get((x,y), {}).get('is_boss'):
+                color = ANSI.YELLOW
+            else:
+                color = ANSI.GREEN
         elif tile == ITEM_TILE:
             char = ITEM_TILE
             color = ANSI.RED
@@ -264,7 +304,7 @@ class DungeonMap:
         exclusions.update(self.items_on_map.keys())
         available_tiles = [tile for tile in floor_tiles if tile not in exclusions]
         
-        monster_ids = list(monster_definitions.keys())
+        monster_ids = [mid for mid in monster_definitions.keys() if mid != 'DRAGON']
         if not monster_ids: return # 정의된 몬스터가 없으면 리턴
 
         for _ in range(min(num_monsters, len(available_tiles))):
@@ -274,6 +314,15 @@ class DungeonMap:
             # 무작위 몬스터 ID 선택
             monster_id = random.choice(monster_ids)
             self.monsters.append(Monster(x, y, self.ui_instance, monster_id=monster_id)) # monster_id 전달
+
+        # --- 열쇠 지급 로직 추가 ---
+        # 현재 맵이 메인 맵이고, 출구가 잠겨있을 때만 열쇠를 지급
+        if self.room_index == 0 and self.exit_type == EXIT_LOCKED:
+            # 몬스터가 충분히 있을 경우, 그 중 2마리에게 열쇠를 지급
+            if len(self.monsters) >= self.required_key_count:
+                key_holders = random.sample(self.monsters, self.required_key_count)
+                for monster in key_holders:
+                    monster.loot = self.required_key_id
 
     def to_dict(self):
         return {
