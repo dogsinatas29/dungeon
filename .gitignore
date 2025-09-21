@@ -10,3 +10,6 @@ game_data/
 bug.txt
 *.old
 추가사항.txt1
+# Documentation and backup folders
+back/
+docs/
