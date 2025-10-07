@@ -34,12 +34,11 @@ class ItemDefinition:
         return (
             f"ItemDefinition(id={self.id}, name={self.name}, item_type={self.item_type}, "
             f"equip_slot={self.equip_slot}, effect_type={self.effect_type}, value={self.value}, "
-            f"description={self.description}, req_level={self.req_level})"
+            f"description='{self.description}', req_level={self.req_level})"
         )
-
 class SkillDefinition:
     """스킬의 정의(템플릿)를 저장하는 클래스."""
-    def __init__(self, skill_id, name, req_level, attribute, cost_type, cost_value, req_equip, description, damage, skill_type):
+    def __init__(self, skill_id, name, req_level, attribute, cost_type, cost_value, req_equip, description, damage, skill_type, skill_subtype, range_str):
         self.id = skill_id
         self.name = name
         self.req_level = req_level
@@ -50,13 +49,15 @@ class SkillDefinition:
         self.description = description
         self.damage = damage
         self.skill_type = skill_type
+        self.skill_subtype = skill_subtype
+        self.range_str = range_str
 
     def __repr__(self):
         return (
             f"SkillDefinition(id={self.id}, name={self.name}, req_level={self.req_level}, "
             f"attribute={self.attribute}, cost_type={self.cost_type}, cost_value={self.cost_value}, "
             f"req_equip={self.req_equip}, description='{self.description}', damage={self.damage}, "
-            f"skill_type='{self.skill_type}')"
+            f"skill_type='{self.skill_type}', skill_subtype='{self.skill_subtype}', range_str={self.range_str})"
         )
 
 class MonsterDefinition:
@@ -225,15 +226,23 @@ def load_skill_definitions(ui_instance=None):
                 continue
             
             try:
-                skill_id, name, req_level, attribute, cost_type, cost_value, req_equip, description, damage, skill_type = line.split(',')
+                # parts = line.split(',')
+                parts = [p.strip() for p in line.split(',')] # 공백 제거
+                if len(parts) < 12:
+                    # 하위 호환성을 위해 기본값 설정
+                    parts.extend(['UNKNOWN', '0'] * (12 - len(parts)))
+                
+                skill_id, name, req_level, attribute, cost_type, cost_value, req_equip, description, damage, skill_type, skill_subtype, range_str = parts[:12]
                 _skill_definitions[skill_id] = SkillDefinition(
-                    skill_id, name, int(req_level), attribute, cost_type, int(cost_value), req_equip, description, int(damage), skill_type
+                    skill_id, name, int(req_level), attribute, cost_type, int(cost_value), 
+                    req_equip, description, int(damage), skill_type, skill_subtype, int(range_str)
                 )
-            except ValueError:
+            except (ValueError, IndexError) as e:
+                error_message = f"경고: 잘못된 형식의 스킬 데이터 줄: {line} (오류: {e})"
                 if ui_instance:
-                    ui_instance.add_message(f"경고: 잘못된 형식의 스킬 데이터 줄: {line}")
+                    ui_instance.add_message(error_message)
                 else:
-                    print(f"경고: 잘못된 형식의 스킬 데이터 줄: {line}")
+                    print(error_message)
     return _skill_definitions
 
 def get_skill_definition(skill_id):

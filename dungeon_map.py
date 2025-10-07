@@ -254,6 +254,19 @@ class DungeonMap:
         
         return f"{color}{char}{ANSI.RESET}"
 
+    def get_monster_at(self, x, y):
+        """지정된 위치에 있는 몬스터 객체를 반환합니다. 없으면 None을 반환합니다."""
+        for monster in self.monsters:
+            if not monster.dead and monster.x == x and monster.y == y:
+                return monster
+        return None
+
+    def is_wall(self, x, y):
+        """지정된 위치가 벽인지 확인합니다."""
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            return True # 맵 밖은 벽으로 간주
+        return self.map_data[y][x] in [INNER_WALL, BORDER_WALL]
+
     def calculate_num_rooms(self, floor):
         return self.BASE_NUM_ROOMS + (floor - 1) // self.ROOM_COUNT_LEVEL_INTERVAL
 

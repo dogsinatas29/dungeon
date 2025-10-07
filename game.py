@@ -1,6 +1,7 @@
 # game.py
 
 import sys
+import time
 from player import Player
 from dungeon_map import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
 from ui import UI, ANSI
@@ -65,6 +66,11 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
     turn_count = 0
     rest_turn_count = 0
 
+    # --- 게임 상태 변수 ---
+    game_state = 'NORMAL'
+    aiming_skill = None
+    projectile_path = []
+
     # 게임 루프
     running = True
     while running:
@@ -77,7 +83,8 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
         ui_instance.draw_game_screen(player, dungeon_map, dungeon_map.monsters, camera['x'], camera['y'],
                                      inventory_open, inventory_cursor_pos, 
                                      inventory_active_tab, inventory_scroll_offset,
-                                     log_viewer_open, log_viewer_scroll_offset)
+                                     log_viewer_open, log_viewer_scroll_offset,
+                                     game_state, projectile_path)
 
         # 사용자 입력 처리
         if not player.is_alive():
@@ -90,15 +97,76 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
         current_floor, current_room_index = current_dungeon_level
         is_in_menu = inventory_open or log_viewer_open
 
+        # --- 스킬 조준 상태 ---
+        if game_state == 'AIMING_SKILL':
+            dx, dy = 0, 0
+            direction_keys = {
+                readchar.key.UP: (0, -1), readchar.key.DOWN: (0, 1),
+                readchar.key.LEFT: (-1, 0), readchar.key.RIGHT: (1, 0),
+                'k': (0, -1), 'j': (0, 1), 'h': (-1, 0), 'l': (1, 0),
+                'y': (-1, -1), 'u': (1, -1), 'b': (-1, 1), 'n': (1, 1)
+            }
+            if key in direction_keys:
+                dx, dy = direction_keys[key]
+                
+                player.mp -= aiming_skill.cost_value
+                ui_instance.add_message(f"{aiming_skill.name}을(를) 시전합니다!")
+
+                for i in range(1, aiming_skill.range + 1):
+                    px, py = player.x + i * dx, player.y + i * dy
+                    
+                    if dungeon_map.is_wall(px, py):
+                        break 
+
+                    projectile_path.append((px, py))
+                    # 애니메이션을 위해 다시 그리기
+                    ui_instance.draw_game_screen(player, dungeon_map, dungeon_map.monsters, camera['x'], camera['y'],
+                                                 inventory_open, inventory_cursor_pos, 
+                                                 inventory_active_tab, inventory_scroll_offset,
+                                                 log_viewer_open, log_viewer_scroll_offset,
+                                                 game_state, projectile_path)
+                    time.sleep(0.05)
+                    projectile_path.clear() # 움직이는 점 효과를 위해 지움
+
+                    monster_hit = dungeon_map.get_monster_at(px, py)
+                    if monster_hit:
+                        damage, is_critical = combat.calculate_damage(player, monster_hit, skill=aiming_skill)
+                        ui_instance.add_message(f"{aiming_skill.name}이(가) {monster_hit.name}에게 적중!" + (" 💥치명타!💥" if is_critical else ""))
+                        monster_hit.take_damage(damage)
+                        ui_instance.add_message(f"{monster_hit.name}에게 {damage}의 데미지를 입혔습니다.")
+                        if monster_hit.dead:
+                            ui_instance.add_message(f"{monster_hit.name}을(를) 물리쳤습니다!")
+                            if data_manager._item_definitions and random.random() < 0.5:
+                                dropped_item_id = random.choice(list(data_manager._item_definitions.keys()))
+                                monster_hit.loot = dropped_item_id
+                                item_def = data_manager.get_item_definition(dropped_item_id)
+                                if item_def:
+                                    ui_instance.add_message(f"{monster_hit.name}이(가) {item_def.name}을(를) 떨어뜨렸습니다.")
+                            exp_gained = monster_hit.exp_given + (monster_hit.level * 2)
+                            ui_instance.add_message(f"{exp_gained}의 경험치를 획득했습니다!")
+                            leveled_up, level_up_message = player.gain_exp(exp_gained)
+                            if leveled_up: ui_instance.add_message(level_up_message)
+
+                player_action_taken = True
+                game_state = 'NORMAL'
+                aiming_skill = None
+                projectile_path.clear()
+
+            elif key in ['c', readchar.key.ESC]:
+                game_state = 'NORMAL'
+                aiming_skill = None
+                ui_instance.add_message("스킬 시전을 취소했습니다.")
+            else:
+                ui_instance.add_message("유효한 방향키를 입력하거나 'c'로 취소하세요.")
+
         # --- 전체 로그 뷰어 활성화 시 입력 처리 ---
-        if log_viewer_open:
+        elif log_viewer_open:
             if key == readchar.key.UP:
                 log_viewer_scroll_offset += 1
             elif key == readchar.key.DOWN:
                 log_viewer_scroll_offset = max(0, log_viewer_scroll_offset - 1)
             elif key == 'm':
                 log_viewer_open = False
-            # 메뉴 조작 시에는 턴이 진행되도록 continue를 사용하지 않음
 
         # --- 인벤토리 창 활성화 시 입력 처리 ---
         elif inventory_open:
@@ -167,176 +235,216 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
 
             if key == 'i':
                 inventory_open = False
-            # 메뉴 조작 시에는 턴이 진행되도록 continue를 사용하지 않음
 
         # --- 일반 게임 플레이 입력 처리 ---
-        elif key == 'i':
-            inventory_open = True
-            inventory_cursor_pos = 0
-            inventory_active_tab = 'item'
-            inventory_scroll_offset = 0
-        
-        elif key == 'm':
-            log_viewer_open = True
-            log_viewer_scroll_offset = 0
+        elif game_state == 'NORMAL':
+            if key == 'i':
+                inventory_open = True
+                inventory_cursor_pos = 0
+                inventory_active_tab = 'item'
+                inventory_scroll_offset = 0
+            
+            elif key == 'm':
+                log_viewer_open = True
+                log_viewer_scroll_offset = 0
 
-        else:
-            dx, dy = 0, 0
-            move_keys = {
-                readchar.key.UP: (0, -1), readchar.key.DOWN: (0, 1),
-                readchar.key.LEFT: (-1, 0), readchar.key.RIGHT: (1, 0),
-                'k': (0, -1), 'j': (0, 1), 'h': (-1, 0), 'l': (1, 0),
-                'y': (-1, -1), 'u': (1, -1), 'b': (-1, 1), 'n': (1, 1)
-            }
-            if key in move_keys:
-                dx, dy = move_keys[key]
+            else:
+                dx, dy = 0, 0
+                move_keys = {
+                    readchar.key.UP: (0, -1), readchar.key.DOWN: (0, 1),
+                    readchar.key.LEFT: (-1, 0), readchar.key.RIGHT: (1, 0),
+                    'k': (0, -1), 'j': (0, 1), 'h': (-1, 0), 'l': (1, 0),
+                    'y': (-1, -1), 'u': (1, -1), 'b': (-1, 1), 'n': (1, 1)
+                }
+                if key in move_keys:
+                    dx, dy = move_keys[key]
 
-            if dx != 0 or dy != 0:
-                moved, result = dungeon_map.move_player(dx, dy)
-                
-                if isinstance(result, Monster):
-                    monster = result
-                    player_action_taken = True
+                if dx != 0 or dy != 0:
+                    moved, result = dungeon_map.move_player(dx, dy)
                     
-                    # --- 전투 로직 시작 ---
-                    ui_instance.add_message(f"{monster.name}과(와) 전투 시작!")
-                    damage, is_critical = combat.calculate_damage(player, monster)
-                    ui_instance.add_message(f"{player.name}의 공격!" + (" 💥치명타!💥" if is_critical else ""))
-                    monster.take_damage(damage)
-                    ui_instance.add_message(f"{monster.name}에게 {damage}의 데미지를 입혔습니다.")
-
-                    if monster.dead:
-                        ui_instance.add_message(f"{monster.name}을(를) 물리쳤습니다!")
-                        # 아이템 드랍 로직
-                        if data_manager._item_definitions and random.random() < 0.5:
-                            dropped_item_id = random.choice(list(data_manager._item_definitions.keys()))
-                            monster.loot = dropped_item_id
-                            item_def = data_manager.get_item_definition(dropped_item_id)
-                            if item_def:
-                                ui_instance.add_message(f"{monster.name}이(가) {item_def.name}을(를) 떨어뜨렸습니다.")
-                        # 경험치 획득 로직
-                        exp_gained = monster.exp_given + (monster.level * 2)
-                        ui_instance.add_message(f"{exp_gained}의 경험치를 획득했습니다!")
-                        leveled_up, level_up_message = player.gain_exp(exp_gained)
-                        if leveled_up: ui_instance.add_message(level_up_message)
-                elif moved:
-                    player_action_taken = True
-                    player.x, player.y = dungeon_map.player_x, dungeon_map.player_y
-                    
-                    # 몬스터 발견 메시지
-                    for m in dungeon_map.monsters:
-                        if not m.dead and abs(player.x - m.x) + abs(player.y - m.y) <= 3:
-                            ui_instance.add_message(f"{m.name}(LV:{m.level})을(를) 만났습니다.")
-                    
-                    # 아이템 줍기 로직
-                    item_data_on_map = dungeon_map.items_on_map.pop((player.x, player.y), None)
-                    if item_data_on_map:
-                        item_def = data_manager.get_item_definition(item_data_on_map['id'])
-                        if item_def:
-                            item_obj = Item.from_definition(item_def)
-                            
-                            # 스킬북인 경우 즉시 습득, 아니면 인벤토리에 추가
-                            if item_obj.item_type == 'SKILLBOOK':
-                                message = player.acquire_skill_from_book(item_obj)
-                                ui_instance.add_message(message)
-                            else:
-                                player.add_item(item_obj, item_data_on_map['qty'])
-                                ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
-
-                    # 방/레벨 전환 로직
-                    player_pos = (player.x, player.y)
-                    
-                    # 1. 방으로 들어가는 경우 (열쇠 없이)
-                    if player_pos in dungeon_map.room_entrances:
-                        room_info = dungeon_map.room_entrances[player_pos]
-                        room_index = room_info['id']
-                        is_boss = room_info.get('is_boss', False)
-
-                        last_entrance_position[current_dungeon_level] = player_pos
-                        current_dungeon_level = (current_floor, room_index)
-                        dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions, is_boss_room=is_boss)
-                        player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
-                        dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
-                        dungeon_map.reveal_tiles(player.x, player.y)
+                    if isinstance(result, Monster):
+                        monster = result
+                        player_action_taken = True
                         
-                        message = f"{current_floor}층 {room_index}번 방으로 이동했습니다."
-                        if is_boss:
-                            message += " 으스스한 기운이 느껴집니다..."
-                        ui_instance.add_message(message)
+                        # --- 전투 로직 시작 ---
+                        ui_instance.add_message(f"{monster.name}과(와) 전투 시작!")
+                        damage, is_critical = combat.calculate_damage(player, monster)
+                        ui_instance.add_message(f"{player.name}의 공격!" + (" 💥치명타!💥" if is_critical else ""))
+                        monster.take_damage(damage)
+                        ui_instance.add_message(f"{monster.name}에게 {damage}의 데미지를 입혔습니다.")
 
-                    # 2. 방에서 나가거나 다음 층으로 이동하는 경우
-                    elif player_pos == (dungeon_map.exit_x, dungeon_map.exit_y):
-                        # 2-1. 방에서 메인 맵으로 돌아옴
-                        if current_room_index > 0:
-                            previous_level = (current_floor, 0)
-                            return_pos = last_entrance_position.get(previous_level)
-                            current_dungeon_level = previous_level
-                            dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
-                            if return_pos: player.x, player.y = return_pos
-                            else: player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
+                        if monster.dead:
+                            ui_instance.add_message(f"{monster.name}을(를) 물리쳤습니다!")
+                            # 아이템 드랍 로직
+                            if data_manager._item_definitions and random.random() < 0.5:
+                                dropped_item_id = random.choice(list(data_manager._item_definitions.keys()))
+                                monster.loot = dropped_item_id
+                                item_def = data_manager.get_item_definition(dropped_item_id)
+                                if item_def:
+                                    ui_instance.add_message(f"{monster.name}이(가) {item_def.name}을(를) 떨어뜨렸습니다.")
+                            # 경험치 획득 로직
+                            exp_gained = monster.exp_given + (monster.level * 2)
+                            ui_instance.add_message(f"{exp_gained}의 경험치를 획득했습니다!")
+                            leveled_up, level_up_message = player.gain_exp(exp_gained)
+                            if leveled_up: ui_instance.add_message(level_up_message)
+                    elif moved:
+                        player_action_taken = True
+                        player.x, player.y = dungeon_map.player_x, dungeon_map.player_y
+                        
+                        # 몬스터 발견 메시지
+                        for m in dungeon_map.monsters:
+                            if not m.dead and abs(player.x - m.x) + abs(player.y - m.y) <= 3:
+                                ui_instance.add_message(f"{m.name}(LV:{m.level})을(를) 만났습니다.")
+                        
+                        # 아이템 줍기 로직
+                        item_data_on_map = dungeon_map.items_on_map.pop((player.x, player.y), None)
+                        if item_data_on_map:
+                            item_def = data_manager.get_item_definition(item_data_on_map['id'])
+                            if item_def:
+                                item_obj = Item.from_definition(item_def)
+                                
+                                # 스킬북인 경우 즉시 습득, 아니면 인벤토리에 추가
+                                if item_obj.item_type == 'SKILLBOOK':
+                                    message = player.acquire_skill_from_book(item_obj)
+                                    ui_instance.add_message(message)
+                                else:
+                                    player.add_item(item_obj, item_data_on_map['qty'])
+                                    ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
+
+                        # 방/레벨 전환 로직
+                        player_pos = (player.x, player.y)
+                        
+                        # 1. 방으로 들어가는 경우 (열쇠 없이)
+                        if player_pos in dungeon_map.room_entrances:
+                            room_info = dungeon_map.room_entrances[player_pos]
+                            room_index = room_info['id']
+                            is_boss = room_info.get('is_boss', False)
+
+                            last_entrance_position[current_dungeon_level] = player_pos
+                            current_dungeon_level = (current_floor, room_index)
+                            dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions, is_boss_room=is_boss)
+                            player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
                             dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
                             dungeon_map.reveal_tiles(player.x, player.y)
-                            ui_instance.add_message(f"{current_floor}층의 중심으로 돌아왔습니다.")
-                        
-                        # 2-2. 메인 맵에서 다음 층으로 이동
-                        else:
-                            should_descend = False
-                            if dungeon_map.exit_type == EXIT_LOCKED:
-                                required_keys = dungeon_map.required_key_count
-                                player_keys = player.get_item_quantity(dungeon_map.required_key_id)
-                                if player_keys >= required_keys:
-                                    key_item_to_remove = player.inventory.find_item_by_id(dungeon_map.required_key_id)
-                                    if key_item_to_remove:
-                                        player.remove_item(key_item_to_remove, required_keys)
-                                    
-                                    dungeon_map.exit_type = EXIT_NORMAL # 문을 영구적으로 엽니다.
-                                    ui_instance.add_message(f"열쇠 {required_keys}개를 사용하여 문을 열었습니다. 이제 이 문은 항상 열려있습니다.")
-                                    should_descend = True
-                                else:
-                                    ui_instance.add_message(f"다음 층으로 가려면 열쇠가 {required_keys}개 필요합니다. (현재: {player_keys}개)")
-                                    player.x -= dx; player.y -= dy
-                                    dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
-                            else: # EXIT_NORMAL
-                                should_descend = True
+                            
+                            message = f"{current_floor}층 {room_index}번 방으로 이동했습니다."
+                            if is_boss:
+                                message += " 으스스한 기운이 느껴집니다..."
+                            ui_instance.add_message(message)
 
-                            if should_descend:
-                                ui_instance.add_message(f"{current_floor + 1}층으로 내려갑니다.")
-                                current_dungeon_level = (current_floor + 1, 0)
+                        # 2. 방에서 나가거나 다음 층으로 이동하는 경우
+                        elif player_pos == (dungeon_map.exit_x, dungeon_map.exit_y):
+                            # 2-1. 방에서 메인 맵으로 돌아옴
+                            if current_room_index > 0:
+                                previous_level = (current_floor, 0)
+                                return_pos = last_entrance_position.get(previous_level)
+                                current_dungeon_level = previous_level
                                 dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
-                                player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
+                                if return_pos: player.x, player.y = return_pos
+                                else: player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
                                 dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
                                 dungeon_map.reveal_tiles(player.x, player.y)
-                elif isinstance(result, str):
-                     ui_instance.add_message(result)
-            
-            # 퀵슬롯 로직 추가
-            elif key in "12345":
-                slot_num = int(key)
-                item_id = player.item_quick_slots.get(slot_num)
-                if not item_id:
-                    ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
-                else:
-                    # 인벤토리에서 실제 아이템 객체 찾기
-                    item_to_use = player.inventory.find_item_by_id(item_id)
-                    if not item_to_use:
-                        ui_instance.add_message(f"'{item_id}' 아이템이 인벤토리에 없습니다.")
-                    else:
-                        used, message = player.use_item(item_to_use)
-                        ui_instance.add_message(message)
-                        if used:
-                            player_action_taken = True
-            
-            elif key in ['v', 't']:
-                status_text = "ON" if dungeon_map.toggle_fog() else "OFF"
-                ui_instance.add_message(f"전장의 안개(Fog of War) 토글: {status_text}")
-            
-            elif key == 'r':
-                # 루팅 로직 (생략)
-                pass
+                                ui_instance.add_message(f"{current_floor}층의 중심으로 돌아왔습니다.")
+                            
+                            # 2-2. 메인 맵에서 다음 층으로 이동
+                            else:
+                                should_descend = False
+                                if dungeon_map.exit_type == EXIT_LOCKED:
+                                    required_keys = dungeon_map.required_key_count
+                                    player_keys = player.get_item_quantity(dungeon_map.required_key_id)
+                                    if player_keys >= required_keys:
+                                        key_item_to_remove = player.inventory.find_item_by_id(dungeon_map.required_key_id)
+                                        if key_item_to_remove:
+                                            player.remove_item(key_item_to_remove, required_keys)
+                                        
+                                        dungeon_map.exit_type = EXIT_NORMAL # 문을 영구적으로 엽니다.
+                                        ui_instance.add_message(f"열쇠 {required_keys}개를 사용하여 문을 열었습니다. 이제 이 문은 항상 열려있습니다.")
+                                        should_descend = True
+                                    else:
+                                        ui_instance.add_message(f"다음 층으로 가려면 열쇠가 {required_keys}개 필요합니다. (현재: {player_keys}개)")
+                                        player.x -= dx; player.y -= dy
+                                        dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
+                                else: # EXIT_NORMAL
+                                    should_descend = True
 
-            elif key == 'q':
-                running = False
-                ui_instance.add_message("게임을 저장하고 메인 메뉴로 돌아갑니다.")
+                                if should_descend:
+                                    ui_instance.add_message(f"{current_floor + 1}층으로 내려갑니다.")
+                                    current_dungeon_level = (current_floor + 1, 0)
+                                    dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
+                                    player.x, player.y = dungeon_map.start_x, dungeon_map.start_y
+                                    dungeon_map.player_x, dungeon_map.player_y = player.x, player.y
+                                    dungeon_map.reveal_tiles(player.x, player.y)
+                    elif isinstance(result, str):
+                         ui_instance.add_message(result)
+                
+                # 퀵슬롯 로직 추가
+                elif key in "12345":
+                    slot_num = int(key)
+                    item_id = player.item_quick_slots.get(slot_num)
+                    if not item_id:
+                        ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
+                    else:
+                        # 인벤토리에서 실제 아이템 객체 찾기
+                        item_to_use = player.inventory.find_item_by_id(item_id)
+                        if not item_to_use:
+                            ui_instance.add_message(f"'{item_id}' 아이템이 인벤토리에 없습니다.")
+                        else:
+                            used, message = player.use_item(item_to_use)
+                            ui_instance.add_message(message)
+                            if used:
+                                player_action_taken = True
+                
+                elif key in "67890":
+                    slot_num = 10 if key == '0' else int(key)
+                    skill_id = player.skill_quick_slots.get(slot_num)
+                    if not skill_id:
+                        ui_instance.add_message(f"스킬 퀵슬롯 {slot_num}번이 비어있습니다.")
+                    else:
+                        skill_def = data_manager.get_skill_definition(skill_id)
+                        if not skill_def:
+                            ui_instance.add_message(f"알 수 없는 스킬입니다: {skill_id}")
+                        elif player.mp < skill_def.cost_value:
+                            ui_instance.add_message("마나가 부족합니다.")
+                        else:
+                            if skill_def.skill_subtype == 'PROJECTILE':
+                                game_state = 'AIMING_SKILL'
+                                aiming_skill = skill_def
+                                ui_instance.add_message(f"[{skill_def.name}] 방향을 선택하세요. (취소: c)")
+                            elif skill_def.skill_subtype == 'SELF':
+                                if skill_def.skill_type == 'RECOVERY':
+                                    player.mp -= skill_def.cost_value
+                                    heal_amount = skill_def.damage # 데이터 파일에서 'damage' 필드를 회복량으로 사용
+                                    player.restore_hp(heal_amount)
+                                    ui_instance.add_message(f"[{skill_def.name}]을(를) 시전하여 HP를 {heal_amount}만큼 회복했습니다.")
+                                    player_action_taken = True
+                                else:
+                                    ui_instance.add_message(f"[{skill_def.name}]은(는) 아직 사용할 수 없는 스킬 타입입니다.")
+                            else:
+                                ui_instance.add_message(f"[{skill_def.name}]은(는) 아직 사용할 수 없는 스킬 타입입니다.")
+
+                elif key in ['v', 't']:
+                    status_text = "ON" if dungeon_map.toggle_fog() else "OFF"
+                    ui_instance.add_message(f"전장의 안개(Fog of War) 토글: {status_text}")
+                
+                elif key == 'r':
+                    monster_at_player_pos = dungeon_map.get_monster_at(player.x, player.y)
+                    if monster_at_player_pos and monster_at_player_pos.dead and monster_at_player_pos.loot:
+                        item_id = monster_at_player_pos.loot
+                        item_def = data_manager.get_item_definition(item_id)
+                        if item_def:
+                            item_obj = Item.from_definition(item_def)
+                            player.add_item(item_obj, 1)
+                            ui_instance.add_message(f"{item_def.name}을(를) 획득했습니다!")
+                            monster_at_player_pos.loot = None # 아이템 중복 획득 방지
+                            player_action_taken = True
+                        else:
+                            ui_instance.add_message(f"알 수 없는 아이템 ID: {item_id}")
+                    else:
+                        ui_instance.add_message("여기에는 아무것도 없습니다.")
+
+                elif key == 'q':
+                    running = False
+                    ui_instance.add_message("게임을 저장하고 메인 메뉴로 돌아갑니다.")
 
         # --- 턴 종료 후 처리 (몬스터 AI, 플레이어 상태 등) ---
         if player_action_taken:
@@ -378,8 +486,8 @@ def run_game(player_data_from_save, all_dungeon_maps_data_from_save_raw, item_de
                         if player.y > monster.y: dy = 1
                         elif player.y < monster.y: dy = -1
                     
-                    # COWARD: 플레이어로부터 도망
-                    elif monster.move_type == 'COWARD':
+                    # COWARD: 플레이어로부터 도망 (공격받았을 때만)
+                    elif monster.move_type == 'COWARD' and monster.is_provoked:
                         if player.x > monster.x: dx = -1
                         elif player.x < monster.x: dx = 1
                         if player.y > monster.y: dy = -1

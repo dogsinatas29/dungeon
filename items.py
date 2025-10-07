@@ -56,7 +56,7 @@ class Item:
                 description=getattr(definition, 'description', ""),
                 item_type=item_type,
                 value=getattr(definition, 'value', 0),
-                required_level=getattr(definition, 'req_level', 0),
+                req_level=getattr(definition, 'req_level', 0),
                 effect_type=getattr(definition, 'effect_type', 'NONE'),
                 slot=getattr(definition, 'equip_slot', 'NONE')
             )
@@ -67,7 +67,7 @@ class Item:
                 description=getattr(definition, 'description', ""),
                 item_type=item_type,
                 value=getattr(definition, 'value', 0),
-                required_level=getattr(definition, 'req_level', 0),
+                req_level=getattr(definition, 'req_level', 0),
                 effect_type=getattr(definition, 'effect_type', 'NONE')
             )
         elif item_type == 'SKILLBOOK':
@@ -77,7 +77,7 @@ class Item:
                 description=getattr(definition, 'description', ""),
                 item_type=item_type,
                 value=getattr(definition, 'value', 0),
-                required_level=getattr(definition, 'req_level', 0),
+                req_level=getattr(definition, 'req_level', 0),
                 # items.txt에서 effect_type 필드를 skill_id로 사용
                 skill_id=getattr(definition, 'effect_type', 'NONE')
             )
@@ -92,10 +92,10 @@ class Item:
 
 class Equipment(Item):
     """장비 아이템 클래스"""
-    def __init__(self, item_id, name, description, item_type, value, required_level, effect_type, slot):
+    def __init__(self, item_id, name, description, item_type, value, req_level, effect_type, slot):
         super().__init__(item_id, name, item_type, description)
         self.value = value
-        self.required_level = required_level
+        self.req_level = req_level
         self.effect_type = effect_type
         self.slot = slot
 
@@ -103,7 +103,7 @@ class Equipment(Item):
         data = super().to_dict()
         data.update({
             'value': self.value,
-            'required_level': self.required_level,
+            'req_level': self.req_level,
             'effect_type': self.effect_type,
             'slot': self.slot
         })
@@ -117,24 +117,24 @@ class Equipment(Item):
             description=data.get('description'),
             item_type=data.get('item_type'),
             value=data.get('value'),
-            required_level=data.get('required_level'),
+            req_level=data.get('req_level'),
             effect_type=data.get('effect_type'),
             slot=data.get('slot')
         )
 
 class Consumable(Item):
     """소모성 아이템 클래스"""
-    def __init__(self, item_id, name, description, item_type, value, required_level, effect_type):
+    def __init__(self, item_id, name, description, item_type, value, req_level, effect_type):
         super().__init__(item_id, name, item_type, description)
         self.value = value
-        self.required_level = required_level
+        self.req_level = req_level
         self.effect_type = effect_type
     
     def to_dict(self):
         data = super().to_dict()
         data.update({
             'value': self.value,
-            'required_level': self.required_level,
+            'req_level': self.req_level,
             'effect_type': self.effect_type
         })
         return data
@@ -147,7 +147,7 @@ class Consumable(Item):
             description=data.get('description'),
             item_type=data.get('item_type'),
             value=data.get('value'),
-            required_level=data.get('required_level'),
+            req_level=data.get('req_level'),
             effect_type=data.get('effect_type')
         )
 
@@ -169,26 +169,30 @@ class Key(Item):
 
 class SkillBook(Item):
     """스킬북 아이템 클래스"""
-    def __init__(self, item_id, name, description, item_type, value, required_level, skill_id):
+    def __init__(self, item_id, name, description, item_type, value, req_level, skill_id):
         super().__init__(item_id, name, item_type, description)
         self.value = value
-        self.required_level = required_level
+        self.req_level = req_level
         self.skill_id = skill_id
 
     def to_dict(self):
         data = super().to_dict()
-        data['skill_id'] = self.skill_id
+        data.update({
+            'value': self.value,
+            'req_level': self.req_level,
+            'skill_id': self.skill_id
+        })
         return data
 
     @classmethod
     def from_dict(cls, data):
         return cls(
-            item_id=data.get('item_id'),
+            item_id=data.get('id'),
             name=data.get('name'),
             description=data.get('description'),
             item_type=data.get('item_type'),
             value=data.get('value'),
-            required_level=data.get('required_level'),
+            req_level=data.get('req_level'),
             skill_id=data.get('skill_id')
         )
 

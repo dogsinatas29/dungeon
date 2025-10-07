@@ -1,18 +1,28 @@
 # combat.py
 import random
 
-def calculate_damage(attacker, defender):
+def calculate_damage(attacker, defender, skill=None):
     """
     공격자와 방어자의 능력치를 기반으로 최종 데미지를 계산합니다.
+    스킬이 제공되면 스킬 데미지를 우선으로 사용합니다.
     치명타 발생 시 데미지를 증폭시키고, 치명타 여부를 함께 반환합니다.
     """
     is_critical = False
+    base_damage = 0
+
+    if skill:
+        # 스킬 데미지 사용 (SkillDefinition 객체를 받는다고 가정)
+        base_damage = skill.damage
+    else:
+        # 기본 공격 데미지
+        base_damage = attacker.attack
+
     # 치명타 발동 여부 확인 (attacker에 critical_chance 속성이 있다고 가정)
     if hasattr(attacker, 'critical_chance') and random.random() < attacker.critical_chance:
         is_critical = True
 
-    # 기본 데미지 계산
-    damage = attacker.attack - defender.defense
+    # 데미지 계산
+    damage = base_damage - defender.defense
 
     # 치명타 발생 시 데미지 증폭
     if is_critical:

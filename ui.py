@@ -115,10 +115,13 @@ class UI:
     def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y, 
                          inventory_open=False, inventory_cursor_pos=0, 
                          inventory_active_tab='item', inventory_scroll_offset=0,
-                         log_viewer_open=False, log_viewer_scroll_offset=0):
+                         log_viewer_open=False, log_viewer_scroll_offset=0,
+                         game_state='NORMAL', projectile_path=None):
+        if projectile_path is None:
+            projectile_path = []
         self.clear_screen()
         
-        self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y)
+        self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y, projectile_path)
         self._draw_player_status(player)
         self._draw_sidebar(player)
 
@@ -129,7 +132,9 @@ class UI:
 
         sys.stdout.flush()
 
-    def _draw_map_and_entities(self, player, dungeon_map, monsters, camera_x, camera_y):
+    def _draw_map_and_entities(self, player, dungeon_map, monsters, camera_x, camera_y, projectile_path=None):
+        if projectile_path is None:
+            projectile_path = []
         monster_positions = {(m.x, m.y): m.symbol for m in monsters if not m.dead}
         
         for y in range(self.MAP_VIEWPORT_HEIGHT):
@@ -148,7 +153,10 @@ class UI:
                     
                     if (map_x, map_y) in monster_positions:
                         char_to_draw = f"{ANSI.RED}{monster_positions[(map_x, map_y)]}{ANSI.RESET}"
-                        
+                    
+                    if (map_x, map_y) in projectile_path:
+                        char_to_draw = f"{ANSI.YELLOW}*{ANSI.RESET}"
+
                     if map_x == player.x and map_y == player.y:
                         char_to_draw = f"{ANSI.YELLOW}{player.char}{ANSI.RESET}"
                 
