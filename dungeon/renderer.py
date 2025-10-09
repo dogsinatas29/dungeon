@@ -6,8 +6,8 @@ import re
 import readchar
 from typing import List
 from wcwidth import wcswidth
-import data_manager # 아이템 정의를 가져오기 위해 추가
-from items import Equipment, SkillBook # 상태 표시를 위해 클래스 임포트
+from . import data_manager # 아이템 정의를 가져오기 위해 추가
+from .items import Equipment, SkillBook # 상태 표시를 위해 클래스 임포트
 
 # 순환 참조 방지를 위해 타입 힌트를 문자열로 사용
 # from monster import Monster
@@ -112,16 +112,16 @@ class UI:
             if len(self.message_log) > self.message_log_max_lines:
                 self.message_log.pop(0)
 
-    def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y, 
-                         inventory_open=False, inventory_cursor_pos=0, 
+    def draw_game_screen(self, player, dungeon_map, monsters, camera_x, camera_y,
+                         inventory_open=False, inventory_cursor_pos=0,
                          inventory_active_tab='item', inventory_scroll_offset=0,
                          log_viewer_open=False, log_viewer_scroll_offset=0,
-                         game_state='NORMAL', projectile_path=None):
+                         game_state='NORMAL', projectile_path=None, impact_effect=None):
         if projectile_path is None:
             projectile_path = []
         self.clear_screen()
-        
-        self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y, projectile_path)
+
+        self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y, projectile_path, impact_effect)
         self._draw_player_status(player)
         self._draw_sidebar(player)
 
@@ -132,34 +132,37 @@ class UI:
 
         sys.stdout.flush()
 
-    def _draw_map_and_entities(self, player, dungeon_map, monsters, camera_x, camera_y, projectile_path=None):
+    def _draw_map_and_entities(self, player, dungeon_map, monsters, camera_x, camera_y, projectile_path=None, impact_effect=None):
         if projectile_path is None:
             projectile_path = []
         monster_positions = {(m.x, m.y): m.symbol for m in monsters if not m.dead}
-        
+
         for y in range(self.MAP_VIEWPORT_HEIGHT):
             draw_y = self.map_viewport_y_start + y
             line_to_write = []
-            
+
             for x_offset in range(self.MAP_VIEWPORT_WIDTH):
                 map_x, map_y = camera_x + x_offset, camera_y + y
-                
+
                 char_to_draw = ' '
-                
+
                 if 0 <= map_x < dungeon_map.width and 0 <= map_y < dungeon_map.height and \
                    (not dungeon_map.fog_enabled or (map_x, map_y) in dungeon_map.visited):
-                    
+
                     char_to_draw = dungeon_map.get_tile_for_display(map_x, map_y)
-                    
+
                     if (map_x, map_y) in monster_positions:
                         char_to_draw = f"{ANSI.RED}{monster_positions[(map_x, map_y)]}{ANSI.RESET}"
                     
-                    if (map_x, map_y) in projectile_path:
+                    if impact_effect and map_x == impact_effect['x'] and map_y == impact_effect['y']:
+                        char_to_draw = f"{impact_effect['color']}{impact_effect['symbol']}{ANSI.RESET}"
+                    elif (map_x, map_y) in projectile_path:
                         char_to_draw = f"{ANSI.YELLOW}*{ANSI.RESET}"
+
 
                     if map_x == player.x and map_y == player.y:
                         char_to_draw = f"{ANSI.YELLOW}{player.char}{ANSI.RESET}"
-                
+
                 line_to_write.append(char_to_draw)
 
             sys.stdout.write(f"{ANSI.cursor_to(draw_y, self.map_viewport_x_start)}{''.join(line_to_write)}")

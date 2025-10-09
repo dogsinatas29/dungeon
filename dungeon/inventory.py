@@ -1,5 +1,5 @@
 # inventory.py
-from items import Item, Equipment, Consumable
+from .items import Item, Equipment, Consumable
 
 class Inventory:
     def __init__(self):
@@ -44,13 +44,13 @@ class Inventory:
 
     def _get_inventory_section(self, item):
         """아이템 종류에 따라 적절한 인벤토리 딕셔너리를 반환합니다."""
-        if isinstance(item, Equipment):
+        if item.item_type == 'EQUIP':
             return self.equipment_items
-        # elif isinstance(item, Scroll):
-        #     return self.scrolls
-        # elif isinstance(item, SkillBook):
-        #     return self.skill_books
-        else: # Consumable 및 기타
+        elif item.item_type == 'SKILLBOOK':
+            return self.skill_books
+        elif item.item_type == 'SCROLL':
+            return self.scrolls
+        else: # CONSUMABLE 및 기타
             return self.items
 
     def get_item_quantity(self, item_id):

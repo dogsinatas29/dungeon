@@ -3,7 +3,7 @@
 import os
 import re
 import json
-from items import Item
+from .items import Item
 
 # 게임 데이터 저장 경로
 SAVE_DIR = "game_data"
@@ -12,11 +12,13 @@ DUNGEON_MAPS_SAVE_FILE = os.path.join(SAVE_DIR, "all_dungeon_maps.json")
 
 
 # 아이템 데이터 파일 경로
-ITEM_DATA_FILE = os.path.join(os.path.dirname(__file__), "items.txt")
+ITEM_DATA_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "items.txt")
 # 몬스터 데이터 파일 경로 추가
-MONSTER_DATA_FILE = os.path.join(os.path.dirname(__file__), "monster_data.txt")
+MONSTER_DATA_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "monster_data.txt")
 # 스킬 데이터 파일 경로 추가
-SKILL_DATA_FILE = os.path.join(os.path.dirname(__file__), "skills.txt")
+SKILL_DATA_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "skills.txt")
+# 함정 데이터 파일 경로 추가
+TRAP_DATA_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "traps.txt")
 
 class ItemDefinition:
     """아이템의 정의(템플릿)를 저장하는 클래스."""
@@ -36,6 +38,25 @@ class ItemDefinition:
             f"equip_slot={self.equip_slot}, effect_type={self.effect_type}, value={self.value}, "
             f"description='{self.description}', req_level={self.req_level})"
         )
+class TrapDefinition:
+    """함정의 정의(템플릿)를 저장하는 클래스."""
+    def __init__(self, trap_id, name, symbol, color, trigger_type, effect_type, damage, radius):
+        self.id = trap_id
+        self.name = name
+        self.symbol = symbol
+        self.color = color
+        self.trigger_type = trigger_type
+        self.effect_type = effect_type
+        self.damage = damage
+        self.radius = radius
+
+    def __repr__(self):
+        return (
+            f"TrapDefinition(id={self.id}, name={self.name}, symbol='{self.symbol}', color='{self.color}', "
+            f"trigger_type='{self.trigger_type}', effect_type='{self.effect_type}', "
+            f"damage={self.damage}, radius={self.radius})"
+        )
+
 class SkillDefinition:
     """스킬의 정의(템플릿)를 저장하는 클래스."""
     def __init__(self, skill_id, name, req_level, attribute, cost_type, cost_value, req_equip, description, damage, skill_type, skill_subtype, range_str):
@@ -86,6 +107,7 @@ class MonsterDefinition:
 _item_definitions = {} # 아이템 정의를 저장할 전역 딕셔너리
 _monster_definitions = {} # 몬스터 정의를 저장할 전역 딕셔너리
 _skill_definitions = {} # 스킬 정의를 저장할 전역 딕셔너리
+_trap_definitions = {} # 함정 정의를 저장할 전역 딕셔너리
 
 def load_item_definitions(ui_instance=None):
     """items.txt 파일에서 아이템 정의를 로드합니다."""
@@ -250,6 +272,47 @@ def get_skill_definition(skill_id):
     if not _skill_definitions:
         load_skill_definitions()
     return _skill_definitions.get(skill_id)
+
+def load_trap_definitions(ui_instance=None):
+    """traps.txt 파일에서 함정 정의를 로드합니다."""
+    if _trap_definitions:
+        return _trap_definitions
+
+    if not os.path.exists(TRAP_DATA_FILE):
+        if ui_instance:
+            ui_instance.add_message(f"오류: 함정 데이터 파일이 존재하지 않습니다: {TRAP_DATA_FILE}")
+        else:
+            print(f"오류: 함정 데이터 파일이 존재하지 않습니다: {TRAP_DATA_FILE}")
+        return {}
+
+    with open(TRAP_DATA_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            
+            try:
+                parts = [p.strip() for p in line.split(',')]
+                if len(parts) < 8:
+                    continue
+                
+                trap_id, name, symbol, color, trigger_type, effect_type, damage, radius = parts[:8]
+                _trap_definitions[trap_id] = TrapDefinition(
+                    trap_id, name, symbol, color, trigger_type, effect_type, int(damage), int(radius)
+                )
+            except (ValueError, IndexError) as e:
+                error_message = f"경고: 잘못된 형식의 함정 데이터 줄: {line} (오류: {e})"
+                if ui_instance:
+                    ui_instance.add_message(error_message)
+                else:
+                    print(error_message)
+    return _trap_definitions
+
+def get_trap_definition(trap_id):
+    """지정된 ID의 함정 정의를 반환합니다."""
+    if not _trap_definitions:
+        load_trap_definitions()
+    return _trap_definitions.get(trap_id)
 
 # --- 게임 데이터 저장 및 로드 함수 ---
 

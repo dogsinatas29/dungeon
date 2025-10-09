@@ -1,5 +1,5 @@
 # monster.py
-import data_manager # data_manager 모듈 임포트
+from . import data_manager # data_manager 모듈 임포트
 
 class Monster:
     def __init__(self, x, y, ui_instance=None, monster_id=None, name=None, symbol=None, hp=None, attack=None, defense=None, level=None, exp_given=None):

@@ -2,3 +2,5 @@
 WIND_WHEEL,휠윈드,13,None,MP,10,쌍도끼,"주변 4방향 공격",40,ATTACK,AREA,1
 FIREBALL,파이어볼,5,불,MP,15,지팡이,"전방으로 화염구 발사",25,ATTACK,PROJECTILE,5
 HEAL,치유,3,빛,MP,20,없음,"자신의 체력 회복",30,RECOVERY,SELF,0
+MAGIC_MISSILE,매직 미사일,1,없음,MP,5,없음,"기본적인 마법 미사일",10,ATTACK,PROJECTILE,5
+ICE_BOLT,아이스 볼트,2,물,MP,8,없음,"전방으로 얼음 화살 발사",15,ATTACK,PROJECTILE,5

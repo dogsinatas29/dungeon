@@ -5,14 +5,14 @@ import json
 import sys
 import shutil
 import readchar
-import game # game 모듈 임포트
-from player import Player
-from dungeon_map import DungeonMap
-from data_manager import (
+from dungeon import engine
+from dungeon.player import Player
+from dungeon.map_manager import DungeonMap
+from dungeon.data_manager import (
     load_item_definitions, get_item_definition, load_skill_definitions,
     save_game_data, load_player_data, load_all_dungeon_maps_data, delete_save_data
 )
-from ui import UI, ANSI
+from dungeon.renderer import UI, ANSI
 
 # --- 데이터 로드 ---
 ITEM_DEFINITIONS = load_item_definitions()
@@ -38,7 +38,7 @@ def start_game(ui, new_game=False):
         ui.add_message(f"{player_name}, 던전에 온 것을 환영하네.")
 
     ui_instance = ui
-    game_result = game.run_game(player_data, all_dungeon_maps_data, ITEM_DEFINITIONS, ui_instance)
+    game_result = engine.run_game(player_data, all_dungeon_maps_data, ITEM_DEFINITIONS, ui_instance)
     
     if game_result == "DEATH":
         delete_save_data()

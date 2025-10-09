@@ -1,6 +1,6 @@
 # player.py
-import data_manager
-from inventory import Inventory
+from . import data_manager
+from .inventory import Inventory
 
 class Player:
     def __init__(self, name, hp=100, mp=50, x=0, y=0, level=1, dungeon_level=(1, 0)):

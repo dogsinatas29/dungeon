@@ -1,9 +1,10 @@
 # dungeon_map.py
 
 import random
-from ui import ANSI
-from monster import Monster
-import data_manager
+from .renderer import ANSI
+from .monster import Monster
+from . import data_manager
+from .trap import Trap
 
 # --- Tile Definitions ---
 BORDER_WALL = '#'
@@ -51,6 +52,7 @@ class DungeonMap:
         self.visited = set()
         self.items_on_map = {}
         self.monsters = []
+        self.traps = [] # 함정 목록 추가
         self.room_entrances = {}
         self.fog_enabled = True # 안개 상태 변수 추가
         self.player_tombstone = None # 플레이어 무덤 위치
@@ -81,9 +83,9 @@ class DungeonMap:
                     self.visited.add((x, y))
 
     def _generate_main_map(self):
-        growth_multiplier = (self.floor - 1) // self.MAP_GROWTH_LEVEL_INTERVAL
-        self.width = min(self.MIN_MAP_WIDTH + growth_multiplier * self.MAP_GROWTH_AMOUNT_WIDTH, self.MAX_MAP_WIDTH)
-        self.height = min(self.MIN_MAP_HEIGHT + growth_multiplier * self.MAP_GROWTH_AMOUNT_HEIGHT, self.MAX_MAP_HEIGHT)
+        # 층마다 맵 크기가 10x10씩 증가하도록 수정
+        self.width = min(self.MIN_MAP_WIDTH + (self.floor - 1) * 10, self.MAX_MAP_WIDTH)
+        self.height = min(self.MIN_MAP_HEIGHT + (self.floor - 1) * 10, self.MAX_MAP_HEIGHT)
         self.map_data = self._generate_empty_map()
         self._generate_random_map()
         self._place_start_and_exit()
@@ -190,20 +192,39 @@ class DungeonMap:
             # 벽이나 다른 장애물
             return False, "벽으로 막혀있습니다."
 
-        # 4. 모든 검사를 통과하면 플레이어 이동
+        # 4. 목적지에 함정이 있는지 확인
+        for trap in self.traps:
+            if not trap.triggered and trap.x == new_x and trap.y == new_y:
+                trap.trigger()
+                # 함정을 밟았음을 알리기 위해 trap 객체 반환
+                return True, trap 
+
+        # 5. 모든 검사를 통과하면 플레이어 이동
         self.player_x = new_x
         self.player_y = new_y
         self.reveal_tiles(self.player_x, self.player_y)
+        
+        # 이동한 타일의 특성에 따라 다른 결과 반환
+        if target_tile == ITEM_TILE:
+            return True, ITEM_TILE
+        elif target_tile == ROOM_ENTRANCE:
+            return True, ROOM_ENTRANCE
+        
         return True, "이동했습니다."
-
     def move_monster(self, monster, dx, dy):
         """지정된 몬스터를 이동시킵니다."""
         new_x, new_y = monster.x + dx, monster.y + dy
         if self.is_walkable_for_monster(new_x, new_y):
             monster.x = new_x
             monster.y = new_y
-            return True
-        return False
+            
+            # 몬스터도 함정을 발동시킬 수 있음
+            for trap in self.traps:
+                if not trap.triggered and trap.x == new_x and trap.y == new_y:
+                    trap.trigger()
+                    return True, trap # 함정 객체 반환
+            return True, None # 함정 없음
+        return False, None
 
     def get_tile(self, x, y):
         if (x, y) in self.room_entrances: return ROOM_ENTRANCE
@@ -219,13 +240,23 @@ class DungeonMap:
         if self.player_tombstone and (x, y) == self.player_tombstone:
             return f"{ANSI.WHITE}T{ANSI.RESET}"
 
-        # 2. 몬스터 시체
+        # 2. 맵에 있는 아이템 (몬스터 시체보다 높은 우선순위)
+        if (x, y) in self.items_on_map:
+            return f"{ANSI.RED}{ITEM_TILE}{ANSI.RESET}"
+
+        # 3. 몬스터 시체
         # 해당 위치에 죽은 몬스터가 있는지 확인
         is_corpse = any(m.dead for m in self.monsters if (x, y) == (m.x, m.y))
         if is_corpse:
             return f"{ANSI.RED}%{ANSI.RESET}"
 
-        # 3. 정적 타일
+        # 4. 함정 (시체보다 낮은 우선순위)
+        for trap in self.traps:
+            if trap.visible and (x, y) == (trap.x, trap.y):
+                trap_color = getattr(ANSI, trap.color, ANSI.WHITE)
+                return f"{trap_color}{trap.symbol}{ANSI.RESET}"
+
+        # 5. 정적 타일
         tile = self.get_tile(x, y) # 아이템, 출입구 등 내부 상태를 가져옴
         
         color = ANSI.WHITE # 기본 색상
