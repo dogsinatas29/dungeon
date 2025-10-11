@@ -316,23 +316,13 @@ def get_trap_definition(trap_id):
 
 # --- 게임 데이터 저장 및 로드 함수 ---
 
-def save_game_data(player, all_dungeon_maps, ui_instance):
+def save_game_data(player_entity_id, all_dungeon_maps, ui_instance, game_state_data):
     """게임 데이터를 파일에 저장합니다."""
     os.makedirs(SAVE_DIR, exist_ok=True)
     try:
-        # 1. 플레이어 데이터 저장
-        player_data_to_save = player.to_dict()
+        # 1. 전체 게임 상태 데이터 저장
         with open(PLAYER_SAVE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(player_data_to_save, f, ensure_ascii=False, indent=4)
-
-        # 2. 맵 데이터 저장
-        maps_data_to_save = {}
-        for level, dungeon_map in all_dungeon_maps.items():
-            level_str = f"{level[0]},{level[1]}"
-            maps_data_to_save[level_str] = dungeon_map.to_dict()
-        
-        with open(DUNGEON_MAPS_SAVE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(maps_data_to_save, f, ensure_ascii=False, indent=4)
+            json.dump(game_state_data, f, ensure_ascii=False, indent=4)
         
         if ui_instance:
             ui_instance.add_message("게임 데이터가 성공적으로 저장되었습니다.")
@@ -341,18 +331,11 @@ def save_game_data(player, all_dungeon_maps, ui_instance):
         if ui_instance:
             ui_instance.add_message(f"데이터 저장 중 오류 발생: {e}")
 
-def load_player_data():
-    """저장된 플레이어 데이터를 불러옵니다."""
+def load_game_data():
+    """저장된 전체 게임 데이터를 불러옵니다."""
     if not os.path.exists(PLAYER_SAVE_FILE):
         return None
     with open(PLAYER_SAVE_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def load_all_dungeon_maps_data():
-    """저장된 모든 맵 데이터를 불러옵니다."""
-    if not os.path.exists(DUNGEON_MAPS_SAVE_FILE):
-        return None
-    with open(DUNGEON_MAPS_SAVE_FILE, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def delete_save_data():

@@ -8,110 +8,79 @@ class Monster:
         if monster_id:
             monster_def = data_manager.get_monster_definition(monster_id)
             if monster_def:
-                self.name = monster_def.name
+                # self.name = monster_def.name # NameComponent에서 관리
                 self.symbol = monster_def.symbol
-                self.hp = monster_def.hp
-                self.max_hp = monster_def.hp
-                self.attack = monster_def.attack
-                self.defense = monster_def.defense
+                # self.hp = monster_def.hp # HealthComponent에서 관리
+                # self.max_hp = monster_def.hp # HealthComponent에서 관리
+                # self.attack = monster_def.attack # AttackComponent에서 관리
+                # self.defense = monster_def.defense # DefenseComponent에서 관리
                 self.level = monster_def.level
                 self.exp_given = monster_def.exp_given
-                self.critical_chance = monster_def.critical_chance
-                self.critical_damage_multiplier = monster_def.critical_damage_multiplier
+                # self.critical_chance = monster_def.critical_chance # AttackComponent에서 관리
+                # self.critical_damage_multiplier = monster_def.critical_damage_multiplier # AttackComponent에서 관리
                 self.move_type = monster_def.move_type
                 self.original_move_type = self.move_type
             else:
-                self.name = name if name else "알 수 없는 몬스터"
+                # self.name = name if name else "알 수 없는 몬스터" # NameComponent에서 관리
                 self.symbol = symbol if symbol else '?'
-                self.hp = hp if hp else 30
-                self.max_hp = self.hp
-                self.attack = attack if attack else 8
-                self.defense = defense if defense else 2
+                # self.hp = hp if hp else 30 # HealthComponent에서 관리
+                # self.max_hp = self.hp # HealthComponent에서 관리
+                # self.attack = attack if attack else 8 # AttackComponent에서 관리
+                # self.defense = defense if defense else 2 # DefenseComponent에서 관리
                 self.level = level if level else 1
                 self.exp_given = exp_given if exp_given else 10
-                self.critical_chance = 0.05
-                self.critical_damage_multiplier = 1.5
+                # self.critical_chance = 0.05 # AttackComponent에서 관리
+                # self.critical_damage_multiplier = 1.5 # AttackComponent에서 관리
                 self.move_type = 'STATIONARY'
                 self.original_move_type = self.move_type
                 if self.ui_instance:
                     self.ui_instance.add_message(f"경고: 몬스터 정의 '{monster_id}'를 찾을 수 없습니다. 기본값 사용.")
         else:
-            self.name = name if name else "몬스터"
+            # self.name = name if name else "몬스터" # NameComponent에서 관리
             self.symbol = symbol if symbol else name[0] if name else 'M'
-            self.hp = hp if hp else 30
-            self.max_hp = self.hp
-            self.attack = attack if attack else 8
-            self.defense = defense if defense else 2
+            # self.hp = hp if hp else 30 # HealthComponent에서 관리
+            # self.max_hp = self.hp # HealthComponent에서 관리
+            # self.attack = attack if attack else 8 # AttackComponent에서 관리
+            # self.defense = defense if defense else 2 # DefenseComponent에서 관리
             self.level = level if level else 1
             self.exp_given = exp_given if exp_given else 10
-            self.critical_chance = 0.05
-            self.critical_damage_multiplier = 1.5
+            # self.critical_chance = 0.05 # AttackComponent에서 관리
+            # self.critical_damage_multiplier = 1.5 # AttackComponent에서 관리
             self.move_type = 'STATIONARY'
             self.original_move_type = self.move_type
 
-        self.x = x
-        self.y = y
         self.dead = False
         self.is_provoked = False
         self.loot = None  # 몬스터가 떨어뜨릴 아이템 추가
-        self.loot = None  # 몬스터가 떨어뜨릴 아이템 추가
-        self.loot = None  # 몬스터가 떨어뜨릴 아이템 추가
-
-    def take_damage(self, amount):
-        self.hp -= amount
-        self.is_provoked = True
-        if self.hp <= 0:
-            self.hp = 0
-            self.dead = True
-        return self.dead
-    
-    def attack(self, target_player):
-        if self.ui_instance:
-            self.ui_instance.add_message(f"{self.name}이(가) 공격합니다!")
-        
-        damage = max(1, self.attack - target_player.defense)
-        target_player.take_damage(damage)
-
-        if self.ui_instance:
-            self.ui_instance.add_message(f"{damage}의 데미지를 입었습니다! 남은 HP: {target_player.hp}")
-            if not target_player.is_alive():
-                self.ui_instance.add_message("당신은 쓰러졌습니다...")
+        self.entity_id = None # ECS 엔티티 ID 추가
 
     def to_dict(self):
         return {
-            "name": self.name, "symbol": self.symbol, "x": self.x, "y": self.y,
-            "hp": self.hp, "max_hp": self.max_hp,
-            "attack": self.attack, "defense": self.defense,
+            "symbol": self.symbol,
+            # "attack": self.attack, # AttackComponent에서 관리
+            # "defense": self.defense, # DefenseComponent에서 관리
             "level": self.level,
             "exp_given": self.exp_given,
-            "critical_chance": self.critical_chance,
-            "critical_damage_multiplier": self.critical_damage_multiplier,
+            # "critical_chance": self.critical_chance, # AttackComponent에서 관리
+            # "critical_damage_multiplier": self.critical_damage_multiplier, # AttackComponent에서 관리
             "move_type": self.move_type,
             "original_move_type": self.original_move_type,
             "is_provoked": self.is_provoked,
             "dead": self.dead,
-            "loot": self.loot
+            "loot": self.loot,
+            "entity_id": self.entity_id
         }
 
     @classmethod
     def from_dict(cls, data):
         monster = cls(
-            x=data['x'], y=data['y'],
-            name=data.get('name', '몬스터'),
             symbol=data.get('symbol', data.get('name', 'M')[0]),
-            hp=data.get('hp', 30),
-            attack=data.get('attack', 8),
-            defense=data.get('defense', 2),
             level=data.get('level', 1),
             exp_given=data.get('exp_given', 10)
         )
-        monster.max_hp = data.get('max_hp', monster.hp)
-        monster.critical_chance = data.get('critical_chance', 0.05)
-        monster.critical_damage_multiplier = data.get('critical_damage_multiplier', 1.5)
+        # monster.max_hp = data.get('max_hp', monster.hp) # HealthComponent에서 관리
+        # monster.critical_chance = data.get('critical_chance', 0.05) # AttackComponent에서 관리
+        # monster.critical_damage_multiplier = data.get('critical_damage_multiplier', 1.5) # AttackComponent에서 관리
         monster.move_type = data.get('move_type', 'STATIONARY')
-        monster.original_move_type = data.get('original_move_type', 'AGGRESSIVE') # 이전 저장 파일 호환성을 위해 기본값 설정
-        monster.is_provoked = data.get('is_provoked', False)
-        monster.dead = data.get('dead', False)
-        monster.loot = data.get('loot', None)
         return monster
 

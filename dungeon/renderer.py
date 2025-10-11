@@ -116,12 +116,14 @@ class UI:
                          inventory_open=False, inventory_cursor_pos=0,
                          inventory_active_tab='item', inventory_scroll_offset=0,
                          log_viewer_open=False, log_viewer_scroll_offset=0,
-                         game_state='NORMAL', projectile_path=None, impact_effect=None):
+                         game_state='NORMAL', projectile_path=None, impact_effect=None, splash_positions=None):
         if projectile_path is None:
             projectile_path = []
+        if splash_positions is None:
+            splash_positions = []
         self.clear_screen()
 
-        self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y, projectile_path, impact_effect)
+        self._draw_map_and_entities(player, dungeon_map, monsters, camera_x, camera_y, projectile_path, impact_effect, splash_positions)
         self._draw_player_status(player)
         self._draw_sidebar(player)
 
@@ -132,10 +134,30 @@ class UI:
 
         sys.stdout.flush()
 
-    def _draw_map_and_entities(self, player, dungeon_map, monsters, camera_x, camera_y, projectile_path=None, impact_effect=None):
+    def _draw_map_and_entities(self, player, dungeon_map, monsters, camera_x, camera_y, projectile_path=None, impact_effect=None, splash_positions=None):
         if projectile_path is None:
             projectile_path = []
-        monster_positions = {(m.x, m.y): m.symbol for m in monsters if not m.dead}
+        if splash_positions is None:
+            splash_positions = []
+        
+        # 몬스터 위치를 entity_manager에서 가져오도록 변경
+        monster_positions = {}
+        if dungeon_map.entity_manager:
+            for monster_obj in monsters:
+                pos_comp = dungeon_map.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
+                if pos_comp:
+                    monster_positions[(pos_comp.x, pos_comp.y)] = monster_obj.symbol
+
+        player_pos = dungeon_map.entity_manager.get_component(player.entity_id, PositionComponent)
+        if not player_pos: return # 플레이어 위치 없으면 그리지 않음
+
+        # 발사체 위치를 entity_manager에서 가져오도록 변경
+        projectile_positions = {}
+        if dungeon_map.entity_manager:
+            for entity_id, proj_comp in dungeon_map.entity_manager.get_components_of_type(ProjectileComponent).items():
+                pos_comp = dungeon_map.entity_manager.get_component(entity_id, PositionComponent)
+                if pos_comp:
+                    projectile_positions[(pos_comp.x, pos_comp.y)] = '*' # 발사체 심볼 (임시)
 
         for y in range(self.MAP_VIEWPORT_HEIGHT):
             draw_y = self.map_viewport_y_start + y
@@ -151,16 +173,20 @@ class UI:
 
                     char_to_draw = dungeon_map.get_tile_for_display(map_x, map_y)
 
+                    # 스플래시 효과 렌더링 (몬스터보다 높은 우선순위)
+                    if (map_x, map_y) in splash_positions:
+                        char_to_draw = f"{ANSI.RED}@{ANSI.RESET}"
+
                     if (map_x, map_y) in monster_positions:
                         char_to_draw = f"{ANSI.RED}{monster_positions[(map_x, map_y)]}{ANSI.RESET}"
                     
                     if impact_effect and map_x == impact_effect['x'] and map_y == impact_effect['y']:
                         char_to_draw = f"{impact_effect['color']}{impact_effect['symbol']}{ANSI.RESET}"
-                    elif (map_x, map_y) in projectile_path:
-                        char_to_draw = f"{ANSI.YELLOW}*{ANSI.RESET}"
+                    elif (map_x, map_y) in projectile_positions: # 발사체 렌더링
+                        char_to_draw = f"{ANSI.YELLOW}{projectile_positions[(map_x, map_y)]}{ANSI.RESET}"
 
 
-                    if map_x == player.x and map_y == player.y:
+                    if map_x == player_pos.x and map_y == player_pos.y:
                         char_to_draw = f"{ANSI.YELLOW}{player.char}{ANSI.RESET}"
 
                 line_to_write.append(char_to_draw)
@@ -327,7 +353,7 @@ class UI:
                 # 2. 퀵슬롯에 등록되었는지 확인
                 else:
                     if isinstance(item_obj, SkillBook):
-                        if item_obj.skill_id in player.skill_quick_slots.values():
+                        if item_obj.id in player.skill_quick_slots.values():
                             status_indicator = "(Q)"
                     elif item_obj.id in player.item_quick_slots.values():
                         status_indicator = "(Q)"

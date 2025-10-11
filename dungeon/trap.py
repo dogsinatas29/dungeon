@@ -21,6 +21,7 @@ class Trap:
         
         self.triggered = False
         self.visible = False # 기본적으로 보이지 않음
+        self.entity_id = None # ECS 엔티티 ID 추가
 
     def trigger(self):
         """함정을 발동시킵니다."""
@@ -30,20 +31,40 @@ class Trap:
             return True
         return False
 
+    def get_splash_effect_positions(self):
+        """함정의 스플래시 효과가 적용될 위치들을 반환합니다."""
+        positions = []
+        for dy in range(-self.radius, self.radius + 1):
+            for dx in range(-self.radius, self.radius + 1):
+                # 원형 반경을 위한 간단한 근사치
+                if dx*dx + dy*dy <= self.radius*self.radius:
+                    positions.append((self.x + dx, self.y + dy))
+        return positions
+
     def to_dict(self):
-        """함정 데이터를 딕셔너리로 변환합니다."""
         return {
-            'x': self.x,
-            'y': self.y,
-            'trap_id': self.trap_id,
-            'triggered': self.triggered,
-            'visible': self.visible
+            "x": self.x, "y": self.y, "trap_id": self.trap_id,
+            "name": self.name, "symbol": self.symbol, "color": self.color,
+            "trigger_type": self.trigger_type, "effect_type": self.effect_type,
+            "damage": self.damage, "radius": self.radius,
+            "triggered": self.triggered, "visible": self.visible,
+            "entity_id": self.entity_id
         }
 
     @classmethod
     def from_dict(cls, data):
-        """딕셔너리로부터 Trap 객체를 생성합니다."""
-        trap = cls(data['x'], data['y'], data['trap_id'])
-        trap.triggered = data.get('triggered', False)
-        trap.visible = data.get('visible', False)
+        trap = cls(
+            x=data['x'], y=data['y'],
+            trap_id=data['trap_id']
+        )
+        trap.name = data.get('name', trap.name)
+        trap.symbol = data.get('symbol', trap.symbol)
+        trap.color = data.get('color', trap.color)
+        trap.trigger_type = data.get('trigger_type', trap.trigger_type)
+        trap.effect_type = data.get('effect_type', trap.effect_type)
+        trap.damage = data.get('damage', trap.damage)
+        trap.radius = data.get('radius', trap.radius)
+        trap.triggered = data.get('triggered', trap.triggered)
+        trap.visible = data.get('visible', trap.visible)
+        trap.entity_id = data.get('entity_id', None)
         return trap

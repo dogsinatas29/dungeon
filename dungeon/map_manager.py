@@ -2,7 +2,6 @@
 
 import random
 from .renderer import ANSI
-from .monster import Monster
 from . import data_manager
 from .trap import Trap
 
@@ -37,26 +36,24 @@ class DungeonMap:
     ROOM_COUNT_LEVEL_INTERVAL = 3
     VIEW_RADIUS = 5
 
-    def __init__(self, dungeon_level_tuple, ui_instance=None, _is_loading=False, is_boss_room=False, monster_definitions=None):
+    def __init__(self, dungeon_level_tuple, ui_instance=None, _is_loading=False, is_boss_room=False, monster_definitions=None, entity_manager=None):
         self.ui_instance = ui_instance
         self.floor, self.room_index = dungeon_level_tuple
         self.width, self.height = 0, 0
         self.map_data = []
         self.start_x, self.start_y = 0, 0
-        self.player_x, self.player_y = 0, 0
         self.exit_x, self.exit_y = 0, 0
         self.exit_type = EXIT_NORMAL
         self.required_key_id = None
         self.required_key_count = 0
         self.is_generated = False
         self.visited = set()
-        self.items_on_map = {}
-        self.monsters = []
         self.traps = [] # 함정 목록 추가
         self.room_entrances = {}
         self.fog_enabled = True # 안개 상태 변수 추가
         self.player_tombstone = None # 플레이어 무덤 위치
         self.monster_definitions = monster_definitions # 몬스터 정의 저장
+        self.entity_manager = entity_manager # entity_manager 저장
 
         if not _is_loading:
             if self.room_index == 0:
@@ -109,42 +106,45 @@ class DungeonMap:
         self.start_y = self.height - 2
         self.exit_x, self.exit_y = self.start_x, self.start_y
         self.exit_type = EXIT_NORMAL
-        self.player_x, self.player_y = self.start_x, self.start_y
         
         if is_boss_room:
             self._populate_boss_room()
 
     def _populate_boss_room(self):
         """보스 방에 몬스터를 배치합니다."""
-        if not self.monster_definitions: return # 몬스터 정의가 없으면 실행하지 않음
+        if not self.monster_definitions: return [] # 몬스터 위치 리스트 반환
 
         floor_tiles = [(x, y) for y in range(1, self.height - 1) for x in range(1, self.width - 1)]
+        placed_monster_data = []
         
         # 50% 확률로 보스 몬스터, 50% 확률로 몬스터 하우스
         if random.random() < 0.5:
             # 보스 몬스터 배치
             if 'DRAGON' in self.monster_definitions:
                 x, y = self.width // 2, self.height // 2
-                self.monsters.append(Monster(x, y, self.ui_instance, monster_id='DRAGON'))
+                monster_def = data_manager.get_monster_definition('DRAGON')
+                if monster_def:
+                    placed_monster_data.append({'x': x, 'y': y, 'monster_id': 'DRAGON', 'monster_def': monster_def})
         else:
             # 몬스터 하우스
             num_monsters = int(len(floor_tiles) * 0.5) # 바닥의 50%를 몬스터로 채움
             monster_ids = [mid for mid in self.monster_definitions.keys() if mid != 'DRAGON']
-            if not monster_ids: return
+            if not monster_ids: return []
 
             for _ in range(num_monsters):
                 if not floor_tiles: break
                 x, y = random.choice(floor_tiles)
                 floor_tiles.remove((x,y))
                 monster_id = random.choice(monster_ids)
-                self.monsters.append(Monster(x, y, self.ui_instance, monster_id=monster_id))
-
+                monster_def = data_manager.get_monster_definition(monster_id)
+                if monster_def:
+                    placed_monster_data.append({'x': x, 'y': y, 'monster_id': monster_id, 'monster_def': monster_def})
+        return placed_monster_data
     def _place_start_and_exit(self):
         while True:
             sx, sy = random.randint(1, self.width - 2), random.randint(1, self.height - 2)
             if self.map_data[sy][sx] == FLOOR:
                 self.start_x, self.start_y = sx, sy
-                self.player_x, self.player_y = sx, sy
                 break
         while True:
             ex, ey = random.randint(1, self.width - 2), random.randint(1, self.height - 2)
@@ -167,68 +167,27 @@ class DungeonMap:
                 entrances.append(pos)
                 self.room_entrances[pos] = {'id': i, 'is_boss': False}
 
+                # InteractableComponent 추가
+                if self.entity_manager:
+                    room_entrance_entity_id = self.entity_manager.create_entity()
+                    self.entity_manager.add_component(room_entrance_entity_id, PositionComponent(x=pos[0], y=pos[1]))
+                    self.entity_manager.add_component(room_entrance_entity_id, InteractableComponent(interaction_type='ROOM_ENTRANCE', data={'room_id': i, 'is_boss': False}))
+
         # 방이 하나라도 있으면, 그 중 하나를 보스 방으로 지정
         if entrances:
             boss_room_pos = random.choice(entrances)
             self.room_entrances[boss_room_pos]['is_boss'] = True
-
-    def move_player(self, dx, dy):
-        new_x, new_y = self.player_x + dx, self.player_y + dy
-
-        # 1. 맵 경계 확인
-        if not (0 <= new_x < self.width and 0 <= new_y < self.height):
-            return False, "맵의 끝에 도달했습니다."
-
-        # 2. 목적지에 몬스터가 있는지 확인
-        for monster in self.monsters:
-            if not monster.dead and monster.x == new_x and monster.y == new_y:
-                # 전투 시작, 이동은 하지 않음
-                return False, monster
-
-        # 3. 타일 자체가 걸을 수 있는지 확인
-        target_tile = self.get_tile(new_x, new_y)
-        walkable_tiles = [FLOOR, ITEM_TILE, EXIT_NORMAL, EXIT_LOCKED, ROOM_ENTRANCE, START]
-        if target_tile not in walkable_tiles:
-            # 벽이나 다른 장애물
-            return False, "벽으로 막혀있습니다."
-
-        # 4. 목적지에 함정이 있는지 확인
-        for trap in self.traps:
-            if not trap.triggered and trap.x == new_x and trap.y == new_y:
-                trap.trigger()
-                # 함정을 밟았음을 알리기 위해 trap 객체 반환
-                return True, trap 
-
-        # 5. 모든 검사를 통과하면 플레이어 이동
-        self.player_x = new_x
-        self.player_y = new_y
-        self.reveal_tiles(self.player_x, self.player_y)
-        
-        # 이동한 타일의 특성에 따라 다른 결과 반환
-        if target_tile == ITEM_TILE:
-            return True, ITEM_TILE
-        elif target_tile == ROOM_ENTRANCE:
-            return True, ROOM_ENTRANCE
-        
-        return True, "이동했습니다."
-    def move_monster(self, monster, dx, dy):
-        """지정된 몬스터를 이동시킵니다."""
-        new_x, new_y = monster.x + dx, monster.y + dy
-        if self.is_walkable_for_monster(new_x, new_y):
-            monster.x = new_x
-            monster.y = new_y
-            
-            # 몬스터도 함정을 발동시킬 수 있음
-            for trap in self.traps:
-                if not trap.triggered and trap.x == new_x and trap.y == new_y:
-                    trap.trigger()
-                    return True, trap # 함정 객체 반환
-            return True, None # 함정 없음
-        return False, None
+            # 해당 엔티티의 InteractableComponent 업데이트
+            if self.entity_manager:
+                for entity_id, pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
+                    if pos_comp.x == boss_room_pos[0] and pos_comp.y == boss_room_pos[1]:
+                        interactable_comp = self.entity_manager.get_component(entity_id, InteractableComponent)
+                        if interactable_comp:
+                            interactable_comp.data['is_boss'] = True
+                        break
 
     def get_tile(self, x, y):
         if (x, y) in self.room_entrances: return ROOM_ENTRANCE
-        if (x, y) in self.items_on_map: return ITEM_TILE
         if (x, y) == (self.exit_x, self.exit_y): return self.exit_type
         if (x, y) == (self.start_x, self.start_y): return START
         return self.map_data[y][x]
@@ -240,13 +199,16 @@ class DungeonMap:
         if self.player_tombstone and (x, y) == self.player_tombstone:
             return f"{ANSI.WHITE}T{ANSI.RESET}"
 
-        # 2. 맵에 있는 아이템 (몬스터 시체보다 높은 우선순위)
-        if (x, y) in self.items_on_map:
-            return f"{ANSI.RED}{ITEM_TILE}{ANSI.RESET}"
-
-        # 3. 몬스터 시체
+        # 2. 몬스터 시체
         # 해당 위치에 죽은 몬스터가 있는지 확인
-        is_corpse = any(m.dead for m in self.monsters if (x, y) == (m.x, m.y))
+        is_corpse = False
+        if self.entity_manager:
+            for monster_obj in self.monsters:
+                if monster_obj.dead:
+                    pos_comp = self.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
+                    if pos_comp and (x, y) == (pos_comp.x, pos_comp.y):
+                        is_corpse = True
+                        break
         if is_corpse:
             return f"{ANSI.RED}%{ANSI.RESET}"
 
@@ -279,17 +241,17 @@ class DungeonMap:
                 color = ANSI.YELLOW
             else:
                 color = ANSI.GREEN
-        elif tile == ITEM_TILE:
-            char = ITEM_TILE
-            color = ANSI.RED
         
         return f"{color}{char}{ANSI.RESET}"
 
     def get_monster_at(self, x, y):
         """지정된 위치에 있는 몬스터 객체를 반환합니다. 없으면 None을 반환합니다."""
-        for monster in self.monsters:
-            if not monster.dead and monster.x == x and monster.y == y:
-                return monster
+        if self.entity_manager:
+            for monster_obj in self.monsters:
+                if not monster_obj.dead:
+                    pos_comp = self.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
+                    if pos_comp and pos_comp.x == x and pos_comp.y == y:
+                        return monster_obj
         return None
 
     def is_wall(self, x, y):
@@ -297,6 +259,10 @@ class DungeonMap:
         if not (0 <= x < self.width and 0 <= y < self.height):
             return True # 맵 밖은 벽으로 간주
         return self.map_data[y][x] in [INNER_WALL, BORDER_WALL]
+
+    def is_valid_tile(self, x, y):
+        """지정된 위치가 맵 범위 내에 있는지 확인합니다."""
+        return 0 <= x < self.width and 0 <= y < self.height
 
     def calculate_num_rooms(self, floor):
         return self.BASE_NUM_ROOMS + (floor - 1) // self.ROOM_COUNT_LEVEL_INTERVAL
@@ -309,12 +275,13 @@ class DungeonMap:
         target_tile = self.get_tile(x, y)
         if target_tile not in [FLOOR, START, EXIT_NORMAL, ROOM_ENTRANCE, ITEM_TILE]:
             return False  # 벽이나 기타 장애물
-
-        if (x, y) == (self.player_x, self.player_y):
-            return False  # 플레이어 위치
-        for m in self.monsters:
-            if not m.dead and m.x == x and m.y == y:
-                return False  # 다른 몬스터 위치
+        
+        if self.entity_manager:
+            for monster_obj in self.monsters:
+                if not monster_obj.dead:
+                    pos_comp = self.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
+                    if pos_comp and pos_comp.x == x and pos_comp.y == y:
+                        return False  # 다른 몬스터 위치
         return True
 
     def _generate_empty_map(self):
@@ -338,58 +305,76 @@ class DungeonMap:
             pos = random.choice(available_tiles)
             available_tiles.remove(pos)
             item_id = random.choice(item_ids)
-            self.items_on_map[pos] = {'id': item_id, 'qty': 1}
+            
+            # InteractableComponent 추가
+            if self.entity_manager:
+                item_entity_id = self.entity_manager.create_entity()
+                self.entity_manager.add_component(item_entity_id, PositionComponent(x=pos[0], y=pos[1]))
+                self.entity_manager.add_component(item_entity_id, InteractableComponent(interaction_type='ITEM_TILE', data={'item_id': item_id, 'qty': 1}))
 
-    def place_monsters(self, monster_definitions, num_monsters=5): # monster_definitions 인자 추가
-        if not monster_definitions: return
+    def place_monsters(self, monster_definitions, num_monsters=5): # entity_manager, ui_instance 인자 제거
+        if not monster_definitions: return [] # 몬스터 위치 리스트 반환
         floor_tiles = [(x, y) for y in range(self.height) for x in range(self.width) if self.map_data[y][x] == FLOOR]
         exclusions = {(self.start_x, self.start_y), (self.exit_x, self.exit_y)}
         exclusions.update(self.room_entrances.keys())
-        exclusions.update(self.items_on_map.keys())
         available_tiles = [tile for tile in floor_tiles if tile not in exclusions]
         
         monster_ids = [mid for mid in monster_definitions.keys() if mid != 'DRAGON']
-        if not monster_ids: return # 정의된 몬스터가 없으면 리턴
+        if not monster_ids: return [] # 정의된 몬스터가 없으면 리턴
 
+        placed_monster_data = []
         for _ in range(min(num_monsters, len(available_tiles))):
             x, y = random.choice(available_tiles)
             available_tiles.remove((x,y))
             
             # 무작위 몬스터 ID 선택
             monster_id = random.choice(monster_ids)
-            self.monsters.append(Monster(x, y, self.ui_instance, monster_id=monster_id)) # monster_id 전달
+            monster_def = data_manager.get_monster_definition(monster_id)
+            if monster_def:
+                placed_monster_data.append({'x': x, 'y': y, 'monster_id': monster_id, 'monster_def': monster_def})
 
         # --- 열쇠 지급 로직 추가 ---
         # 현재 맵이 메인 맵이고, 출구가 잠겨있을 때만 열쇠를 지급
         if self.room_index == 0 and self.exit_type == EXIT_LOCKED:
             # 몬스터가 충분히 있을 경우, 그 중 2마리에게 열쇠를 지급
-            if len(self.monsters) >= self.required_key_count:
-                key_holders = random.sample(self.monsters, self.required_key_count)
-                for monster in key_holders:
-                    monster.loot = self.required_key_id
+            if len(placed_monster_data) >= self.required_key_count:
+                key_holders = random.sample(placed_monster_data, self.required_key_count)
+                for monster_data in key_holders:
+                    monster_data['loot'] = self.required_key_id
+        
+        return placed_monster_data
 
     def to_dict(self):
         return {
             "dungeon_level_tuple": (self.floor, self.room_index), "width": self.width, "height": self.height,
             "map_data": self.map_data, "start_x": self.start_x, "start_y": self.start_y,
-            "player_x": self.player_x, "player_y": self.player_y, "exit_x": self.exit_x, "exit_y": self.exit_y,
+            "exit_x": self.exit_x, "exit_y": self.exit_y,
             "exit_type": self.exit_type, "visited": list(self.visited), "is_generated": self.is_generated,
-            "items_on_map": {f"{k[0]},{k[1]}": v for k, v in self.items_on_map.items()},
-            "monsters": [m.to_dict() for m in self.monsters], 
-            "room_entrances": {f"{k[0]},{k[1]}": v for k, v in self.room_entrances.items()}
+            "room_entrances": {f"{k[0]},{k[1]}": v for k, v in self.room_entrances.items()},
+            "entity_manager_data": self.entity_manager.to_dict() if self.entity_manager else None,
+            "traps": [t.to_dict() for t in self.traps]
         }
     @classmethod
     def from_dict(cls, data):
         level = tuple(data.get('dungeon_level_tuple', (1, 0)))
         d_map = cls(level, ui_instance=None, _is_loading=True)
+        
+        entity_manager_data = data.get('entity_manager_data')
+        if entity_manager_data:
+            d_map.entity_manager = EntityManager.from_dict(entity_manager_data)
+        else:
+            d_map.entity_manager = None # 또는 새로운 EntityManager 생성
+
         for key, value in data.items():
             if key == "visited": setattr(d_map, key, set(tuple(v) for v in value))
-            elif key in ["items_on_map", "room_entrances"]:
-                deserialized_dict = {}
-                for k_str, v in value.items():
-                    x_str, y_str = k_str.split(',')
-                    deserialized_dict[(int(x_str), int(y_str))] = v
-                setattr(d_map, key, deserialized_dict)
-            elif key == "monsters": d_map.monsters = [Monster.from_dict(m_data) for m_data in value]
+            elif key == "traps": # 함정 데이터 로드
+                d_map.traps = [Trap.from_dict(t_data) for t_data in value]
+                # 함정 엔티티도 로드 시점에 entity_manager에 추가
+                if d_map.entity_manager:
+                    for trap_obj in d_map.traps:
+                        trap_entity_id = d_map.entity_manager.create_entity()
+                        d_map.entity_manager.add_component(trap_entity_id, PositionComponent(x=trap_obj.x, y=trap_obj.y))
+                        d_map.entity_manager.add_component(trap_entity_id, InteractableComponent(interaction_type='TRAP', data={'trap_id': trap_obj.id}))
+                        trap_obj.entity_id = trap_entity_id # 함정 객체에 엔티티 ID 저장
             elif hasattr(d_map, key): setattr(d_map, key, value)
         return d_map
