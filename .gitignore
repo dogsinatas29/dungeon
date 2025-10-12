@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+
+# Gemini CLI files
+GEMINI.md
+.gemini/
+
+# User generated data
+game_data/
+bug.txt
+*.old
+추가사항.txt1
+# Documentation and backup folders
+back/
+docs/

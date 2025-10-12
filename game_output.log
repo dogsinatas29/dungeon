@@ -1,0 +1,12 @@
+[?25l[2J[H[2J[H[12;39H[33m> 새 게임[0m[13;39H  이어하기[0m[14;39H  게임 종료[0mTraceback (most recent call last):
+  File "/home/dogsinatas/python_project/dungeon/Start.py", line 81, in <module>
+    main_menu()
+    ~~~~~~~~~^^
+  File "/home/dogsinatas/python_project/dungeon/Start.py", line 66, in main_menu
+    choice = ui.show_main_menu()
+  File "/home/dogsinatas/python_project/dungeon/dungeon/renderer.py", line 450, in show_main_menu
+    key = readchar.readkey()
+  File "/home/dogsinatas/.venv/lib/python3.13/site-packages/readchar/_posix_read.py", line 37, in readkey
+    raise KeyboardInterrupt
+KeyboardInterrupt
+[?25h[0m[2J[H

@@ -1,0 +1,2 @@
+# ID,이름,심볼,색상,발동방식,효과타입,데미지,범위
+EXPLOSION_TRAP,폭발 함정,T,WHITE,STEP_ON,SPLASH_DAMAGE,30,1
