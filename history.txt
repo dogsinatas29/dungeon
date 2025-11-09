@@ -1,0 +1,12 @@
+### 2025년 11월 9일 일요일
+
+#### 1. `dungeon/map_manager.py` 수정
+- **`reveal_tiles` 함수 위치 수정**: `reveal_tiles` 함수가 `toggle_fog` 함수 내부에 잘못 정의되어 `AttributeError`를 발생시키던 문제를 해결했습니다. `reveal_tiles` 함수를 `DungeonMap` 클래스의 직접적인 메서드로 이동하여 올바르게 호출될 수 있도록 수정했습니다.
+- **`_get_line` 메서드 시작점 제외 확인**: `_get_line` 메서드가 이미 시작점(x1, y1)을 반환되는 선상의 타일 목록에서 제외하고 있음을 확인했습니다. 이는 LOS(Line of Sight) 로직의 정확성을 높이는 데 기여합니다.
+- **`reveal_tiles` LOS 체크 로직 확인**: `reveal_tiles` 메서드에 이미 LOS 체크 로직이 포함되어 있으며, 들여쓰기도 올바르게 되어 있음을 확인했습니다.
+
+#### 2. `dungeon/renderer.py` 수정
+- **맵 렌더링 최적화 및 즉시 반영**: `_draw_map_and_entities` 함수에서 맵을 그릴 때 각 문자를 개별적으로 쓰는 대신, 한 줄의 모든 문자를 모아 한 번에 출력하도록 변경했습니다. 또한, 각 줄을 출력한 후 `sys.stdout.flush()`를 호출하여 렌더링된 내용이 즉시 터미널에 반영되도록 수정했습니다. 이는 렌더링 성능을 향상시키고 화면 깜빡임 문제를 줄이는 데 도움이 됩니다.
+
+#### 3. `dungeon/system.py` 수정
+- **`RenderingSystem.update` 플레이어 객체 조회 로직 수정**: `RenderingSystem.update` 함수에서 `Player` 객체를 컴포넌트로 조회하던 잘못된 로직을 제거했습니다. `Player`는 ECS 컴포넌트가 아니므로, 이로 인해 렌더링 시스템이 조기에 종료되던 문제를 해결했습니다. 이제 렌더링 시스템은 `player_entity_id`를 통해 필요한 컴포넌트(예: `PositionComponent`, `RenderComponent`)를 직접 조회하여 렌더링을 진행합니다.

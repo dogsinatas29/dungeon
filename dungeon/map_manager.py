@@ -1,5 +1,6 @@
 # dungeon/map_manager.py
 
+import logging # logging 모듈 임포트
 import random
 # .renderer와 .data_manager는 프로젝트 루트 경로에 있다고 가정하고 상대 임포트를 유지합니다.
 from .renderer import ANSI 
@@ -44,7 +45,8 @@ class DungeonMap:
     def __init__(self, dungeon_level_tuple, ui_instance=None, _is_loading=False, is_boss_room=False, monster_definitions=None, entity_manager=None):
         self.ui_instance = ui_instance
         # engine.py에서 (int, int) 튜플로 전달됨
-        self.floor, self.room_index = dungeon_level_tuple 
+        self.floor = dungeon_level_tuple[0]
+        self.room_index = dungeon_level_tuple[1] 
         self.dungeon_level_tuple = dungeon_level_tuple # 맵의 고유 ID (map_id)
         self.width, self.height = 0, 0
         self.map_data = []
@@ -83,22 +85,84 @@ class DungeonMap:
         return self.fog_enabled
 
     def reveal_tiles(self, center_x, center_y):
-        if not self.fog_enabled:
-            return
-        for y in range(max(0, center_y - self.VIEW_RADIUS), min(self.height, center_y + self.VIEW_RADIUS + 1)):
-            for x in range(max(0, center_x - self.VIEW_RADIUS), min(self.width, center_x + self.VIEW_RADIUS + 1)):
-                # 원형 시야 범위 계산
-                if (x - center_x)**2 + (y - center_y)**2 <= self.VIEW_RADIUS**2:
-                    self.visited.add((x, y))
+        logging.debug(f"reveal_tiles 호출됨: center_x={center_x}, center_y={center_y}")
+        
+        # 1. 현재 시야에 들어온 타일을 담을 임시 집합 (LOS가 적용된 시야)
+        current_visible = set()
 
+        if not self.fog_enabled:
+            logging.debug("안개 비활성화, 타일 공개 건너뜀.")
+            # 안개가 비활성화된 경우, 모든 맵 타일을 current_visible에 추가
+            for y in range(self.height):
+                for x in range(self.width):
+                    current_visible.add((x, y))
+            # 이후 로직에서 visited에 추가될 수 있도록 return 하지 않음
+        
+        initial_visited_count = len(self.visited)
+        new_tiles_added = 0
+        
+        # 2. 시야 반경 내의 모든 타일 순회 (원형 시야) - fog_enabled가 True일 때만 LOS 계산
+        if self.fog_enabled:
+            for y in range(max(0, center_y - self.VIEW_RADIUS), min(self.height, center_y + self.VIEW_RADIUS + 1)):
+                for x in range(max(0, center_x - self.VIEW_RADIUS), min(self.width, center_x + self.VIEW_RADIUS + 1)):
+                    
+                    # 2-1. 원형 시야 범위 및 유효한 타일인지 확인
+                    if not self.is_valid_tile(x, y):
+                        continue
+
+                    if (x - center_x)**2 + (y - center_y)**2 <= self.VIEW_RADIUS**2:
+                        
+                        # 2-2. LOS(Line of Sight) 확인: 플레이어 위치는 항상 보여야 함
+                        if x == center_x and y == center_y:
+                            current_visible.add((x, y))
+                            continue 
+
+                        # (center_x, center_y)에서 (x, y)까지의 선을 따라가며 벽 확인
+                        line = self._get_line(center_x, center_y, x, y)
+                        blocked = False
+                        
+                        for lx, ly in line:
+                            # is_blocked는 해당 타일이 시야를 차단하는지(예: 벽) 확인합니다.
+                            if self.is_blocked(lx, ly):
+                                blocked = True
+                                break
+                        
+                        if not blocked:
+                            current_visible.add((x, y))
+    
+        # 3. 새로운 타일만 self.visited에 추가
+        for x, y in current_visible:
+            if (x, y) not in self.visited:
+                self.visited.add((x, y))
+                logging.debug(f"reveal_tiles: 새로운 타일 ({x}, {y}) 방문됨.")
+                new_tiles_added += 1
+    
+        logging.debug(f"reveal_tiles 완료: {new_tiles_added}개 타일 추가됨. 총 방문 타일: {len(self.visited)}")
     def _generate_main_map(self):
         # 층에 따른 맵 크기 결정
         self.width = min(self.MIN_MAP_WIDTH + (self.floor - 1) * 10, self.MAX_MAP_WIDTH)
         self.height = min(self.MIN_MAP_HEIGHT + (self.floor - 1) * 10, self.MAX_MAP_HEIGHT)
+        logging.debug(f"_generate_main_map: 맵 크기 - 너비: {self.width}, 높이: {self.height}")
         self.map_data = self._generate_empty_map()
+        logging.debug(f"_generate_main_map: 빈 맵 생성 완료. map_data[0][0]: {self.map_data[0][0]}")
         self._generate_random_map()
+        logging.debug(f"_generate_main_map: 랜덤 맵 생성 완료. map_data[1][1]: {self.map_data[1][1]}")
         self._place_start_and_exit()
+        # 플레이어 시작 지점 주변을 강제로 FLOOR로 설정
+        for y_offset in range(-self.VIEW_RADIUS, self.VIEW_RADIUS + 1):
+            for x_offset in range(-self.VIEW_RADIUS, self.VIEW_RADIUS + 1):
+                nx, ny = self.start_x + x_offset, self.start_y + y_offset
+                if 0 <= nx < self.width and 0 <= ny < self.height:
+                    if (nx - self.start_x)**2 + (ny - self.start_y)**2 <= self.VIEW_RADIUS**2:
+                        self.map_data[ny][nx] = FLOOR
+        logging.debug(f"_generate_main_map: 시작/출구 배치 완료. 시작: ({self.start_x}, {self.start_y}), 출구: ({self.exit_x}, {self.exit_y})")
+        # 디버그: 시작점과 출구 타일이 FLOOR인지 확인
+        if self.map_data[self.start_y][self.start_x] != FLOOR:
+            logging.warning(f"_generate_main_map: 시작점 ({self.start_x}, {self.start_y})이(가) FLOOR가 아닙니다: {self.map_data[self.start_y][self.start_x]}")
+        if self.map_data[self.exit_y][self.exit_x] != FLOOR:
+            logging.warning(f"_generate_main_map: 출구 ({self.exit_x}, {self.exit_y})이(가) FLOOR가 아닙니다: {self.map_data[self.exit_y][self.exit_x]}")
         self._place_room_entrances() # 여기서 오류 발생
+        logging.debug(f"_generate_main_map: 방 입구 배치 완료. 방 개수: {len(self.room_entrances)}")
 
         # 방이 있으면 출구를 잠그고, 필요한 열쇠 수를 설정
         if self.room_entrances:
@@ -218,6 +282,7 @@ class DungeonMap:
 
     def get_tile_for_display(self, x, y):
         # 0. 안개 상태 처리 (가장 먼저)
+        # DEBUG: 안개 비활성화 상태이므로 이 블록은 실행되지 않음
         if self.fog_enabled and (x, y) not in self.visited:
             return f"{ANSI.BLACK}{EMPTY_SPACE}{ANSI.RESET}"
             
@@ -251,7 +316,7 @@ class DungeonMap:
         char = tile 
         
         if tile == BORDER_WALL or tile == INNER_WALL:
-            color = ANSI.WHITE
+            color = ANSI.BLUE
             char = WALL # # 기호 유지
         elif tile == START:
             char = START
@@ -266,10 +331,12 @@ class DungeonMap:
             else:
                 color = ANSI.GREEN
         elif tile == FLOOR:
-            color = ANSI.DARK_GRAY # 바닥 색상을 어둡게 설정
-            char = FLOOR # ' ' 공백 문자로 유지
+            color = ANSI.WHITE # 바닥 색상을 흰색으로 설정
+            char = '.' # ' ' 공백 문자로 유지
         
-        return f"{color}{char}{ANSI.RESET}"
+        final_display_char = f"{color}{char}{ANSI.RESET}"
+        logging.debug(f"get_tile_for_display: ({x}, {y}) 타일 최종 문자: '{final_display_char}'")
+        return final_display_char
 
     def get_monster_at(self, x, y):
         """지정된 위치에 있는 몬스터 객체(또는 Entity ID)를 반환합니다. (EntityManager.get_components_of_type 회피)"""
@@ -299,6 +366,39 @@ class DungeonMap:
     def is_valid_tile(self, x, y):
         """지정된 위치가 맵 범위 내에 있는지 확인합니다."""
         return 0 <= x < self.width and 0 <= y < self.height
+
+    def is_blocked(self, x, y):
+        """지정된 위치의 타일이 시야를 차단하는지 확인합니다 (예: 벽)."""
+        if not self.is_valid_tile(x, y):
+            return True # 맵 밖은 시야 차단
+        return self.map_data[y][x] in [INNER_WALL, BORDER_WALL]
+
+    def _get_line(self, x1, y1, x2, y2):
+        """Bresenham's line algorithm을 사용하여 두 점 사이의 모든 타일 좌표를 반환합니다."""
+        line = []
+        dx = abs(x2 - x1)
+        dy = -abs(y2 - y1)
+        sx = 1 if x1 < x2 else -1
+        sy = 1 if y1 < y2 else -1
+        err = dx + dy
+        
+        x, y = x1, y1
+        
+        while True:
+            # 시작점 (x1, y1)은 선에 추가하지 않습니다.
+            if x != x1 or y != y1: 
+                 line.append((x, y))
+            
+            if x == x2 and y == y2:
+                break
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x += sx
+            if e2 <= dx:
+                err += dx
+                y += sy
+        return line
 
     def calculate_num_rooms(self, floor):
         return self.BASE_NUM_ROOMS + (floor - 1) // self.ROOM_COUNT_LEVEL_INTERVAL
@@ -331,12 +431,51 @@ class DungeonMap:
         return [[INNER_WALL for _ in range(self.width)] for _ in range(self.height)]
         
     def _generate_random_map(self):
+        logging.debug("_generate_random_map: 함수 시작")
+        # 맵 전체를 내부 벽으로 초기화
+        self.map_data = [[INNER_WALL for _ in range(self.width)] for _ in range(self.height)]
+
+        # 시작점과 출구 배치 (먼저 배치하여 기준점 확보)
+        self._place_start_and_exit()
+
+        # 시작점 주변을 바닥으로 만듦
+        for y_offset in range(-self.VIEW_RADIUS, self.VIEW_RADIUS + 1):
+            for x_offset in range(-self.VIEW_RADIUS, self.VIEW_RADIUS + 1):
+                nx, ny = self.start_x + x_offset, self.start_y + y_offset
+                if 0 <= nx < self.width and 0 <= ny < self.height:
+                    if (nx - self.start_x)**2 + (ny - self.start_y)**2 <= self.VIEW_RADIUS**2:
+                        self.map_data[ny][nx] = FLOOR
+
+        # 나머지 맵을 채우면서 연결성 확보
+        for y in range(1, self.height - 1):
+            for x in range(1, self.width - 1):
+                if self.map_data[y][x] == INNER_WALL: # 아직 벽인 경우
+                    # 주변에 바닥이 있으면 바닥이 될 확률을 높임
+                    floor_neighbors = 0
+                    for dy in [-1, 0, 1]:
+                        for dx in [-1, 0, 1]:
+                            if dx == 0 and dy == 0: continue
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < self.width and 0 <= ny < self.height and self.map_data[ny][nx] == FLOOR:
+                                floor_neighbors += 1
+                    
+                    if floor_neighbors > 0 and random.random() < 0.8: # 주변에 바닥이 있으면 80% 확률로 바닥
+                        self.map_data[y][x] = FLOOR
+                    elif random.random() < 0.1: # 주변에 바닥이 없어도 10% 확률로 바닥 (고립된 바닥 생성 방지)
+                        self.map_data[y][x] = FLOOR
+
+        # 경계 벽 설정
         for y in range(self.height):
-            for x in range(self.width):
-                if x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1:
-                    self.map_data[y][x] = BORDER_WALL
-                else:
-                    self.map_data[y][x] = FLOOR if random.random() < 0.7 else INNER_WALL
+            self.map_data[y][0] = BORDER_WALL
+            self.map_data[y][self.width - 1] = BORDER_WALL
+        for x in range(self.width):
+            self.map_data[0][x] = BORDER_WALL
+            self.map_data[self.height - 1][x] = BORDER_WALL
+
+        # 디버그: 생성된 맵의 바닥 타일 비율 확인
+        floor_count = sum(row.count(FLOOR) for row in self.map_data)
+        total_tiles = self.width * self.height
+        logging.debug(f"_generate_random_map: 생성된 맵의 바닥 타일 비율: {floor_count / total_tiles:.2%}")
     
     def place_random_items(self, item_definitions, num_items=3):
         if not item_definitions: return
@@ -388,20 +527,21 @@ class DungeonMap:
 
     def to_dict(self):
         return {
-            "dungeon_level_tuple": self.dungeon_level_tuple, "width": self.width, "height": self.height,
+            "dungeon_level_tuple": f"{self.floor},{self.room_index}", "width": self.width, "height": self.height,
             "map_data": self.map_data, "start_x": self.start_x, "start_y": self.start_y,
             "exit_x": self.exit_x, "exit_y": self.exit_y,
             "exit_type": self.exit_type, "visited": list(self.visited), "is_generated": self.is_generated,
             "room_entrances": {f"{k[0]},{k[1]}": v for k, v in self.room_entrances.items()},
             # entity_manager.to_dict()는 EntityManager 클래스가 필요
-            "entity_manager_data": self.entity_manager.to_dict() if self.entity_manager else None,
+            "entity_manager_data": None, # EntityManager 데이터는 SaveLoadSystem에서 직접 처리
             "traps": [t.to_dict() for t in self.traps]
         }
         
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data, level=None):
         # 로드 시점에 DungeonMap 생성자에 전달될 레벨 정보 (int, int) 튜플
-        level = tuple(data.get('dungeon_level_tuple', (1, 0)))
+        if level is None:
+            level = tuple(data.get('dungeon_level_tuple', (1, 0)))
         d_map = cls(level, ui_instance=None, _is_loading=True)
         
         # EntityManager 로드 (EntityManager 클래스가 외부 정의되었다고 가정)

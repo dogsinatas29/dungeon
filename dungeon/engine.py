@@ -5,8 +5,8 @@ import time
 import math
 import random
 import re
-import readchar
 import logging
+import readchar # readchar 모듈 임포트 추가
 
 # 로깅 설정
 logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
@@ -53,10 +53,11 @@ def calculate_line_path(x1, y1, x2, y2):
 
 def run_game(item_definitions, ui_instance):
     logging.debug("run_game 함수 시작")
+    ui_instance.add_message("디버그: engine.run_game 시작.")
 
     monster_definitions = data_manager.load_monster_definitions(ui_instance)
     entity_manager = EntityManager()
-    dungeon_map = None 
+
 
     save_load_system = SaveLoadSystem(entity_manager)
     
@@ -87,21 +88,23 @@ def run_game(item_definitions, ui_instance):
         entity_manager.add_component(player_entity_id, RenderComponent(symbol=player_obj.char, color='white'))
         logging.debug("새 플레이어 생성됨: entity_id=%s", player_entity_id)
 
-    # 나머지 시스템 초기화
-    movement_system = MovementSystem(entity_manager, dungeon_map)
-    collision_system = CollisionSystem(entity_manager, dungeon_map)
-    interaction_system = InteractionSystem(entity_manager, dungeon_map, player_entity_id, ui_instance)
-    projectile_system = ProjectileSystem(entity_manager, dungeon_map, ui_instance)
-    combat_system = CombatSystem(entity_manager, ui_instance, dungeon_map)
-    dungeon_generation_system = DungeonGenerationSystem(entity_manager, dungeon_map, ui_instance, item_definitions, monster_definitions)
-    death_system = DeathSystem(entity_manager, dungeon_map, ui_instance, player_entity_id)
-    game_over_system = GameOverSystem(entity_manager, dungeon_map, ui_instance, player_entity_id)
-    rendering_system = RenderingSystem(entity_manager, dungeon_map, ui_instance, player_entity_id)
-    inventory_system = InventorySystem(entity_manager, ui_instance, item_definitions) 
+    # 모든 시스템 초기화 (dungeon_map은 나중에 할당)
+    movement_system = MovementSystem(entity_manager, None) 
+    collision_system = CollisionSystem(entity_manager, None) 
+    interaction_system = InteractionSystem(entity_manager, None, player_entity_id, ui_instance) 
+    projectile_system = ProjectileSystem(entity_manager, None, ui_instance) 
+    combat_system = CombatSystem(entity_manager, ui_instance, None) 
+    dungeon_generation_system = DungeonGenerationSystem(entity_manager, None, ui_instance, item_definitions, monster_definitions) 
+    death_system = DeathSystem(entity_manager, None, ui_instance, player_entity_id) 
+    game_over_system = GameOverSystem(entity_manager, None, ui_instance, player_entity_id) 
+    rendering_system = RenderingSystem(entity_manager, None, ui_instance, player_entity_id) 
+    inventory_system = InventorySystem(entity_manager, ui_instance, item_definitions)
 
     def get_or_create_map(level_tuple, all_maps, ui, items_def, monster_defs, is_boss_room=False):
+        ui_instance.add_message(f"디버그: 맵 로드/생성 시도 - {level_tuple}")
         # level_tuple은 항상 (int, int) 형태의 튜플이어야 함.
         if level_tuple in all_maps:
+            ui_instance.add_message(f"디버그: 기존 맵 {level_tuple} 로드.")
             d_map = all_maps[level_tuple]
             d_map.ui_instance = ui
             d_map.entity_manager = entity_manager 
@@ -125,6 +128,7 @@ def run_game(item_definitions, ui_instance):
 
             return d_map
         else:
+            ui_instance.add_message(f"디버그: 새 맵 {level_tuple} 생성.")
             # 새 맵 생성
             d_map = DungeonMap(level_tuple, ui, is_boss_room=is_boss_room, monster_definitions=monster_defs, entity_manager=entity_manager)
             # DungeonGenerationSystem을 사용하여 엔티티 생성
@@ -176,6 +180,7 @@ def run_game(item_definitions, ui_instance):
     # ---------------------------------------------------------------------------------------
 
     dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
+    ui_instance.add_message(f"디버그: 현재 맵 설정 완료 - {dungeon_map.dungeon_level_tuple}")
     
     # 모든 시스템에 현재 맵 전달
     movement_system.dungeon_map = dungeon_map
@@ -186,15 +191,20 @@ def run_game(item_definitions, ui_instance):
     dungeon_generation_system.dungeon_map = dungeon_map
     death_system.dungeon_map = dungeon_map
     game_over_system.dungeon_map = dungeon_map
+    rendering_system.dungeon_map = dungeon_map # rendering_system에 dungeon_map 할당
 
     player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
+    ui_instance.add_message(f"디버그: 플레이어 초기 위치 설정 시도. 현재 player_pos: {player_pos}")
     # player_x, player_y는 이제 dungeon_map.start_x, dungeon_map.start_y를 사용함
     if not player_pos:
+         ui_instance.add_message(f"디버그: 새 PositionComponent 생성. x={dungeon_map.start_x}, y={dungeon_map.start_y}")
          player_pos = PositionComponent(x=dungeon_map.start_x, y=dungeon_map.start_y, map_id=current_dungeon_level)
          entity_manager.add_component(player_entity_id, player_pos)
     else:
-         player_pos.x, player_pos.y = dungeon_map.start_x, dungeon_map.start_y
+         ui_instance.add_message(f"디버그: 기존 PositionComponent 업데이트. x={dungeon_map.start_x}, y={dungeon_map.start_y}")
+         player_pos.x, player_pos.y = dungeon_map.start_x, dungeon_map.start_y # 이 줄을 다시 추가
          player_pos.map_id = current_dungeon_level 
+    ui_instance.add_message(f"디버그: 플레이어 최종 위치: ({player_pos.x}, {player_pos.y}) on map {player_pos.map_id}")
 
     ui_instance.clear_screen()
 
@@ -257,23 +267,56 @@ def run_game(item_definitions, ui_instance):
 
     running = True
     while running:
+        ui_instance.add_message("디버그: 게임 루프 시작.")
+        
+        # 렌더링 관련 임시 변수 초기화
+        projectile_path = []
+        impact_effect = None
+        splash_positions = []
+
         map_viewport_width = ui_instance.MAP_VIEWPORT_WIDTH
         map_viewport_height = ui_instance.MAP_VIEWPORT_HEIGHT
         player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
+        if player_pos is None:
+            logging.debug("디버그: 게임 루프에서 player_pos가 None입니다. 렌더링을 건너뜁니다.")
+            running = False
+            continue
         
         # 플레이어 위치를 기반으로 카메라 설정
         if player_pos:
-            camera['x'] = max(0, min(player_pos.x - map_viewport_width // 2, dungeon_map.width - map_viewport_width))
-            camera['y'] = max(0, min(player_pos.y - map_viewport_height // 2, dungeon_map.height - map_viewport_height))
+            half_viewport_width = map_viewport_width // 2
+            half_viewport_height = map_viewport_height // 2
+
+            # 카메라 x 계산
+            camera_x_candidate = player_pos.x - half_viewport_width
+            camera['x'] = max(0, min(camera_x_candidate, dungeon_map.width - map_viewport_width))
+
+            # 카메라 y 계산
+            camera_y_candidate = player_pos.y - half_viewport_height
+            camera['y'] = max(0, min(camera_y_candidate, dungeon_map.height - map_viewport_height))
+
+            logging.debug(f"카메라 계산: player_pos=({player_pos.x}, {player_pos.y}), "
+                          f"viewport=({map_viewport_width}, {map_viewport_height}), "
+                          f"map_dim=({dungeon_map.width}, {dungeon_map.height})")
+            logging.debug(f"  half_viewport=({half_viewport_width}, {half_viewport_height})")
+            logging.debug(f"  camera_x_candidate={camera_x_candidate}, camera_y_candidate={camera_y_candidate}")
+            logging.debug(f"  최종 카메라 위치: x={camera['x']}, y={camera['y']}")
+            logging.debug(f"플레이어 위치: x={player_pos.x}, y={player_pos.y}")
         else:
+             # 이 else 블록은 위에서 player_pos is None 체크로 인해 실행되지 않아야 하지만, 안전을 위해 유지
+             logging.debug("디버그: 카메라 설정 중 player_pos가 None입니다. 게임을 종료합니다.")
              running = False
              continue
 
         if game_state != 'ANIMATING':
+            logging.debug("디버그: rendering_system.update 호출 전. player_pos 유효: %s", player_pos is not None)
+            ui_instance.add_message("디버그: rendering_system.update 호출 전.")
             rendering_system.update(camera['x'], camera['y'],
                                     inventory_open, inventory_cursor_pos,
                                     inventory_active_tab, inventory_scroll_offset,
-                                    log_viewer_open, log_viewer_scroll_offset)
+                                    log_viewer_open, log_viewer_scroll_offset,
+                                    game_state, projectile_path, impact_effect, splash_positions)
+            ui_instance.add_message("디버그: rendering_system.update 호출 후.")
 
         if entity_manager.has_component(player_entity_id, GameOverComponent):
             game_over_comp = entity_manager.get_component(player_entity_id, GameOverComponent)
@@ -284,8 +327,14 @@ def run_game(item_definitions, ui_instance):
 
         player_action_taken = False
         
-        key = readchar.readkey()
-        
+        ui_instance.add_message("디버그: 입력 대기 중...")
+        sys.stdout.flush() # 렌더링 내용이 확실히 화면에 반영되도록 강제 플러시
+        key = ui_instance.get_full_key_input() # 단일 문자 입력 받기
+        if key is None: # KeyboardInterrupt 감지 시
+            running = False
+            ui_instance.add_message("게임이 중단되었습니다.")
+            continue
+
         current_floor, current_room_index = current_dungeon_level # 이제 안전하게 언패킹 가능
             
         inventory_comp = entity_manager.get_component(player_entity_id, InventoryComponent)
@@ -307,13 +356,13 @@ def run_game(item_definitions, ui_instance):
             if key == 'i' or key == 'I': 
                 inventory_open = False
             elif key == readchar.key.UP:
-                items_in_tab = inventory_comp.get_items_by_tab(inventory_active_tab)
+                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
                 if items_in_tab:
                     inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
                     if inventory_cursor_pos < inventory_scroll_offset:
                         inventory_scroll_offset = inventory_cursor_pos
             elif key == readchar.key.DOWN:
-                items_in_tab = inventory_comp.get_items_by_tab(inventory_active_tab)
+                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
                 if items_in_tab:
                     inventory_cursor_pos = min(len(items_in_tab) - 1, inventory_cursor_pos + 1)
                     list_height = ui_instance.MAP_VIEWPORT_HEIGHT - 6
@@ -325,7 +374,7 @@ def run_game(item_definitions, ui_instance):
             elif key == 'd': inventory_active_tab = 'skill_book'
             elif key == 'z': inventory_active_tab = 'all'
             elif key == 'e': 
-                items_in_tab = inventory_comp.get_items_by_tab(inventory_active_tab)
+                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
                 if items_in_tab and 0 <= inventory_cursor_pos < len(items_in_tab):
                     selected_item_data = items_in_tab[inventory_cursor_pos]
                     selected_item = selected_item_data['item']
@@ -354,7 +403,7 @@ def run_game(item_definitions, ui_instance):
                     else:
                         ui_instance.add_message("선택된 항목이 아이템이 아닙니다.")
             elif key == 'R': 
-                items_in_tab = inventory_comp.get_items_by_tab(inventory_active_tab)
+                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
                 if items_in_tab and 0 <= inventory_cursor_pos < len(items_in_tab):
                     selected_item_data = items_in_tab[inventory_cursor_pos]
                     selected_item = selected_item_data['item']
@@ -366,7 +415,7 @@ def run_game(item_definitions, ui_instance):
             elif key in "1234567890": 
                 if not quickslot_comp: continue
                 slot_num = 10 if key == '0' else int(key)
-                items_in_tab = inventory_comp.get_items_by_tab(inventory_active_tab)
+                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
                 if items_in_tab and 0 <= inventory_cursor_pos < len(items_in_tab):
                     selected_item_data = items_in_tab[inventory_cursor_pos]
                     selected_item = selected_item_data['item']
@@ -388,8 +437,8 @@ def run_game(item_definitions, ui_instance):
             else:
                 dx, dy = 0, 0
                 move_keys = {
-                    readchar.key.UP: (0, -1), readchar.key.DOWN: (0, 1),
-                    readchar.key.LEFT: (-1, 0), readchar.key.RIGHT: (1, 0),
+                    '\x1b[A': (0, -1), '\x1b[B': (0, 1),
+                    '\x1b[D': (-1, 0), '\x1b[C': (1, 0),
                     'k': (0, -1), 'j': (0, 1), 'h': (-1, 0), 'l': (1, 0),
                     'y': (-1, -1), 'u': (1, -1), 'b': (-1, 1), 'n': (1, 1)
                 }

@@ -83,10 +83,11 @@ class SkillDefinition:
 
 class MonsterDefinition:
     """몬스터의 정의(템플릿)를 저장하는 클래스."""
-    def __init__(self, monster_id, name, symbol, hp, attack, defense, level, exp_given, critical_chance, critical_damage_multiplier, move_type):
+    def __init__(self, monster_id, name, symbol, color, hp, attack, defense, level, exp_given, critical_chance, critical_damage_multiplier, move_type):
         self.id = monster_id
         self.name = name
         self.symbol = symbol
+        self.color = color # 색상 추가
         self.hp = hp
         self.attack = attack
         self.defense = defense
@@ -98,7 +99,7 @@ class MonsterDefinition:
 
     def __repr__(self):
         return (
-            f"MonsterDefinition(id={self.id}, name={self.name}, symbol={self.symbol}, hp={self.hp}, attack={self.attack}, "
+            f"MonsterDefinition(id={self.id}, name={self.name}, symbol={self.symbol}, color={self.color}, hp={self.hp}, attack={self.attack}, "
             f"defense={self.defense}, level={self.level}, exp_given={self.exp_given}, "
             f"critical_chance={self.critical_chance}, critical_damage_multiplier={self.critical_damage_multiplier}, "
             f"move_type={self.move_type})"
@@ -210,16 +211,22 @@ def load_monster_definitions(ui_instance=None):
             parts = [p.strip() for p in line.split(',')]
             
             # 필드 개수에 따라 하위 호환성 유지
-            if len(parts) >= 11: # 심볼, 이동 타입 포함
-                monster_id, name, symbol, hp, attack, defense, level, exp_given, crit_chance, crit_mult, move_type = parts[:11]
+            if len(parts) >= 12: # 심볼, 색상, 이동 타입 포함
+                monster_id, name, symbol, color, hp, attack, defense, level, exp_given, crit_chance, crit_mult, move_type = parts[:12]
                 _monster_definitions[monster_id] = MonsterDefinition(
-                    monster_id, name, symbol, int(hp), int(attack), int(defense), int(level), int(exp_given),
+                    monster_id, name, symbol, color, int(hp), int(attack), int(defense), int(level), int(exp_given),
                     float(crit_chance), float(crit_mult), move_type
                 )
-            elif len(parts) >= 10: # 심볼 미포함, 이동 타입 포함 (하위호환)
+            elif len(parts) >= 11: # 심볼, 이동 타입 포함 (색상 기본값 white)
+                monster_id, name, symbol, hp, attack, defense, level, exp_given, crit_chance, crit_mult, move_type = parts[:11]
+                _monster_definitions[monster_id] = MonsterDefinition(
+                    monster_id, name, symbol, "white", int(hp), int(attack), int(defense), int(level), int(exp_given),
+                    float(crit_chance), float(crit_mult), move_type
+                )
+            elif len(parts) >= 10: # 심볼 미포함, 이동 타입 포함 (하위호환, 색상 기본값 white)
                 monster_id, name, hp, attack, defense, level, exp_given, crit_chance, crit_mult, move_type = parts[:10]
                 _monster_definitions[monster_id] = MonsterDefinition(
-                    monster_id, name, name[0], int(hp), int(attack), int(defense), int(level), int(exp_given),
+                    monster_id, name, name[0], "white", int(hp), int(attack), int(defense), int(level), int(exp_given),
                     float(crit_chance), float(crit_mult), move_type
                 )
             else:

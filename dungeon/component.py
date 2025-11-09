@@ -76,6 +76,23 @@ class ManaComponent:
     max_mp: int
     current_mp: int
 
+@dataclass
+class StaminaComponent:
+    """엔티티의 스태미나 정보를 저장합니다."""
+    max_stamina: float
+    current_stamina: float
+
+@dataclass
+class ExperienceComponent:
+    """엔티티의 경험치 정보를 저장합니다."""
+    current_exp: int
+    exp_to_next_level: int
+
+@dataclass
+class LevelComponent:
+    """엔티티의 레벨 정보를 저장합니다."""
+    level: int
+
 # 3. 속성 및 전투 관련
 @dataclass
 class AttackComponent:
@@ -131,6 +148,19 @@ class QuickSlotComponent:
     item_slots: Dict[int, str] = field(default_factory=dict)
     # 6-10번 슬롯: 스킬 ID
     skill_slots: Dict[int, str] = field(default_factory=dict)
+
+@dataclass
+class SkillComponent:
+    """엔티티의 스킬 정보를 저장합니다."""
+    skills: Dict[str, Dict[str, Any]] = field(default_factory=dict) # {skill_id: {'level': int, 'exp': int}}
+    skill_quick_slots: Dict[int, str] = field(default_factory=dict) # {slot_num: skill_id}
+
+@dataclass
+class ItemUseRequestComponent:
+    """아이템 사용 요청 이벤트/데이터."""
+    entity_id: int
+    item_id: str
+    target_id: int = None # 사용 대상 (예: 회복 아이템의 경우 플레이어 자신)
 
 @dataclass
 class ItemUseRequestComponent:

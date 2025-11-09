@@ -13,6 +13,18 @@ class EntityManager:
         self.entities[entity_id] = {}
         return entity_id
 
+    def add_entity_with_id(self, entity_id: int):
+        """특정 ID로 엔티티를 추가합니다. 주로 게임 로드 시 사용됩니다."""
+        if entity_id in self.entities:
+            # 이미 존재하는 엔티티 ID라면 경고 또는 오류 처리
+            import logging
+            logging.warning(f"EntityManager: Entity ID {entity_id} already exists. Overwriting.")
+        self.entities[entity_id] = {}
+        # next_entity_id가 로드된 ID보다 작으면 업데이트하여 충돌 방지
+        if entity_id >= self.next_entity_id:
+            self.next_entity_id = entity_id + 1
+        return entity_id
+
     def destroy_entity(self, entity_id):
         """엔티티를 제거하고 모든 컴포넌트 인덱스에서 제거합니다."""
         if entity_id in self.entities:
@@ -40,34 +52,18 @@ class EntityManager:
         """엔티티가 특정 컴포넌트 타입을 가지고 있는지 확인합니다."""
         return comp_type in self.entities.get(entity_id, {})
 
+    def remove_component(self, entity_id, comp_type):
+        """엔티티에서 컴포넌트를 제거합니다."""
+        if entity_id in self.entities and comp_type in self.entities[entity_id]:
+            del self.entities[entity_id][comp_type]
+            if comp_type in self.components and entity_id in self.components[comp_type]:
+                del self.components[comp_type][entity_id]
+
+    def get_components_of_type(self, comp_type):
+        """특정 타입의 모든 컴포넌트 인스턴스를 {entity_id: component_instance} 형태로 반환합니다."""
+        return self.components.get(comp_type, {})
+
     def get_entities_with(self, *comp_types):
-        """
-        주어진 모든 컴포넌트를 가진 엔티티들을 반환합니다 (시스템이 사용할 핵심 메서드).
+        """주어진 모든 컴포넌트를 가진 엔티티들을 반환합니다 (시스템이 사용할 핵심 메서드).
         반환 형식: [(EntityID, [CompInst1, CompInst2, ...]), ...]
         """
-        if not comp_types:
-            return []
-
-        # 1. 쿼리 최적화: 가장 적은 엔티티를 가진 컴포넌트 타입부터 찾기
-        #    (이 부분이 사용자님의 성능 최적화 로직입니다. 그대로 유지합니다.)
-        comp_types_sorted = sorted(comp_types, key=lambda t: len(self.components.get(t, {})))
-        
-        base_entities = set(self.components.get(comp_types_sorted[0], {}).keys())
-        if not base_entities:
-            return []
-
-        for comp_type in comp_types_sorted[1:]:
-            other_entities = set(self.components.get(comp_type, {}).keys())
-            base_entities.intersection_update(other_entities)
-            if not base_entities:
-                return []
-                
-        # 2. 반환 부분 수정: EntityID와 해당 컴포넌트 인스턴스들을 함께 묶어 반환
-        results = []
-        for entity_id in base_entities:
-            # 쿼리된 컴포넌트 타입(*comp_types*) 순서대로 인스턴스를 가져와 리스트로 만듭니다.
-            # (정렬된 comp_types_sorted가 아닌, 입력 순서인 comp_types를 사용해야 시스템에서 정확히 언패킹할 수 있습니다.)
-            components = [self.entities[entity_id][t] for t in comp_types]
-            results.append((entity_id, components))
-            
-        return results
