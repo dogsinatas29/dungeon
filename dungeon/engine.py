@@ -13,6 +13,7 @@ logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
+from events.event_manager import event_manager # 추가
 from .map_manager import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
 from .renderer import UI, ANSI
 from . import data_manager
@@ -21,7 +22,7 @@ from .monster import Monster
 from .player import Player # Player 클래스 임포트
 from .entity import EntityManager
 from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent 
-from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem 
+from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem # LoggingSystem 추가
 from .trap import Trap # Trap 클래스 임포트
 # ----------------------------------------------------
 
@@ -90,7 +91,7 @@ def run_game(item_definitions, ui_instance):
 
     # 모든 시스템 초기화 (dungeon_map은 나중에 할당)
     movement_system = MovementSystem(entity_manager, None) 
-    collision_system = CollisionSystem(entity_manager, None) 
+    collision_system = CollisionSystem(entity_manager, None, player_entity_id) 
     interaction_system = InteractionSystem(entity_manager, None, player_entity_id, ui_instance) 
     projectile_system = ProjectileSystem(entity_manager, None, ui_instance) 
     combat_system = CombatSystem(entity_manager, ui_instance, None) 
@@ -99,55 +100,10 @@ def run_game(item_definitions, ui_instance):
     game_over_system = GameOverSystem(entity_manager, None, ui_instance, player_entity_id) 
     rendering_system = RenderingSystem(entity_manager, None, ui_instance, player_entity_id) 
     inventory_system = InventorySystem(entity_manager, ui_instance, item_definitions)
+    logging_system = LoggingSystem(entity_manager, ui_instance) # dungeon_map 인자 제거
 
-    def get_or_create_map(level_tuple, all_maps, ui, items_def, monster_defs, is_boss_room=False):
-        ui_instance.add_message(f"디버그: 맵 로드/생성 시도 - {level_tuple}")
-        # level_tuple은 항상 (int, int) 형태의 튜플이어야 함.
-        if level_tuple in all_maps:
-            ui_instance.add_message(f"디버그: 기존 맵 {level_tuple} 로드.")
-            d_map = all_maps[level_tuple]
-            d_map.ui_instance = ui
-            d_map.entity_manager = entity_manager 
-            
-            # --- 몬스터 리젠 로직 (ECS 방식) ---
-            entities_to_remove = []
-            for entity_id, pos_comp in list(entity_manager.get_components_of_type(PositionComponent).items()):
-                # 플레이어 엔티티 제외 및 현재 맵의 엔티티만 타겟팅
-                if entity_id != player_entity_id and pos_comp.map_id == level_tuple and entity_manager.has_component(entity_id, NameComponent):
-                    name_comp = entity_manager.get_component(entity_id, NameComponent)
-                    # 몬스터로 추정되는 엔티티 제거 (아이템, 함정 등은 제외)
-                    if name_comp.name not in ["Player", "Trap", "Item"]: 
-                        entities_to_remove.append(entity_id)
-            
-            for entity_id in entities_to_remove:
-                entity_manager.remove_entity(entity_id)
-
-            # DungeonGenerationSystem을 사용하여 엔티티 생성 (재생성)
-            dungeon_generation_system.dungeon_map = d_map 
-            dungeon_generation_system.generate_dungeon_entities(level_tuple, is_boss_room=is_boss_room)
-
-            return d_map
-        else:
-            ui_instance.add_message(f"디버그: 새 맵 {level_tuple} 생성.")
-            # 새 맵 생성
-            d_map = DungeonMap(level_tuple, ui, is_boss_room=is_boss_room, monster_definitions=monster_defs, entity_manager=entity_manager)
-            # DungeonGenerationSystem을 사용하여 엔티티 생성
-            dungeon_generation_system.dungeon_map = d_map 
-            dungeon_generation_system.generate_dungeon_entities(level_tuple, is_boss_room=is_boss_room)
-
-            all_maps[level_tuple] = d_map
-            return d_map
-
-    camera = {'x': 0, 'y': 0}
-    last_entrance_position = {}
-    
-    inventory_open = False
-    inventory_cursor_pos = 0
-    inventory_active_tab = 'item'
-    inventory_scroll_offset = 0
-
-    log_viewer_open = False
-    log_viewer_scroll_offset = 0
+    # camera, inventory_open 등은 이제 해당 시스템/컴포넌트에서 관리됩니다.
+    last_entrance_position = {} # 이 부분만 유지
     
     # --- [수정] current_dungeon_level의 타입을 체크하여 (int, int) 튜플로 변환 ---
     map_level_tuple = (1, 0) # 기본값 (1층, 메인 룸)
@@ -192,6 +148,7 @@ def run_game(item_definitions, ui_instance):
     death_system.dungeon_map = dungeon_map
     game_over_system.dungeon_map = dungeon_map
     rendering_system.dungeon_map = dungeon_map # rendering_system에 dungeon_map 할당
+    logging_system.dungeon_map = dungeon_map # logging_system에 dungeon_map 할당
 
     player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
     ui_instance.add_message(f"디버그: 플레이어 초기 위치 설정 시도. 현재 player_pos: {player_pos}")
@@ -274,49 +231,14 @@ def run_game(item_definitions, ui_instance):
         impact_effect = None
         splash_positions = []
 
-        map_viewport_width = ui_instance.MAP_VIEWPORT_WIDTH
-        map_viewport_height = ui_instance.MAP_VIEWPORT_HEIGHT
+        # 카메라 계산은 이제 RenderingSystem이 처리합니다.
         player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
         if player_pos is None:
             logging.debug("디버그: 게임 루프에서 player_pos가 None입니다. 렌더링을 건너뜁니다.")
             running = False
             continue
-        
-        # 플레이어 위치를 기반으로 카메라 설정
-        if player_pos:
-            half_viewport_width = map_viewport_width // 2
-            half_viewport_height = map_viewport_height // 2
 
-            # 카메라 x 계산
-            camera_x_candidate = player_pos.x - half_viewport_width
-            camera['x'] = max(0, min(camera_x_candidate, dungeon_map.width - map_viewport_width))
-
-            # 카메라 y 계산
-            camera_y_candidate = player_pos.y - half_viewport_height
-            camera['y'] = max(0, min(camera_y_candidate, dungeon_map.height - map_viewport_height))
-
-            logging.debug(f"카메라 계산: player_pos=({player_pos.x}, {player_pos.y}), "
-                          f"viewport=({map_viewport_width}, {map_viewport_height}), "
-                          f"map_dim=({dungeon_map.width}, {dungeon_map.height})")
-            logging.debug(f"  half_viewport=({half_viewport_width}, {half_viewport_height})")
-            logging.debug(f"  camera_x_candidate={camera_x_candidate}, camera_y_candidate={camera_y_candidate}")
-            logging.debug(f"  최종 카메라 위치: x={camera['x']}, y={camera['y']}")
-            logging.debug(f"플레이어 위치: x={player_pos.x}, y={player_pos.y}")
-        else:
-             # 이 else 블록은 위에서 player_pos is None 체크로 인해 실행되지 않아야 하지만, 안전을 위해 유지
-             logging.debug("디버그: 카메라 설정 중 player_pos가 None입니다. 게임을 종료합니다.")
-             running = False
-             continue
-
-        if game_state != 'ANIMATING':
-            logging.debug("디버그: rendering_system.update 호출 전. player_pos 유효: %s", player_pos is not None)
-            ui_instance.add_message("디버그: rendering_system.update 호출 전.")
-            rendering_system.update(camera['x'], camera['y'],
-                                    inventory_open, inventory_cursor_pos,
-                                    inventory_active_tab, inventory_scroll_offset,
-                                    log_viewer_open, log_viewer_scroll_offset,
-                                    game_state, projectile_path, impact_effect, splash_positions)
-            ui_instance.add_message("디버그: rendering_system.update 호출 후.")
+        # RenderingSystem은 이제 PlayerMovedEvent를 구독하고 자체적으로 업데이트됩니다.
 
         if entity_manager.has_component(player_entity_id, GameOverComponent):
             game_over_comp = entity_manager.get_component(player_entity_id, GameOverComponent)
@@ -522,15 +444,8 @@ def run_game(item_definitions, ui_instance):
             if player_pos:
                 dungeon_map.reveal_tiles(player_pos.x, player_pos.y) 
 
-            # 충돌 결과 처리
-            if isinstance(collision_result, int): 
-                monster_entity_id = collision_result
-                
-                player_attack_comp = entity_manager.get_component(player_entity_id, AttackComponent)
-                if player_attack_comp:
-                    entity_manager.add_component(monster_entity_id, DamageRequestComponent(target_id=monster_entity_id, amount=player_attack_comp.power, attacker_id=player_entity_id))
-
-            elif isinstance(collision_result, Trap):
+            # 충돌 결과 처리 (몬스터 충돌에 대한 즉각적인 공격 로직 제거)
+            if isinstance(collision_result, Trap):
                 trap_triggered = collision_result
                 player_name_comp = entity_manager.get_component(player_entity_id, NameComponent)
                 player_name = player_name_comp.name if player_name_comp else "플레이어"

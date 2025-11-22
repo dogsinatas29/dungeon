@@ -8,6 +8,16 @@ from . import data_manager # data_manager 임포트
 from .items import Item # Item 클래스 임포트
 import random # random 임포트
 import logging # 로깅 모듈 임포트
+from events.event_manager import event_manager
+from events.game_events import PlayerMovedEvent
+
+class System:
+    def __init__(self, entity_manager: EntityManager):
+        self.entity_manager = entity_manager
+
+    def update(self):
+        # 모든 시스템의 기본 업데이트 로직
+        pass
 
 class MovementSystem:
     def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap):
@@ -33,9 +43,10 @@ class MovementSystem:
             self.entity_manager.remove_component(entity_id, MoveRequestComponent)
 
 class CollisionSystem:
-    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap):
+    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, player_entity_id: int): # player_entity_id 추가
         self.entity_manager = entity_manager
         self.dungeon_map = dungeon_map
+        self.player_entity_id = player_entity_id # player_entity_id 저장
 
     def update(self):
         for entity_id, desired_pos in list(self.entity_manager.get_components_of_type(DesiredPositionComponent).items()):
@@ -55,12 +66,58 @@ class CollisionSystem:
                 can_move = False
                 collision_result = "벽으로 막혀있습니다."
             
-            # 2. 몬스터 충돌 검사 (플레이어와 몬스터 모두)
+            # 2. 다른 엔티티와의 충돌 검사 (ColliderComponent 활용)
             if can_move:
-                target_monster = self.dungeon_map.get_monster_at(new_x, new_y)
-                if target_monster:
-                    can_move = False
-                    collision_result = target_monster # 몬스터 객체 반환
+                # 이동하려는 엔티티의 ColliderComponent 가져오기 (없으면 기본값 사용 또는 충돌 검사에서 제외)
+                moving_collider = self.entity_manager.get_component(entity_id, ColliderComponent)
+                moving_width = moving_collider.width if moving_collider else 1
+                moving_height = moving_collider.height if moving_collider else 1
+                moving_offset_x = moving_collider.offset_x if moving_collider else 0
+                moving_offset_y = moving_collider.offset_y if moving_collider else 0
+
+                # 이동하려는 엔티티의 새로운 Bounding Box
+                moving_bbox = {
+                    'left': new_x + moving_offset_x,
+                    'top': new_y + moving_offset_y,
+                    'right': new_x + moving_offset_x + moving_width -1,
+                    'bottom': new_y + moving_offset_y + moving_height -1
+                }
+
+                for other_entity_id, other_pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
+                    if other_entity_id == entity_id or other_pos_comp.map_id != current_pos.map_id:
+                        continue # 자기 자신 또는 다른 맵의 엔티티는 무시
+
+                    other_collider = self.entity_manager.get_component(other_entity_id, ColliderComponent)
+                    if not other_collider or not other_collider.is_solid:
+                        continue # ColliderComponent가 없거나 통과 가능한 엔티티는 무시
+
+                    other_width = other_collider.width
+                    other_height = other_collider.height
+                    other_offset_x = other_collider.offset_x
+                    other_offset_y = other_collider.offset_y
+
+                    # 다른 엔티티의 Bounding Box
+                    other_bbox = {
+                        'left': other_pos_comp.x + other_offset_x,
+                        'top': other_pos_comp.y + other_offset_y,
+                        'right': other_pos_comp.x + other_offset_x + other_width -1,
+                        'bottom': other_pos_comp.y + other_offset_y + other_height -1
+                    }
+
+                    # AABB 충돌 검사
+                    if not (moving_bbox['right'] < other_bbox['left'] or
+                            moving_bbox['left'] > other_bbox['right'] or
+                            moving_bbox['bottom'] < other_bbox['top'] or
+                            moving_bbox['top'] > other_bbox['bottom']):
+                        
+                        can_move = False
+                        # 충돌한 엔티티가 몬스터인지 확인 (NameComponent 등으로)
+                        other_name_comp = self.entity_manager.get_component(other_entity_id, NameComponent)
+                        if other_name_comp and other_entity_id != self.player_entity_id: # 몬스터와 충돌한 경우
+                            collision_result = other_entity_id # 몬스터 엔티티 ID 반환
+                        else: # 다른 솔리드 엔티티 (예: 상자, 다른 플레이어 등 - 현재는 몬스터만 고려)
+                            collision_result = "다른 엔티티와 충돌했습니다."
+                        break # 충돌했으므로 다른 엔티티 검사 중단
 
             # 3. 다른 엔티티 (플레이어 또는 몬스터) 충돌 검사 (MovementSystem에서 처리하지 않았으므로 여기서 다시 확인)
             # 현재는 몬스터만 고려, 플레이어는 별도 처리
@@ -86,6 +143,24 @@ class CollisionSystem:
                 # 이동 후 타일 상호작용을 위해 InteractionSystem에 전달할 정보 저장
                 # (나중에 InteractionSystem에서 처리)
                 # self.entity_manager.add_component(entity_id, InteractionRequestComponent(entity_id, new_x, new_y))
+
+                # 이동한 엔티티가 플레이어인 경우 PlayerMovedEvent 발행
+                if entity_id == self.player_entity_id:
+                    encountered_monster_ids = []
+                    # 새 위치에서 몬스터 확인
+                    for monster_obj in self.dungeon_map.monsters:
+                        monster_pos = self.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
+                        if monster_pos and monster_pos.x == new_x and monster_pos.y == new_y and not monster_obj.dead:
+                            name_comp = self.entity_manager.get_component(monster_obj.entity_id, NameComponent)
+                            if name_comp:
+                                encountered_monster_ids.append(name_comp.name) 
+
+                    event_manager.publish(PlayerMovedEvent(
+                        entity_id=entity_id, # 플레이어 엔티티 ID 추가
+                        old_pos=(original_x, original_y), # 필드명 변경
+                        new_pos=(new_x, new_y), # 필드명 변경
+                        encountered_monster_ids=encountered_monster_ids
+                    ))
 
             # DesiredPositionComponent는 처리 후 제거합니다.
             self.entity_manager.remove_component(entity_id, DesiredPositionComponent)
@@ -369,6 +444,38 @@ class GameOverSystem:
                 self.ui_instance.add_message("게임 승리! 던전을 탈출했습니다.")
                 return # 게임 종료
 
+class LoggingSystem(System): # System 상속
+    """
+    PlayerMovedEvent를 구독하여 게임 메시지(로그)를 출력하는 시스템입니다.
+    """
+    def __init__(self, entity_manager: EntityManager, ui_instance):
+        super().__init__(entity_manager)
+        self.ui_instance = ui_instance # renderer 대신 ui_instance 사용
+        
+        # CRITICAL: 시스템이 시작될 때 이벤트를 구독합니다.
+        event_manager.subscribe(PlayerMovedEvent, self.handle_player_moved_event) # 메서드 이름 유지
+        print("LoggingSystem: PlayerMovedEvent 구독 완료.")
+
+    def handle_player_moved_event(self, event: PlayerMovedEvent):
+        """PlayerMovedEvent를 처리하는 핸들러 함수입니다."""
+        
+        # 1. 플레이어 위치를 로그로 출력 (디버그용)
+        x, y = event.new_position # event.new_position 사용
+        log_message = f"플레이어가 이동했습니다: ({x}, {y})"
+        
+        # 2. 메시지 로그에 메시지 추가 (UI 직접 호출은 불가피)
+        self.ui_instance.add_message(log_message)
+        
+        # 3. (임시) 몬스터 근접 메시지 출력 로직은 추후 CombatSystem 이벤트로 분리 예정
+        #    현재는 단순 이동 로그만 출력합니다.
+        #    encountered_monster_ids 로깅은 필요에 따라 남길 수 있음 (디버그용)
+        if event.encountered_monster_ids:
+            self.ui_instance.add_message(f"DEBUG: Player encountered monsters: {', '.join(event.encountered_monster_ids)}")
+
+    def update(self):
+        # LoggingSystem은 주로 이벤트 기반으로 동작하므로, 
+        # 메인 루프에서 update를 호출할 필요가 없습니다. (비워둠)
+        pass
 
 class RenderingSystem:
     def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance, player_entity_id: int):
@@ -376,36 +483,49 @@ class RenderingSystem:
         self.dungeon_map = dungeon_map
         self.ui_instance = ui_instance
         self.player_entity_id = player_entity_id
+        event_manager.subscribe(PlayerMovedEvent, self.handle_player_moved_event)
 
-    def update(self, camera_x: int, camera_y: int,
-               inventory_open: bool, inventory_cursor_pos: int,
-               inventory_active_tab: str, inventory_scroll_offset: int,
-               log_viewer_open: bool, log_viewer_scroll_offset: int,
-               game_state: str, projectile_path: list, impact_effect: dict, splash_positions: list):
-        logging.debug(f"RenderingSystem.update: self.dungeon_map 유효성: {self.dungeon_map is not None}, 타입: {type(self.dungeon_map)}")
+    def handle_player_moved_event(self, event: PlayerMovedEvent):
+        self.update()
 
+    def update(self):
+        logging.debug("RenderingSystem.update called via event.")
+        player_pos = self.entity_manager.get_component(self.player_entity_id, PositionComponent)
+        if player_pos is None:
+            logging.debug("RenderingSystem.update: player_pos is None, skipping render.")
+            return
+
+        map_viewport_width = self.ui_instance.MAP_VIEWPORT_WIDTH
+        map_viewport_height = self.ui_instance.MAP_VIEWPORT_HEIGHT
+        
+        half_viewport_width = map_viewport_width // 2
+        half_viewport_height = map_viewport_height // 2
+
+        camera_x_candidate = player_pos.x - half_viewport_width
+        camera_x = max(0, min(camera_x_candidate, self.dungeon_map.width - map_viewport_width))
+
+        camera_y_candidate = player_pos.y - half_viewport_height
+        camera_y = max(0, min(camera_y_candidate, self.dungeon_map.height - map_viewport_height))
 
         monsters_to_render = []
         for entity_id, pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
-            if entity_id != self.player_entity_id: # 플레이어는 별도로 처리
-                # 해당 엔티티가 몬스터인지 확인 (예: Monster 객체에 entity_id가 저장되어 있다고 가정)
+            if entity_id != self.player_entity_id:
                 for monster_obj in self.dungeon_map.monsters:
                     if monster_obj.entity_id == entity_id and not monster_obj.dead:
                         monsters_to_render.append(monster_obj)
                         break
 
-        logging.debug("draw_game_screen 호출 전.")
         try:
             self.ui_instance.draw_game_screen(
                 self.player_entity_id, self.dungeon_map, monsters_to_render, camera_x, camera_y,
-                inventory_open=inventory_open, inventory_cursor_pos=inventory_cursor_pos,
-                inventory_active_tab=inventory_active_tab, inventory_scroll_offset=inventory_scroll_offset,
-                log_viewer_open=log_viewer_open, log_viewer_scroll_offset=log_viewer_scroll_offset,
-                game_state=game_state, projectile_path=projectile_path, 
-                impact_effect=impact_effect, splash_positions=splash_positions)
+                inventory_open=False, inventory_cursor_pos=0,
+                inventory_active_tab='item', inventory_scroll_offset=0,
+                log_viewer_open=False, log_viewer_scroll_offset=0,
+                game_state='NORMAL', projectile_path=[],
+                impact_effect={}, splash_positions=[]
+            )
         except Exception as e:
-            logging.critical(f"_draw_map_and_entities 호출 중 치명적인 오류 발생: {e}", exc_info=True)
-        logging.debug("draw_game_screen 호출 후.")
+            logging.critical(f"draw_game_screen 호출 중 치명적인 오류 발생: {e}", exc_info=True)
 
 
 class InventorySystem:
