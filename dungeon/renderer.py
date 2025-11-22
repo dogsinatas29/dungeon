@@ -620,6 +620,17 @@ class UI:
     def write_at(self, y, x, text):
         sys.stdout.write(f"{ANSI.cursor_to(y, x)}{text}")
 
+    def refresh(self):
+        """버퍼의 내용을 화면에 렌더링하고 버퍼를 지웁니다."""
+        self._render_buffer_to_screen()
+        self._buffer = [' ' * self.terminal_width for _ in range(self.terminal_height)] # 버퍼 초기화
+
+    def _render_buffer_to_screen(self):
+        sys.stdout.write(ANSI.cursor_to(0, 0)) # 커서를 화면 맨 위로 이동
+        for y in range(self.terminal_height):
+            sys.stdout.write(self._buffer[y])
+        sys.stdout.flush()
+
     def get_full_key_input(self):
         logging.debug("get_full_key_input: 입력 대기 중...")
         try:
@@ -689,39 +700,24 @@ class UI:
             sys.stdout.flush()
             logging.debug("이름 입력 대기 중 (현재: '%s')", current_name_str)
             key = self.get_full_key_input() # 단일 문자 입력 받기
-    def _render_buffer_to_screen(self):
-        sys.stdout.write(ANSI.cursor_to(0, 0)) # 커서를 화면 맨 위로 이동
-        for y in range(self.terminal_height):
-            sys.stdout.write(self._buffer[y])
-        sys.stdout.flush()
 
-    def get_full_key_input(self):
-        logging.debug("get_full_key_input: 입력 대기 중...")
-        try:
-            char = readchar.readkey()
-            logging.debug("get_full_key_input: 키 감지됨 - '%s'", repr(char))
-            return char
-        except KeyboardInterrupt:
-            logging.debug("KeyboardInterrupt 감지됨. None 반환.")
-            return None
-
-    def show_game_over_screen(self):
-        logging.debug("show_game_over_screen 호출됨")
-        self.clear_screen()
-        msg = "GAME OVER"
-        self.write_at(self.terminal_height // 2, self.terminal_width // 2 - len(msg) // 2, msg)
-        sys.stdout.flush()
-        logging.debug("게임 오버 화면 렌더링 완료, 입력 대기 중...")
-        readchar.readkey()
-        logging.debug("게임 오버 화면 입력 감지")
-
-    def __del__(self):
-        # unset_raw_mode() # readchar 사용으로 불필요
-        # sys.stdout.write(ANSI.SHOW_CURSOR) # readchar가 커서 관리를 담당
-        sys.stdout.write("\033[0m")
-        self.clear_screen()
-        logging.debug("UI 객체 소멸")
-
+            if key == readchar.key.ENTER: # ENTER
+                if not name: # 이름이 비어있으면 엔터 무시 (최소 한 글자 입력 강제)
+                    continue
+                logging.debug("이름 입력 완료: '%s'", current_name_str)
+                break
+            elif key == readchar.key.BACKSPACE: # BACKSPACE
+                if name: 
+                    name.pop()
+                    logging.debug("백스페이스 입력, 현재 이름: '%s'", "".join(name))
+            elif len(name) < 20 and key and isinstance(key, str) and key.isprintable(): # 최대 20글자, 출력 가능한 문자만
+                name.append(key)
+                logging.debug("문자 입력: '%s', 현재 이름: '%s'", key, "".join(name))
+            
+        sys.stdout.write(ANSI.HIDE_CURSOR)
+        final_name = "".join(name) if name else "용사"
+        logging.debug("최종 플레이어 이름: '%s'", final_name)
+        return final_name
 
     def show_game_over_screen(self):
         logging.debug("show_game_over_screen 호출됨")
@@ -734,8 +730,6 @@ class UI:
         logging.debug("게임 오버 화면 입력 감지")
 
     def __del__(self):
-        # unset_raw_mode() # readchar 사용으로 불필요
-        # sys.stdout.write(ANSI.SHOW_CURSOR) # readchar가 커서 관리를 담당
         sys.stdout.write("\033[0m")
         self.clear_screen()
         logging.debug("UI 객체 소멸")

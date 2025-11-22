@@ -11,4 +11,8 @@
 - `dungeon/system.py`의 `LoggingSystem`을 `System`을 상속하도록 변경하고, 생성자 및 `handle_player_moved_event` 로직을 업데이트하여 단순화된 플레이어 이동 메시지만 로깅하도록 수정.
 - [통합] `dungeon/engine.py`에 `LoggingSystem` 초기화 및 통합 완료.
 - `dungeon/component.py`에 `ColliderComponent`를 추가하고 중복된 `ItemUseRequestComponent` 정의를 제거.
-- `dungeon/system.py`의 `CollisionSystem.update()`를 수정하여 `ColliderComponent`를 활용한 일반화된 엔티티 충돌 감지를 수행하도록 변경.
+- `dungeon/utils/collision.py` 파일을 생성하여 AABB 충돌 검사 및 관련 유틸리티 함수들을 정의.
+- `dungeon/system.py`의 `CollisionSystem.update()`를 수정하여 `dungeon/utils/collision.py`의 유틸리티 함수들을 활용하여 일반화된 엔티티 충돌 감지를 수행하도록 변경.
+- `dungeon/engine.py`에서 플레이어 및 몬스터 엔티티 생성 시 `ColliderComponent`를 추가.
+- `dungeon/system.py`의 `CombatSystem` 생성자에서 `dungeon_map` 인자를 제거.
+- `dungeon/engine.py`에서 `CombatSystem` 초기화 시 `dungeon_map` 인자를 제거하도록 업데이트.

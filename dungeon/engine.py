@@ -1,4 +1,4 @@
-# /home/dogsinatas/python_project/dungeon/dungeon/engine.py (수정된 전체 코드)
+# /home/dogsinatas/python_project/dungeon/dungeon/engine.py (수정될 전체 코드)
 
 import sys
 import time
@@ -6,526 +6,306 @@ import math
 import random
 import re
 import logging
-import readchar # readchar 모듈 임포트 추가
+# tcod 대신 readchar를 사용하므로 tcod 관련 import는 제거
 
 # 로깅 설정
 logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
-from events.event_manager import event_manager # 추가
+from events.event_manager import event_manager
 from .map_manager import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
 from .renderer import UI, ANSI
 from . import data_manager
 from .items import Item
 from .monster import Monster
-from .player import Player # Player 클래스 임포트
+from .player import Player
 from .entity import EntityManager
-from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent 
-from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem # LoggingSystem 추가
-from .trap import Trap # Trap 클래스 임포트
+from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent
+from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem, AISystem
+from .trap import Trap
+from typing import Optional, Tuple, List # List 타입 힌트 추가
+
 # ----------------------------------------------------
 
-def calculate_line_path(x1, y1, x2, y2):
-    """Bresenham's line algorithm을 사용하여 두 점 사이의 경로를 계산합니다."""
-    path = []
-    dx = abs(x2 - x1)
-    dy = -abs(y2 - y1)
-    sx = 1 if x1 < x2 else -1
-    sy = 1 if y1 < y2 else -1
-    err = dx + dy
-    
-    x, y = x1, y1
-    
-    while True:
-        path.append((x, y))
-        if x == x2 and y == y2:
-            break
-        e2 = 2 * err
-        if e2 >= dy:
-            err += dy
-            x += sx
-        if e2 <= dx:
-            err += dx
-            y += sy
-            
-    # 시작점은 제외하고 경로 반환
-    return path[1:]
+# --- Configuration ---
+MAP_WIDTH = 80
+MAP_HEIGHT = 45
+UI_HEIGHT = 5
 
-def run_game(item_definitions, ui_instance):
-    logging.debug("run_game 함수 시작")
-    ui_instance.add_message("디버그: engine.run_game 시작.")
+# 디버깅: readchar 임포트 확인
+try:
+    import readchar
+    import readchar.key
+except ImportError:
+    print("Error: readchar not installed. Please install it using 'pip install readchar'")
+    sys.exit(1)
 
-    monster_definitions = data_manager.load_monster_definitions(ui_instance)
-    entity_manager = EntityManager()
+# UIManager는 UI 클래스의 인스턴스로 가정합니다.
+class UIManager(UI):
+    def __init__(self, console_width, ui_height):
+        super().__init__() # UI 클래스의 __init__ 호출
+        self.MAP_VIEWPORT_WIDTH = console_width # 임시 설정
+        self.MAP_VIEWPORT_HEIGHT = ui_height # 임시 설정 (맵 높이 아님)
 
+# RNG 클래스 (시드 관리용)
+class RNG:
+    def __init__(self, seed: Optional[int] = None):
+        self.seed = seed if seed is not None else int(time.time())
+        random.seed(self.seed)
 
-    save_load_system = SaveLoadSystem(entity_manager)
-    
-    game_state_data = data_manager.load_game_data()
-    
-    player_obj, all_dungeon_maps, current_dungeon_level = save_load_system.load_game(game_state_data, ui_instance)
-    
-    if current_dungeon_level is None:
-        current_dungeon_level = (1, 0) # 기본값 설정
+    def randint(self, a, b):
+        return random.randint(a, b)
 
-    if player_obj:
-        player_entity_id = player_obj.entity_id
-        logging.debug("기존 플레이어 로드됨: entity_id=%s", player_entity_id)
-    else:
-        # 새 게임이거나 저장된 게임이 없는 경우, 플레이어 엔티티 생성
-        player_entity_id = entity_manager.create_entity()
-        player_obj = Player("용사", hp=100, mp=50) # Player 객체 생성 및 엔티티 ID 할당 (기본값 사용)
-        entity_manager.add_component(player_entity_id, PositionComponent(x=0, y=0, map_id=(1,0))) # 초기 위치 설정
-        entity_manager.add_component(player_entity_id, MovableComponent())
-        entity_manager.add_component(player_entity_id, HealthComponent(max_hp=100, current_hp=100))
-        entity_manager.add_component(player_entity_id, NameComponent(name="용사"))
-        entity_manager.add_component(player_entity_id, AttackComponent(power=10, critical_chance=0.05, critical_damage_multiplier=1.5))
-        entity_manager.add_component(player_entity_id, DefenseComponent(value=3))
-        entity_manager.add_component(player_entity_id, ManaComponent(max_mp=player_obj.max_mp, current_mp=player_obj.mp))
-        entity_manager.add_component(player_entity_id, InventoryComponent())
-        entity_manager.add_component(player_entity_id, EquipmentComponent())
-        entity_manager.add_component(player_entity_id, QuickSlotComponent())
-        entity_manager.add_component(player_entity_id, RenderComponent(symbol=player_obj.char, color='white'))
-        logging.debug("새 플레이어 생성됨: entity_id=%s", player_entity_id)
+class Engine:
+    """게임의 메인 루프와 초기화를 담당하는 클래스입니다."""
 
-    # 모든 시스템 초기화 (dungeon_map은 나중에 할당)
-    movement_system = MovementSystem(entity_manager, None) 
-    collision_system = CollisionSystem(entity_manager, None, player_entity_id) 
-    interaction_system = InteractionSystem(entity_manager, None, player_entity_id, ui_instance) 
-    projectile_system = ProjectileSystem(entity_manager, None, ui_instance) 
-    combat_system = CombatSystem(entity_manager, ui_instance, None) 
-    dungeon_generation_system = DungeonGenerationSystem(entity_manager, None, ui_instance, item_definitions, monster_definitions) 
-    death_system = DeathSystem(entity_manager, None, ui_instance, player_entity_id) 
-    game_over_system = GameOverSystem(entity_manager, None, ui_instance, player_entity_id) 
-    rendering_system = RenderingSystem(entity_manager, None, ui_instance, player_entity_id) 
-    inventory_system = InventorySystem(entity_manager, ui_instance, item_definitions)
-    logging_system = LoggingSystem(entity_manager, ui_instance) # dungeon_map 인자 제거
+    def __init__(self, rng_seed: Optional[int] = None):
+        """엔진을 초기화합니다."""
+        self.rng = RNG(rng_seed)
+        self.ui_instance = UIManager(MAP_WIDTH, MAP_HEIGHT) # UI 클래스 인스턴스 생성
+        self.entity_manager = EntityManager()
+        self.rng_seed = self.rng.seed
+        
+        # 플레이어 엔티티 생성
+        self.player_entity_id = self.entity_manager.create_entity()
+        player_obj_template = Player("용사", hp=100, mp=50) # Player 클래스를 템플릿처럼 사용
+        self.entity_manager.add_component(self.player_entity_id, PositionComponent(x=0, y=0, map_id=(1,0)))
+        self.entity_manager.add_component(self.player_entity_id, MovableComponent())
+        self.entity_manager.add_component(self.player_entity_id, HealthComponent(max_hp=player_obj_template.max_hp, current_hp=player_obj_template.hp))
+        self.entity_manager.add_component(self.player_entity_id, NameComponent(name="용사"))
+        self.entity_manager.add_component(self.player_entity_id, AttackComponent(power=10, critical_chance=0.05, critical_damage_multiplier=1.5))
+        self.entity_manager.add_component(self.player_entity_id, DefenseComponent(value=3))
+        self.entity_manager.add_component(self.player_entity_id, ManaComponent(max_mp=player_obj_template.max_mp, current_mp=player_obj_template.mp))
+        self.entity_manager.add_component(self.player_entity_id, InventoryComponent())
+        self.entity_manager.add_component(self.player_entity_id, EquipmentComponent())
+        self.entity_manager.add_component(self.player_entity_id, QuickSlotComponent())
+        self.entity_manager.add_component(self.player_entity_id, ColliderComponent(width=1, height=1))
+        self.entity_manager.add_component(self.player_entity_id, RenderComponent(symbol=player_obj_template.char, color='white'))
 
-    # camera, inventory_open 등은 이제 해당 시스템/컴포넌트에서 관리됩니다.
-    last_entrance_position = {} # 이 부분만 유지
-    
-    # --- [수정] current_dungeon_level의 타입을 체크하여 (int, int) 튜플로 변환 ---
-    map_level_tuple = (1, 0) # 기본값 (1층, 메인 룸)
-    
-    if current_dungeon_level is not None:
-        if isinstance(current_dungeon_level, dict):
-            floor_str = current_dungeon_level.get('floor') or current_dungeon_level.get('level_id') or "1F"
-            room_index = current_dungeon_level.get('room_index', 0)
-            match = re.search(r'(\d+)', str(floor_str))
-            floor = int(match.group(1)) if match else 1
-            map_level_tuple = (floor, room_index)
-        elif isinstance(current_dungeon_level, str):
-            match = re.search(r'(\d+)', current_dungeon_level)
-            floor = int(match.group(1)) if match else 1
-            map_level_tuple = (floor, 0)
-        elif isinstance(current_dungeon_level, tuple) and len(current_dungeon_level) == 2:
-            floor_val = current_dungeon_level[0]
-            room_index_val = current_dungeon_level[1]
-            if isinstance(floor_val, str):
-                match = re.search(r'(\d+)', floor_val)
-                floor = int(match.group(1)) if match else 1
-            else:
-                floor = int(floor_val) if isinstance(floor_val, (int, float)) else 1
-            room_index = int(room_index_val) if isinstance(room_index_val, (int, float)) else 0
-            map_level_tuple = (floor, room_index)
-        else:
-            ui_instance.add_message("경고: 로드된 맵 레벨 정보가 유효하지 않아 기본값(1, 0)을 사용합니다.")
-    
-    current_dungeon_level = map_level_tuple # 이제 current_dungeon_level은 항상 (int, int) 튜플
-    # ---------------------------------------------------------------------------------------
+        # 엔티티 정의 로드 (data_manager에서 로드)
+        self.item_definitions = data_manager.load_item_definitions(self.ui_instance)
+        self.monster_definitions = data_manager.load_monster_definitions(self.ui_instance)
+        
+        # 던전 맵 생성 (초기 맵)
+        self.current_dungeon_level = (1, 0)
+        self.all_dungeon_maps = {}
+        self.dungeon_map = self._get_or_create_map(self.current_dungeon_level, self.all_dungeon_maps, self.ui_instance, self.item_definitions, self.monster_definitions)
 
-    dungeon_map = get_or_create_map(current_dungeon_level, all_dungeon_maps, ui_instance, item_definitions, monster_definitions)
-    ui_instance.add_message(f"디버그: 현재 맵 설정 완료 - {dungeon_map.dungeon_level_tuple}")
-    
-    # 모든 시스템에 현재 맵 전달
-    movement_system.dungeon_map = dungeon_map
-    collision_system.dungeon_map = dungeon_map
-    interaction_system.dungeon_map = dungeon_map
-    projectile_system.dungeon_map = dungeon_map
-    combat_system.dungeon_map = dungeon_map
-    dungeon_generation_system.dungeon_map = dungeon_map
-    death_system.dungeon_map = dungeon_map
-    game_over_system.dungeon_map = dungeon_map
-    rendering_system.dungeon_map = dungeon_map # rendering_system에 dungeon_map 할당
-    logging_system.dungeon_map = dungeon_map # logging_system에 dungeon_map 할당
+        # 시스템 초기화
+        self.movement_system = MovementSystem(self.entity_manager, self.dungeon_map)
+        self.collision_system = CollisionSystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
+        self.interaction_system = InteractionSystem(self.entity_manager, self.dungeon_map, self.player_entity_id, self.ui_instance)
+        self.projectile_system = ProjectileSystem(self.entity_manager, self.dungeon_map, self.ui_instance)
+        self.combat_system = CombatSystem(self.entity_manager, self.ui_instance)
+        self.dungeon_generation_system = DungeonGenerationSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.item_definitions, self.monster_definitions)
+        self.death_system = DeathSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
+        self.game_over_system = GameOverSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
+        self.ai_system = AISystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
+        self.rendering_system = RenderingSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
+        self.inventory_system = InventorySystem(self.entity_manager, self.ui_instance, self.item_definitions)
+        self.logging_system = LoggingSystem(self.entity_manager, self.ui_instance)
 
-    player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
-    ui_instance.add_message(f"디버그: 플레이어 초기 위치 설정 시도. 현재 player_pos: {player_pos}")
-    # player_x, player_y는 이제 dungeon_map.start_x, dungeon_map.start_y를 사용함
-    if not player_pos:
-         ui_instance.add_message(f"디버그: 새 PositionComponent 생성. x={dungeon_map.start_x}, y={dungeon_map.start_y}")
-         player_pos = PositionComponent(x=dungeon_map.start_x, y=dungeon_map.start_y, map_id=current_dungeon_level)
-         entity_manager.add_component(player_entity_id, player_pos)
-    else:
-         ui_instance.add_message(f"디버그: 기존 PositionComponent 업데이트. x={dungeon_map.start_x}, y={dungeon_map.start_y}")
-         player_pos.x, player_pos.y = dungeon_map.start_x, dungeon_map.start_y # 이 줄을 다시 추가
-         player_pos.map_id = current_dungeon_level 
-    ui_instance.add_message(f"디버그: 플레이어 최종 위치: ({player_pos.x}, {player_pos.y}) on map {player_pos.map_id}")
+        # 초기 던전 엔티티 생성 및 플레이어 위치 설정
+        self.dungeon_generation_system.generate_dungeon_entities(self.current_dungeon_level)
+        player_pos_comp = self.entity_manager.get_component(self.player_entity_id, PositionComponent)
+        if player_pos_comp:
+            player_pos_comp.x = self.dungeon_map.start_x
+            player_pos_comp.y = self.dungeon_map.start_y
+            self.dungeon_map.reveal_tiles(player_pos_comp.x, player_pos_comp.y)
 
-    ui_instance.clear_screen()
+        # 초기 메시지
+        self.ui_instance.add_message("환영합니다! 던전에 오신 것을 환영합니다!")
 
-    turn_count = 0
-    rest_turn_count = 0
+        self.simulated_inputs: List[str] = []
+        self.last_frame_time = time.time()
 
-    game_state = 'NORMAL'
-    aiming_skill = None
-    
-    # ECS 전환 후 컴포넌트 기반으로 수정된 use_projectile_skill 함수
-    def use_projectile_skill(player_entity_id, dungeon, skill):
-        player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
+    def _get_or_create_map(self, level_tuple, all_dungeon_maps, ui_instance, item_definitions, monster_definitions):
+        if level_tuple not in all_dungeon_maps:
+            new_map = DungeonMap(MAP_WIDTH, MAP_HEIGHT, self.rng, level=level_tuple)
+            new_map.generate_map(level_tuple, ui_instance)
+            all_dungeon_maps[level_tuple] = new_map
+        return all_dungeon_maps[level_tuple]
+
+    def handle_input(self, key: Optional[str]) -> bool:
+        """키 입력을 처리하고, 플레이어의 행동이 있었는지 여부를 반환합니다."""
+        if key is None:
+            return False
+
+        player_pos = self.entity_manager.get_component(self.player_entity_id, PositionComponent)
         if not player_pos: return False
-
-        # HealthComponent를 가진 엔티티 (몬스터)를 찾음
-        visible_monsters = []
-        for entity_id, health_comp in entity_manager.get_components_of_type(HealthComponent).items():
-            if entity_id != player_entity_id:
-                 pos_comp = entity_manager.get_component(entity_id, PositionComponent)
-                 # 맵 ID는 튜플로 비교
-                 if pos_comp and pos_comp.map_id == dungeon.dungeon_level_tuple and (pos_comp.x, pos_comp.y) in dungeon.visited:
-                    visible_monsters.append((entity_id, pos_comp))
-
-        if not visible_monsters:
-            ui_instance.add_message("주변에 보이는 몬스터가 없습니다.")
-            return False
-
-        # 가장 가까운 몬스터 엔티티 ID와 위치 컴포넌트 찾기
-        closest_monster_data = min(visible_monsters, key=lambda m_data: math.sqrt((player_pos.x - m_data[1].x)**2 + (player_pos.y - m_data[1].y)**2))
-        closest_monster_entity_id, closest_monster_pos = closest_monster_data
-        
-        distance = math.sqrt((player_pos.x - closest_monster_pos.x)**2 + (player_pos.y - closest_monster_pos.y)**2)
-        if distance > skill.range_str:
-            ui_instance.add_message(f"'{skill.name}' 스킬의 사거리가 닿지 않습니다. (사거리: {skill.range_str})")
-            return False
-
-        # 발사체 엔티티 생성
-        projectile_entity_id = entity_manager.create_entity()
-        entity_manager.add_component(projectile_entity_id, PositionComponent(x=player_pos.x, y=player_pos.y, map_id=player_pos.map_id))
-        
-        # 발사체 방향 계산
-        dx, dy = 0, 0
-        if closest_monster_pos.x > player_pos.x: dx = 1
-        elif closest_monster_pos.x < player_pos.x: dx = -1
-        if closest_monster_pos.y > player_pos.y: dy = 1
-        elif closest_monster_pos.y < player_pos.y: dy = -1
-
-        entity_manager.add_component(projectile_entity_id, ProjectileComponent(
-            damage=skill.damage, 
-            range=skill.range_str, 
-            current_range=skill.range_str, 
-            shooter_id=player_entity_id,
-            dx=dx, dy=dy,
-            skill_def_id=skill.id
-        ))
-        entity_manager.add_component(projectile_entity_id, RenderComponent(symbol='*', color='yellow')) # 발사체 심볼 및 색상 추가
-
-        ui_instance.add_message(f"'{skill.name}'을(를) 발사했습니다!")
-        return True
-
-    running = True
-    while running:
-        ui_instance.add_message("디버그: 게임 루프 시작.")
-        
-        # 렌더링 관련 임시 변수 초기화
-        projectile_path = []
-        impact_effect = None
-        splash_positions = []
-
-        # 카메라 계산은 이제 RenderingSystem이 처리합니다.
-        player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
-        if player_pos is None:
-            logging.debug("디버그: 게임 루프에서 player_pos가 None입니다. 렌더링을 건너뜁니다.")
-            running = False
-            continue
-
-        # RenderingSystem은 이제 PlayerMovedEvent를 구독하고 자체적으로 업데이트됩니다.
-
-        if entity_manager.has_component(player_entity_id, GameOverComponent):
-            game_over_comp = entity_manager.get_component(player_entity_id, GameOverComponent)
-            if not game_over_comp.win: 
-                readchar.readkey()
-            running = False
-            continue
 
         player_action_taken = False
         
-        ui_instance.add_message("디버그: 입력 대기 중...")
-        sys.stdout.flush() # 렌더링 내용이 확실히 화면에 반영되도록 강제 플러시
-        key = ui_instance.get_full_key_input() # 단일 문자 입력 받기
-        if key is None: # KeyboardInterrupt 감지 시
-            running = False
-            ui_instance.add_message("게임이 중단되었습니다.")
-            continue
+        inventory_open = False # 임시
+        log_viewer_open = False # 임시
 
-        current_floor, current_room_index = current_dungeon_level # 이제 안전하게 언패킹 가능
-            
-        inventory_comp = entity_manager.get_component(player_entity_id, InventoryComponent)
-        quickslot_comp = entity_manager.get_component(player_entity_id, QuickSlotComponent)
-        health_comp = entity_manager.get_component(player_entity_id, HealthComponent)
-        mana_comp = entity_manager.get_component(player_entity_id, ManaComponent)
-
-        if game_state == 'AIMING_SKILL':
-            pass 
-        
-        elif log_viewer_open:
-            if key == readchar.key.UP: log_viewer_scroll_offset += 1
-            elif key == readchar.key.DOWN: log_viewer_scroll_offset = max(0, log_viewer_scroll_offset - 1)
-            elif key == 'm': log_viewer_open = False
-
-        elif inventory_open:
-            if not inventory_comp: continue
-
-            if key == 'i' or key == 'I': 
-                inventory_open = False
-            elif key == readchar.key.UP:
-                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
-                if items_in_tab:
-                    inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
-                    if inventory_cursor_pos < inventory_scroll_offset:
-                        inventory_scroll_offset = inventory_cursor_pos
+        if inventory_open:
+            if key == readchar.key.UP:
+                self.ui_instance.add_message("인벤토리: 위")
             elif key == readchar.key.DOWN:
-                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
-                if items_in_tab:
-                    inventory_cursor_pos = min(len(items_in_tab) - 1, inventory_cursor_pos + 1)
-                    list_height = ui_instance.MAP_VIEWPORT_HEIGHT - 6
-                    if inventory_cursor_pos >= inventory_scroll_offset + list_height: 
-                        inventory_scroll_offset += 1
-            elif key == 'a': inventory_active_tab = 'item'
-            elif key == 'b': inventory_active_tab = 'equipment'
-            elif key == 'c': inventory_active_tab = 'scroll'
-            elif key == 'd': inventory_active_tab = 'skill_book'
-            elif key == 'z': inventory_active_tab = 'all'
-            elif key == 'e': 
-                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
-                if items_in_tab and 0 <= inventory_cursor_pos < len(items_in_tab):
-                    selected_item_data = items_in_tab[inventory_cursor_pos]
-                    selected_item = selected_item_data['item']
+                self.ui_instance.add_message("인벤토리: 아래")
+            elif key == 'i':
+                inventory_open = False
+            player_action_taken = False
 
-                    if isinstance(selected_item, Item):
-                        if selected_item.item_type == 'EQUIP':
-                            message = inventory_system.equip_unequip_item(player_entity_id, selected_item)
-                            ui_instance.add_message(message)
-                            player_action_taken = True
-                        elif selected_item.item_type == 'CONSUMABLE':
-                            message, used = inventory_system.use_item(player_entity_id, selected_item.id)
-                            ui_instance.add_message(message)
-                            if used:
-                                player_action_taken = True
-                            if inventory_comp.get_item_quantity(selected_item.id) <= 0:
-                                inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
-                        elif selected_item.item_type == 'SKILLBOOK':
-                            message, acquired = inventory_system.acquire_skill_from_book(player_entity_id, selected_item)
-                            ui_instance.add_message(message)
-                            if acquired:
-                                player_action_taken = True
-                            if inventory_comp.get_item_quantity(selected_item.id) <= 0:
-                                inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
-                        else:
-                            ui_instance.add_message("이 아이템은 장착하거나 사용할 수 없습니다.")
-                    else:
-                        ui_instance.add_message("선택된 항목이 아이템이 아닙니다.")
-            elif key == 'R': 
-                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
-                if items_in_tab and 0 <= inventory_cursor_pos < len(items_in_tab):
-                    selected_item_data = items_in_tab[inventory_cursor_pos]
-                    selected_item = selected_item_data['item']
-                    message, dropped = inventory_system.drop_item(player_entity_id, selected_item.id)
-                    ui_instance.add_message(message)
-                    if dropped:
+        elif log_viewer_open:
+            if key == readchar.key.UP: pass
+            elif key == readchar.key.DOWN: pass
+            elif key == 'm': log_viewer_open = False
+            player_action_taken = False
+
+        else: # NORMAL 게임 상태
+            dx, dy = 0, 0
+            move_keys = {
+                readchar.key.UP: (0, -1), readchar.key.DOWN: (0, 1),
+                readchar.key.LEFT: (-1, 0), readchar.key.RIGHT: (1, 0),
+                'k': (0, -1), 'j': (0, 1), 'h': (-1, 0), 'l': (1, 0),
+                'y': (-1, -1), 'u': (1, -1), 'b': (-1, 1), 'n': (1, 1)
+            }
+            
+            if key in move_keys:
+                dx, dy = move_keys[key]
+                new_x, new_y = player_pos.x + dx, player_pos.y + dy
+
+                target_monster_entity_id = None
+                for eid, pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
+                    if eid != self.player_entity_id and pos_comp.x == new_x and pos_comp.y == new_y and self.entity_manager.has_component(eid, HealthComponent):
+                        target_monster_entity_id = eid
+                        break
+
+                if target_monster_entity_id:
+                    player_attack_comp = self.entity_manager.get_component(self.player_entity_id, AttackComponent)
+                    if player_attack_comp:
+                        self.entity_manager.add_component(target_monster_entity_id, DamageRequestComponent(
+                            target_id=target_monster_entity_id, 
+                            amount=player_attack_comp.power, 
+                            attacker_id=self.player_entity_id
+                        ))
+                        self.ui_instance.add_message(f"플레이어가 {self.entity_manager.get_component(target_monster_entity_id, NameComponent).name}을(를) 공격했습니다!")
                         player_action_taken = True
-                        inventory_cursor_pos = max(0, inventory_cursor_pos - 1)
-            elif key in "1234567890": 
-                if not quickslot_comp: continue
-                slot_num = 10 if key == '0' else int(key)
-                items_in_tab = inventory_system.get_items_by_tab(player_entity_id, inventory_active_tab)
-                if items_in_tab and 0 <= inventory_cursor_pos < len(items_in_tab):
-                    selected_item_data = items_in_tab[inventory_cursor_pos]
-                    selected_item = selected_item_data['item']
-
-                    if 1 <= slot_num <= 5: 
-                        message = inventory_system.assign_item_to_quickslot(player_entity_id, selected_item.id, slot_num)
-                        ui_instance.add_message(message)
-                    elif 6 <= slot_num <= 10: 
-                        message = inventory_system.assign_skill_to_quickslot(player_entity_id, selected_item.id, slot_num)
-                        ui_instance.add_message(message)
                 else:
-                    ui_instance.add_message("선택된 아이템이 없습니다.")
-
-        elif game_state == 'NORMAL':
-            if key == 'i':
-                inventory_open = True
-            elif key == 'm':
-                log_viewer_open = True
-            else:
-                dx, dy = 0, 0
-                move_keys = {
-                    '\x1b[A': (0, -1), '\x1b[B': (0, 1),
-                    '\x1b[D': (-1, 0), '\x1b[C': (1, 0),
-                    'k': (0, -1), 'j': (0, 1), 'h': (-1, 0), 'l': (1, 0),
-                    'y': (-1, -1), 'u': (1, -1), 'b': (-1, 1), 'n': (1, 1)
-                }
-                if key in move_keys:
-                    dx, dy = move_keys[key]
-
-                if dx != 0 or dy != 0:
-                    entity_manager.add_component(player_entity_id, MoveRequestComponent(entity_id=player_entity_id, dx=dx, dy=dy))
+                    self.entity_manager.add_component(self.player_entity_id, MoveRequestComponent(entity_id=self.player_entity_id, dx=dx, dy=dy))
                     player_action_taken = True
                     
-                elif key in "1234567890":
-                    if not quickslot_comp or not mana_comp: continue
+            elif key == '.': # 대기
+                self.ui_instance.add_message("플레이어가 대기합니다.")
+                player_action_taken = True
 
-                    slot_num = 10 if key == '0' else int(key)
-                    
-                    # 아이템 퀵슬롯 처리 (1-5)
-                    if 1 <= slot_num <= 5:
-                        item_id = quickslot_comp.item_slots.get(slot_num)
-                        if not item_id:
-                            ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
-                        else:
-                            message, used = inventory_system.use_item(player_entity_id, item_id)
-                            ui_instance.add_message(message)
-                            if used:
-                                player_action_taken = True
-                                
-                    # 스킬 퀵슬롯 처리 (6-0)
-                    elif 6 <= slot_num <= 10:
-                        skill_id = quickslot_comp.skill_slots.get(slot_num)
-                        if not skill_id:
-                            ui_instance.add_message(f"퀵슬롯 {0 if slot_num == 10 else slot_num}번이 비어있습니다.")
-                        else:
-                            skill_def = data_manager.get_skill_definition(skill_id)
-                            if not skill_def:
-                                ui_instance.add_message("알 수 없는 스킬입니다.")
-                            elif mana_comp.current_mp < skill_def.cost_value:
-                                ui_instance.add_message(f"MP가 부족하여 '{skill_def.name}'을(를) 사용할 수 없습니다.")
-                            else:
-                                mana_comp.current_mp -= skill_def.cost_value
-                                ui_instance.add_message(f"'{skill_def.name}'을(를) 시전합니다!")
-                                
-                                if skill_def.skill_subtype == 'PROJECTILE':
-                                    if use_projectile_skill(player_entity_id, dungeon_map, skill_def):
-                                        pass
-                                    else:
-                                        mana_comp.current_mp += skill_def.cost_value
-                                        player_action_taken = False 
-                                else:
-                                    ui_instance.add_message(f"'{skill_def.name}'은(는) 아직 구현되지 않았습니다.")
-                                    player_action_taken = True
-
-                elif key in ['v', 't']:
-                    status_text = "ON" if dungeon_map.toggle_fog() else "OFF"
-                    ui_instance.add_message(f"전장의 안개(Fog of War) 토글: {status_text}")
-                    
-                elif key == 'r':
-                    message, looted = inventory_system.loot_items(player_entity_id, dungeon_map)
-                    ui_instance.add_message(message)
-                    if looted:
-                        player_action_taken = True
-
-                elif key == 'q':
-                    running = False
-                    ui_instance.add_message("게임을 저장하고 메인 메뉴로 돌아갑니다.")
-
-        if player_action_taken:
-            turn_count += 1
+            elif key == 'i': # 인벤토리 열기 (토글)
+                inventory_open = True
+                self.ui_instance.add_message("인벤토리를 엽니다.")
+                player_action_taken = False
             
-            # --- 시스템 업데이트 순서 (최적화) ---
-            movement_system.update() 
-            collision_result = collision_system.update() 
-            interaction_system.update() 
-            projectile_system.update() 
-            combat_system.update() 
-            death_system.update() 
-            game_over_system.update() 
-            # ------------------------------------
+            elif key == 'q': # 게임 종료
+                self.ui_instance.add_message("게임을 종료합니다.")
+                sys.exit(0)
 
-            # 시야 업데이트
-            player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
-            if player_pos:
-                dungeon_map.reveal_tiles(player_pos.x, player_pos.y) 
+            elif key == 'r': # 아이템 루팅
+                message, looted = self.inventory_system.loot_items(self.player_entity_id, self.dungeon_map)
+                self.ui_instance.add_message(message)
+                if looted:
+                    player_action_taken = True
 
-            # 충돌 결과 처리 (몬스터 충돌에 대한 즉각적인 공격 로직 제거)
-            if isinstance(collision_result, Trap):
-                trap_triggered = collision_result
-                player_name_comp = entity_manager.get_component(player_entity_id, NameComponent)
-                player_name = player_name_comp.name if player_name_comp else "플레이어"
-                ui_instance.add_message(f"{player_name}이(가) {trap_triggered.name} 함정을 밟았습니다!")
-
-            elif isinstance(collision_result, str):
-                ui_instance.add_message(collision_result)
-
-            # (몬스터 턴 처리)
-            for entity_id, health_comp in entity_manager.get_components_of_type(HealthComponent).items():
-                if entity_id == player_entity_id: continue 
+            elif key in "1234567890":
+                slot_num = 10 if key == '0' else int(key)
+                quickslot_comp = self.entity_manager.get_component(self.player_entity_id, QuickSlotComponent)
+                mana_comp = self.entity_manager.get_component(self.player_entity_id, ManaComponent)
                 
-                name_comp = entity_manager.get_component(entity_id, NameComponent)
-                if not name_comp or name_comp.name in ["Item", "Trap"]: continue 
+                if not quickslot_comp: return False
 
-                monster_pos = entity_manager.get_component(entity_id, PositionComponent)
-                monster_attack_comp = entity_manager.get_component(entity_id, AttackComponent)
-                
-                if not monster_pos or not monster_attack_comp or monster_pos.map_id != current_dungeon_level: continue
-                if health_comp.current_hp <= 0: continue 
+                if 1 <= slot_num <= 5: # 아이템 퀵슬롯
+                    item_id = quickslot_comp.item_slots.get(slot_num)
+                    if item_id:
+                        self.entity_manager.add_component(self.player_entity_id, ItemUseRequestComponent(entity_id=self.player_entity_id, item_id=item_id))
+                        player_action_taken = True
+                    else:
+                        self.ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
 
-                player_pos = entity_manager.get_component(player_entity_id, PositionComponent)
-                if not player_pos: continue
+                elif 6 <= slot_num <= 10: # 스킬 퀵슬롯
+                    skill_id = quickslot_comp.skill_slots.get(slot_num)
+                    if skill_id:
+                        skill_def = data_manager.get_skill_definition(skill_id)
+                        if skill_def and mana_comp and mana_comp.current_mp >= skill_def.cost_value:
+                            mana_comp.current_mp -= skill_def.cost_value
+                            if skill_def.skill_subtype == 'PROJECTILE':
+                                # TODO: use_projectile_skill 함수 Engine 클래스 메서드로 이동 또는 ProjectileSystem 통합
+                                self.ui_instance.add_message(f"'{skill_def.name}' 스킬 사용 (구현 예정)")
+                                player_action_taken = True
+                            else:
+                                self.ui_instance.add_message(f"'{skill_def.name}' 스킬은 아직 구현되지 않았습니다.")
+                            player_action_taken = True
+                        else:
+                            self.ui_instance.add_message("스킬을 사용하기 위한 MP가 부족하거나 스킬을 찾을 수 없습니다.")
+                    else:
+                        self.ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
 
-                # 공격 범위 체크 (1칸 이내)
-                if abs(player_pos.x - monster_pos.x) <= 1 and abs(player_pos.y - monster_pos.y) <= 1:
-                    entity_manager.add_component(player_entity_id, DamageRequestComponent(target_id=player_entity_id, amount=monster_attack_comp.power, attacker_id=entity_id))
-                else:
-                    # 몬스터 이동 AI (기존 로직 유지)
-                    monster_data = data_manager.get_monster_definition_by_name(name_comp.name)
-                    if not monster_data: continue
-                    current_move_type = monster_data.move_type 
+        return player_action_taken
 
-                    if current_move_type == 'STATIONARY':
-                        continue 
-                        
-                    rel_x = player_pos.x - monster_pos.x
-                    rel_y = player_pos.y - monster_pos.y
-
-                    target_dx, target_dy = 0, 0
-                    if current_move_type == 'AGGRESSIVE':
-                        if rel_x > 0: target_dx = 1
-                        elif rel_x < 0: target_dx = -1
-                        if rel_y > 0: target_dy = 1
-                        elif rel_y < 0: target_dy = -1
-                    elif current_move_type == 'COWARDLY':
-                        if rel_x > 0: target_dx = -1
-                        elif rel_x < 0: target_dx = 1
-                        if rel_y > 0: target_dy = -1
-                        elif rel_y < 0: target_dy = 1
-
-                    all_directions = [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (1, -1), (-1, 1), (1, 1)]
-                    random.shuffle(all_directions) 
-
-                    preferred_directions = []
-                    
-                    if current_move_type == 'AGGRESSIVE':
-                        for adx, ady in all_directions:
-                            if (adx == 0 or (adx > 0 and rel_x > 0) or (adx < 0 and rel_x < 0)) and \
-                               (ady == 0 or (ady > 0 and rel_y > 0) or (ady < 0 and rel_y < 0)):
-                                preferred_directions.append((adx, ady))
-                    elif current_move_type == 'COWARDLY':
-                        for adx, ady in all_directions:
-                            if (adx == 0 or (adx > 0 and rel_x < 0) or (adx < 0 and rel_x > 0)) and \
-                               (ady == 0 or (ady > 0 and rel_y < 0) or (ady < 0 and rel_y > 0)):
-                                preferred_directions.append((adx, ady))
-
-                    if not preferred_directions:
-                        preferred_directions = all_directions
-
-                    for dx, dy in preferred_directions:
-                        monster_pos = entity_manager.get_component(entity_id, PositionComponent)
-                        if monster_pos:
-                            entity_manager.add_component(entity_id, MoveRequestComponent(entity_id=entity_id, dx=dx, dy=dy))
-                            break 
+    def run_game_loop(self):
+        """메인 게임 루프입니다. 프레임 기반의 실시간으로 동작합니다."""
         
-    sys.stdout.write(ANSI.SHOW_CURSOR)
-    save_load_system.save_game(player_entity_id, current_dungeon_level, all_dungeon_maps, ui_instance) 
-    
-    game_over_comp = entity_manager.get_component(player_entity_id, GameOverComponent)
-    if game_over_comp:
-        return "WIN" if game_over_comp.win else "DEATH"
-    return "QUIT"
+        while True:
+            current_time = time.time()
+            dt = current_time - self.last_frame_time # 델타 타임 계산
+            self.last_frame_time = current_time
+
+            # 1. 입력 처리 (논블로킹)
+            key = None
+            if self.simulated_inputs:
+                key = self.simulated_inputs.pop(0) # 시뮬레이션된 입력 처리
+            else:
+                # sys.stdin의 논블로킹 읽기를 시도합니다.
+                # 이는 UNIX 계열 시스템에서만 동작하며, Windows에서는 다른 방법을 사용해야 합니다.
+                try:
+                    import select
+                    if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                        key = readchar.readkey() # 입력이 있으면 읽습니다.
+                except Exception:
+                    pass # 입력이 없거나 오류 발생 시 무시
+
+            self.handle_input(key)
+
+            # 2. ECS 업데이트 (매 프레임 실행)
+            # 모든 시스템을 델타 타임(dt)과 함께 업데이트합니다.
+            self.movement_system.update() 
+            self.collision_system.update()
+            self.interaction_system.update() 
+            self.projectile_system.update()
+            self.combat_system.update() 
+            self.ai_system.update(dt) # AISystem에 dt 전달
+            self.death_system.update() 
+            self.game_over_system.update()
+            self.inventory_system.update()
+            self.logging_system.update()
+
+            # 3. 렌더링 및 UI 업데이트 (항상 실행)
+            self.rendering_system.update()
+            self.ui_instance.refresh() # UI 렌더링 및 메시지 표시
+
+            # 게임 오버 상태 확인
+            game_over_comp = self.entity_manager.get_component(self.player_entity_id, GameOverComponent)
+            if game_over_comp:
+                message = "게임 승리!" if game_over_comp.win else "게임 오버!"
+                self.ui_instance.add_message(f"{message} 'q'를 눌러 종료하세요.")
+                self.ui_instance.refresh()
+                key = readchar.readchar() # 게임 오버 상태에서는 블로킹 입력 대기
+                if key == 'q':
+                    break
+                continue
+
+            # 프레임 속도 조절 (예: 초당 30프레임)
+            frame_time = time.time() - current_time
+            if frame_time < (1 / 30): # 목표 FPS (예: 30)
+                time.sleep((1 / 30) - frame_time)
+
+
+def run_game(rng_seed: Optional[int] = None):
+    """게임 인스턴스를 생성하고 실행합니다."""
+    engine = Engine(rng_seed)
+    engine.run_game_loop()
+
+if __name__ == '__main__':
+    # 시드 고정 또는 랜덤 시드 사용
+    RNG_SEED = int(time.time()) 
+    run_game(RNG_SEED)
