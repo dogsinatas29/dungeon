@@ -178,3 +178,15 @@ class ItemUseRequestComponent:
     entity_id: int
     item_id: str
     target_id: int = None # 사용 대상 (예: 회복 아이템의 경우 플레이어 자신)
+
+@dataclass
+class DoorComponent:
+    """문(Door)의 상태를 정의합니다."""
+    is_open: bool = False
+    is_locked: bool = True
+    key_id: str = "default_key" # 문을 열 수 있는 열쇠의 ID
+
+@dataclass
+class KeyComponent:
+    """열쇠(Key) 아이템의 속성을 정의합니다."""
+    key_id: str = "default_key" # 이 열쇠가 열 수 있는 문의 ID
