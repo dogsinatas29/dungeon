@@ -13,3 +13,4 @@
 *   **콘솔 UI/렌더링 로직 구현**: `dungeon/ui.py` 파일을 생성하여 콘솔 기반의 UI 및 렌더링 로직을 구현.
 *   **메인 게임 진입점 구현**: `main.py` 파일에 게임 초기화 및 메인 루프 실행 로직을 구현.
 *   **NameError 수정**: `dungeon/entity.py`에서 `Tuple`이 정의되지 않은 오류를 해결하기 위해 `typing` 모듈에서 `Tuple`을 임포트하도록 수정.
+*   **UI 통합 및 Renderer 제거**: `dungeon/engine.py`의 UI 인스턴스화와 임포트를 `dungeon.ui.ConsoleUI`를 사용하도록 변경하고, `dungeon/system.py`의 `RenderingSystem`을 `ConsoleUI`에 맞춰 데이터를 구성하고 `ConsoleUI.refresh`를 호출하도록 리팩토링했습니다. 또한, 더 이상 사용되지 않는 `dungeon/renderer.py` 파일을 삭제했습니다.

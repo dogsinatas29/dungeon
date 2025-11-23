@@ -15,7 +15,7 @@ logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
 from events.event_manager import event_manager
 from .map import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
-from .renderer import Renderer, ANSI
+from .ui import ConsoleUI # Renderer 대신 ConsoleUI 임포트
 from . import data_manager
 from .items import Item
 from .monster import Monster
@@ -41,8 +41,6 @@ except ImportError:
     print("Error: readchar not installed. Please install it using 'pip install readchar'")
     sys.exit(1)
 
-# UIManager는 UI 클래스의 인스턴스로 가정합니다.
-
 # RNG 클래스 (시드 관리용)
 class RNG:
     def __init__(self, seed: Optional[int] = None):
@@ -55,20 +53,20 @@ class RNG:
 class Engine:
     """게임의 메인 루프와 초기화를 담당하는 클래스입니다."""
 
-    def __init__(self, rng_seed: Optional[int] = None):
+    def __init__(self, ui_instance: ConsoleUI, player_name: str, rng_seed: Optional[int] = None):
         """엔진을 초기화합니다."""
         self.rng = RNG(rng_seed)
-        self.ui_instance = Renderer(MAP_WIDTH, MAP_HEIGHT) # Renderer 클래스 인스턴스 생성
+        self.ui_instance = ui_instance
         self.entity_manager = EntityManager()
         self.rng_seed = self.rng.seed
         
         # 플레이어 엔티티 생성
         self.player_entity_id = self.entity_manager.create_entity()
-        player_obj_template = Player("용사", hp=100, mp=50) # Player 클래스를 템플릿처럼 사용
+        player_obj_template = Player(player_name, hp=100, mp=50) # Player 클래스를 템플릿처럼 사용
         self.entity_manager.add_component(self.player_entity_id, PositionComponent(x=0, y=0, map_id=(1,0)))
         self.entity_manager.add_component(self.player_entity_id, MovableComponent())
         self.entity_manager.add_component(self.player_entity_id, HealthComponent(max_hp=player_obj_template.max_hp, current_hp=player_obj_template.hp))
-        self.entity_manager.add_component(self.player_entity_id, NameComponent(name="용사"))
+        self.entity_manager.add_component(self.player_entity_id, NameComponent(name=player_name))
         self.entity_manager.add_component(self.player_entity_id, AttackComponent(power=10, critical_chance=0.05, critical_damage_multiplier=1.5))
         self.entity_manager.add_component(self.player_entity_id, DefenseComponent(value=3))
         self.entity_manager.add_component(self.player_entity_id, ManaComponent(max_mp=player_obj_template.max_mp, current_mp=player_obj_template.mp))
