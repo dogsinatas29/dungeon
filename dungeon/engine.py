@@ -6,6 +6,7 @@ import math
 import random
 import re
 import logging
+import readchar # readchar 임포트 추가
 # tcod 대신 readchar를 사용하므로 tcod 관련 import는 제거
 
 # 로깅 설정
@@ -14,32 +15,24 @@ logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
 
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
 from events.event_manager import event_manager
-from .map import Map, MAP_WIDTH, MAP_HEIGHT
+from events.game_events import GameMessageEvent, InputReceivedEvent # GameMessageEvent와 InputReceivedEvent 임포트 추가
+from .map import DungeonMap
 from .ui import ConsoleUI # Renderer 대신 ConsoleUI 임포트
 from . import data_manager
 from .items import Item
 from .monster import Monster
 from .player import Player
 from .entity import EntityManager
-from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent
-from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem, AISystem, DeletionSystem
+from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent, ItemUseRequestComponent # ItemUseRequestComponent 임포트 추가
+from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem, AISystem, DeletionSystem, InputSystem # InputSystem 임포트 추가
 from .trap import Trap
+from .config import MAP_WIDTH, MAP_HEIGHT # config.py에서 MAP_WIDTH, MAP_HEIGHT 임포트
 from typing import Optional, Tuple, List # List 타입 힌트 추가
 
 # ----------------------------------------------------
 
 # --- Configuration ---
-MAP_WIDTH = 80
-MAP_HEIGHT = 45
 UI_HEIGHT = 5
-
-# 디버깅: readchar 임포트 확인
-try:
-    import readchar
-    import readchar.key
-except ImportError:
-    print("Error: readchar not installed. Please install it using 'pip install readchar'")
-    sys.exit(1)
 
 # RNG 클래스 (시드 관리용)
 class RNG:
@@ -65,11 +58,11 @@ class Engine:
         player_obj_template = Player(player_name, hp=100, mp=50) # Player 클래스를 템플릿처럼 사용
         self.entity_manager.add_component(self.player_entity_id, PositionComponent(x=0, y=0, map_id=(1,0)))
         self.entity_manager.add_component(self.player_entity_id, MovableComponent())
-        self.entity_manager.add_component(self.player_entity_id, HealthComponent(max_hp=player_obj_template.max_hp, current_hp=player_obj_template.hp))
+        self.entity_manager.add_component(self.player_entity_id, HealthComponent(max_hp=100, current_hp=100))
         self.entity_manager.add_component(self.player_entity_id, NameComponent(name=player_name))
         self.entity_manager.add_component(self.player_entity_id, AttackComponent(power=10, critical_chance=0.05, critical_damage_multiplier=1.5))
         self.entity_manager.add_component(self.player_entity_id, DefenseComponent(value=3))
-        self.entity_manager.add_component(self.player_entity_id, ManaComponent(max_mp=player_obj_template.max_mp, current_mp=player_obj_template.mp))
+        self.entity_manager.add_component(self.player_entity_id, ManaComponent(max_mp=50, current_mp=50))
         self.entity_manager.add_component(self.player_entity_id, InventoryComponent())
         self.entity_manager.add_component(self.player_entity_id, EquipmentComponent())
         self.entity_manager.add_component(self.player_entity_id, QuickSlotComponent())
@@ -90,6 +83,7 @@ class Engine:
         self.logging_system = LoggingSystem(self.entity_manager, self.ui_instance)
 
         # 시스템 초기화
+        self.input_system = InputSystem(self.entity_manager) # InputSystem 초기화
         self.movement_system = MovementSystem(self.entity_manager, self.dungeon_map, self.inventory_system)
         self.collision_system = CollisionSystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
         self.interaction_system = InteractionSystem(self.entity_manager, self.dungeon_map, self.player_entity_id, self.ui_instance)
@@ -100,6 +94,9 @@ class Engine:
         self.game_over_system = GameOverSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
         self.ai_system = AISystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
         self.deletion_system = DeletionSystem(self.entity_manager)
+        
+        # InputSystem 이벤트 구독
+        event_manager.subscribe(InputReceivedEvent, self._handle_input_event)
 
         # 초기 던전 엔티티 생성 및 플레이어 위치 설정
         self.dungeon_generation_system.generate_dungeon_entities(self.current_dungeon_level)
@@ -112,21 +109,18 @@ class Engine:
         # 초기 메시지
         event_manager.publish(GameMessageEvent(message="환영합니다! 던전에 오신 것을 환영합니다!"))
 
-        self.simulated_inputs: List[str] = []
         self.last_frame_time = time.time()
 
     def _get_or_create_map(self, level_tuple, all_dungeon_maps, ui_instance, item_definitions, monster_definitions, entity_manager: EntityManager):
         if level_tuple not in all_dungeon_maps:
-            new_map = DungeonMap(MAP_WIDTH, MAP_HEIGHT, self.rng, dungeon_level_tuple=level_tuple, ui_instance=ui_instance, entity_manager=entity_manager)
+            new_map = DungeonMap(MAP_WIDTH, MAP_HEIGHT, self.rng, dungeon_level_tuple=level_tuple)
             new_map.generate_map()
             all_dungeon_maps[level_tuple] = new_map
         return all_dungeon_maps[level_tuple]
 
-    def handle_input(self, key: Optional[str]) -> bool:
-        """키 입력을 처리하고, 플레이어의 행동이 있었는지 여부를 반환합니다."""
-        if key is None:
-            return False
-
+    def _handle_input_event(self, event: InputReceivedEvent) -> bool:
+        """InputReceivedEvent를 처리하고, 플레이어의 행동이 있었는지 여부를 반환합니다."""
+        key = event.key
         player_pos = self.entity_manager.get_component(self.player_entity_id, PositionComponent)
         if not player_pos: return False
 
@@ -245,21 +239,8 @@ class Engine:
             dt = current_time - self.last_frame_time # 델타 타임 계산
             self.last_frame_time = current_time
 
-            # 1. 입력 처리 (논블로킹)
-            key = None
-            if self.simulated_inputs:
-                key = self.simulated_inputs.pop(0) # 시뮬레이션된 입력 처리
-            else:
-                # sys.stdin의 논블로킹 읽기를 시도합니다.
-                # 이는 UNIX 계열 시스템에서만 동작하며, Windows에서는 다른 방법을 사용해야 합니다.
-                try:
-                    import select
-                    if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
-                        key = readchar.readkey() # 입력이 있으면 읽습니다.
-                except Exception:
-                    pass # 입력이 없거나 오류 발생 시 무시
-
-            self.handle_input(key)
+            # 1. 입력 처리 (InputSystem을 통해 이벤트를 발행)
+            self.input_system.update() # InputSystem이 InputReceivedEvent를 발행합니다.
 
             # 2. ECS 업데이트 (매 프레임 실행)
             # 모든 시스템을 델타 타임(dt)과 함께 업데이트합니다.
@@ -277,7 +258,7 @@ class Engine:
 
             # 3. 렌더링 및 UI 업데이트 (항상 실행)
             self.rendering_system.update()
-            self.ui_instance.refresh() # UI 렌더링 및 메시지 표시
+
 
             # 게임 오버 상태 확인
             game_over_comp = self.entity_manager.get_component(self.player_entity_id, GameOverComponent)
@@ -293,12 +274,13 @@ class Engine:
                 time.sleep((1 / 30) - frame_time)
 
 
-def run_game(rng_seed: Optional[int] = None):
+def run_game(player_name: str = "Hero", rng_seed: Optional[int] = None):
     """게임 인스턴스를 생성하고 실행합니다."""
-    engine = Engine(rng_seed)
+    ui_instance = ConsoleUI()
+    engine = Engine(ui_instance, player_name, rng_seed)
     engine.run_game_loop()
 
 if __name__ == '__main__':
     # 시드 고정 또는 랜덤 시드 사용
     RNG_SEED = int(time.time()) 
-    run_game(RNG_SEED)
+    run_game(player_name="TestPlayer", rng_seed=RNG_SEED)
