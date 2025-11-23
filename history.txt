@@ -6,3 +6,6 @@
 *   **시스템 전반의 메시지 발행 통일**: `Engine`, `ProjectileSystem`, `CombatSystem`, `DeathSystem`, `GameOverSystem`, `InteractionSystem`, `InventorySystem` 내의 `self.ui_instance.add_message` 호출을 `event_manager.publish(GameMessageEvent(message=...))`로 변경하여 모든 메시지 출력을 이벤트 시스템으로 통합.
 *   **Engine 초기화 수정**: `MovementSystem` 초기화 시 `InventorySystem` 인스턴스를 전달하도록 `engine.py` 수정.
 *   **Map 클래스 초기화 조정**: `dungeon/engine.py` 내 `_get_or_create_map` 메서드에서 `DungeonMap.generate_map` 호출 시 인자를 제거하여 맵 초기화 로직을 `DungeonMap` 클래스 내부로 통합.
+*   **UI/Renderer 클래스 재구조화**: `dungeon/renderer.py` 파일의 `UI` 클래스를 `Renderer`로 이름 변경. `Renderer` 클래스 생성자가 `map_display_width` 및 `map_display_height`를 인자로 받도록 수정하여 뷰포트 크기 설정. `_draw_map_and_entities` 메서드가 `self._buffer`에 직접 그리도록 변경.
+*   **Engine 클래스 UI 인스턴스화 수정**: `dungeon/engine.py`에서 `UIManager` 대신 `Renderer`를 임포트하고, `self.ui_instance`를 `Renderer(MAP_WIDTH, MAP_HEIGHT)`로 올바르게 인스턴스화하도록 수정.
+*   **디버그 메시지 제거**: `dungeon/renderer.py`의 `draw_game_screen` 및 `_draw_map_and_entities` 메서드에서 디버그용 `self.add_message` 호출 제거.

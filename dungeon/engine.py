@@ -15,7 +15,7 @@ logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
 from events.event_manager import event_manager
 from .map import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
-from .renderer import UI, ANSI
+from .renderer import Renderer, ANSI
 from . import data_manager
 from .items import Item
 from .monster import Monster
@@ -42,11 +42,6 @@ except ImportError:
     sys.exit(1)
 
 # UIManager는 UI 클래스의 인스턴스로 가정합니다.
-class UIManager(UI):
-    def __init__(self, console_width, ui_height):
-        super().__init__() # UI 클래스의 __init__ 호출
-        self.MAP_VIEWPORT_WIDTH = console_width # 임시 설정
-        self.MAP_VIEWPORT_HEIGHT = ui_height # 임시 설정 (맵 높이 아님)
 
 # RNG 클래스 (시드 관리용)
 class RNG:
@@ -63,7 +58,7 @@ class Engine:
     def __init__(self, rng_seed: Optional[int] = None):
         """엔진을 초기화합니다."""
         self.rng = RNG(rng_seed)
-        self.ui_instance = UIManager(MAP_WIDTH, MAP_HEIGHT) # UI 클래스 인스턴스 생성
+        self.ui_instance = Renderer(MAP_WIDTH, MAP_HEIGHT) # Renderer 클래스 인스턴스 생성
         self.entity_manager = EntityManager()
         self.rng_seed = self.rng.seed
         
