@@ -7,7 +7,6 @@ from typing import List, Tuple, Dict, Any, Optional
 # --- Component Imports ---
 from .component import PositionComponent, RenderComponent, ColliderComponent, DoorComponent, KeyComponent, InteractableComponent, NameComponent, HealthComponent, AIComponent, InventoryComponent # InventoryComponent 추가
 from .entity import EntityManager, make_door, make_key # make_door, make_key 임포트
-from .renderer import ANSI 
 from . import data_manager 
 
 # --- Tile Definitions ---

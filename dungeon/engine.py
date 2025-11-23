@@ -14,7 +14,7 @@ logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
 
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
 from events.event_manager import event_manager
-from .map import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
+from .map import Map, MAP_WIDTH, MAP_HEIGHT
 from .ui import ConsoleUI # Renderer 대신 ConsoleUI 임포트
 from . import data_manager
 from .items import Item
@@ -22,7 +22,7 @@ from .monster import Monster
 from .player import Player
 from .entity import EntityManager
 from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent
-from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem, AISystem
+from .system import MovementSystem, CollisionSystem, InteractionSystem, ProjectileSystem, CombatSystem, DungeonGenerationSystem, DeathSystem, GameOverSystem, InventorySystem, SaveLoadSystem, RenderingSystem, LoggingSystem, AISystem, DeletionSystem
 from .trap import Trap
 from typing import Optional, Tuple, List # List 타입 힌트 추가
 
@@ -85,7 +85,7 @@ class Engine:
         self.all_dungeon_maps = {}
         self.dungeon_map = self._get_or_create_map(self.current_dungeon_level, self.all_dungeon_maps, self.ui_instance, self.item_definitions, self.monster_definitions, self.entity_manager)
 
-        self.rendering_system = RenderingSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
+        self.rendering_system = RenderingSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id, engine=self)
         self.inventory_system = InventorySystem(self.entity_manager, self.ui_instance, self.item_definitions) # MovementSystem보다 먼저 초기화
         self.logging_system = LoggingSystem(self.entity_manager, self.ui_instance)
 
@@ -99,6 +99,7 @@ class Engine:
         self.death_system = DeathSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
         self.game_over_system = GameOverSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
         self.ai_system = AISystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
+        self.deletion_system = DeletionSystem(self.entity_manager)
 
         # 초기 던전 엔티티 생성 및 플레이어 위치 설정
         self.dungeon_generation_system.generate_dungeon_entities(self.current_dungeon_level)
@@ -272,6 +273,7 @@ class Engine:
             self.game_over_system.update()
             self.inventory_system.update()
             self.logging_system.update()
+            self.deletion_system.update()
 
             # 3. 렌더링 및 UI 업데이트 (항상 실행)
             self.rendering_system.update()
@@ -280,9 +282,6 @@ class Engine:
             # 게임 오버 상태 확인
             game_over_comp = self.entity_manager.get_component(self.player_entity_id, GameOverComponent)
             if game_over_comp:
-                message = "게임 승리!" if game_over_comp.win else "게임 오버!"
-                event_manager.publish(GameMessageEvent(message=f"{message} 'q'를 눌러 종료하세요."))
-                self.ui_instance.refresh()
                 key = readchar.readchar() # 게임 오버 상태에서는 블로킹 입력 대기
                 if key == 'q':
                     break
