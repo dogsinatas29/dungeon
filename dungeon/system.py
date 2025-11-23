@@ -1,5 +1,6 @@
 import sys # input() 사용을 위해 필요
 import readchar # readchar 임포트 추가
+import logging # logging 임포트 추가
 from events.event_manager import event_manager
 from events.game_events import PlayerMovedEvent, GameMessageEvent, DoorOpenedEvent, DoorClosedEvent, KeyUsedEvent, InputReceivedEvent # 추가된 이벤트 임포트
 from dungeon.utils.collision import calculate_bounding_box, is_aabb_colliding, check_entity_collision, get_colliding_tile_coords
