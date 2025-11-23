@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, List, Tuple
 
 # 1. 위치 및 외형
 @dataclass
