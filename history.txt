@@ -1,15 +1,4 @@
-### [2025년 11월 23일]
-*   **이벤트 시스템 확장**: `events/game_events.py`에 `DoorOpenedEvent`, `DoorClosedEvent`, `KeyUsedEvent`, `GameMessageEvent` 추가.
-*   **MovementSystem 수정**: 문의 잠금 해제 및 열쇠 사용 로직에 `InventorySystem` 메서드를 활용하고, 문 관련 이벤트(`DoorOpenedEvent`, `DoorClosedEvent`, `KeyUsedEvent`) 및 메시지 이벤트(`GameMessageEvent`)를 발행하도록 변경.
-*   **InventorySystem 기능 추가**: `has_item` 및 `remove_item` 메서드를 추가하여 인벤토리 내 아이템 확인 및 제거 기능 구현.
-*   **LoggingSystem 개선**: `GameMessageEvent`, `DoorOpenedEvent`, `DoorClosedEvent`, `KeyUsedEvent`를 구독하고 처리하여 중앙 집중식 메시지 로깅 구현.
-*   **시스템 전반의 메시지 발행 통일**: `Engine`, `ProjectileSystem`, `CombatSystem`, `DeathSystem`, `GameOverSystem`, `InteractionSystem`, `InventorySystem` 내의 `self.ui_instance.add_message` 호출을 `event_manager.publish(GameMessageEvent(message=...))`로 변경하여 모든 메시지 출력을 이벤트 시스템으로 통합.
-*   **Engine 초기화 수정**: `MovementSystem` 초기화 시 `InventorySystem` 인스턴스를 전달하도록 `engine.py` 수정.
-*   **Map 클래스 초기화 조정**: `dungeon/engine.py` 내 `_get_or_create_map` 메서드에서 `DungeonMap.generate_map` 호출 시 인자를 제거하여 맵 초기화 로직을 `DungeonMap` 클래스 내부로 통합.
-*   **UI/Renderer 클래스 재구조화**: `dungeon/renderer.py` 파일의 `UI` 클래스를 `Renderer`로 이름 변경. `Renderer` 클래스 생성자가 `map_display_width` 및 `map_display_height`를 인자로 받도록 수정하여 뷰포트 크기 설정. `_draw_map_and_entities` 메서드가 `self._buffer`에 직접 그리도록 변경.
-*   **Engine 클래스 UI 인스턴스화 수정**: `dungeon/engine.py`에서 `UIManager` 대신 `Renderer`를 임포트하고, `self.ui_instance`를 `Renderer(MAP_WIDTH, MAP_HEIGHT)`로 올바르게 인스턴스화하도록 수정.
-*   **디버그 메시지 제거**: `dungeon/renderer.py`의 `draw_game_screen` 및 `_draw_map_and_entities` 메서드에서 디버그용 `self.add_message` 호출 제거.
-*   **메인 진입점 파일 생성**: `main.py`를 생성하여 게임 엔진을 호출하고 게임을 실행하는 진입점을 만듦.
-*   **콘솔 UI/렌더링 로직 구현**: `dungeon/ui.py` 파일을 생성하여 콘솔 기반의 UI 및 렌더링 로직을 구현.
-*   **메인 게임 진입점 구현**: `main.py` 파일에 게임 초기화 및 메인 루프 실행 로직을 구현.
-*   **NameError 수정 및 ECS 정리**: `dungeon/entity.py`에서 `Tuple` 임포트 오류를 수정하고, `dungeon/component.py`에서 `List` 타입을 임포트하도록 추가. `dungeon/engine.py`에서 `ConsoleUI`를 사용하도록 임포트 및 생성자 매개변수를 업데이트하고, `dungeon/system.py`의 `RenderingSystem`을 `ConsoleUI.refresh`에 맞게 리팩토링했습니다. 또한, 더 이상 사용되지 않는 `dungeon/renderer.py` 파일을 삭제했습니다.
+### [2025년 11월 24일]
+*   **UI 입력 가이드 개선**: `dungeon/ui.py` 파일에서 메인 메뉴의 플레이어 이름 입력 프롬프트에서 불필요한 `(Enter)` 가이드를 제거했습니다.
+*   **실시간 입력 반영**: `dungeon/ui.py` 파일의 `render_all` 함수 내 게임 조작 가이드를 실시간 키 입력 방식에 맞춰 WASD, 방향키, HJKL, YUBN 등 다양한 이동 옵션과 인벤토리([I]) 단축키를 명시하도록 업데이트했습니다.
+*   **엔진 입력 처리 확인**: `dungeon/engine.py`는 이미 `readchar` 라이브러리를 사용하여 실시간 키 입력을 처리하고 있으므로 별도 수정 사항이 없습니다.

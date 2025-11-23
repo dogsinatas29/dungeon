@@ -12,7 +12,7 @@ COLOR_MAP = {
     "blue": "\033[94m",
     "gold": "\033[33m",
     "brown": "\033[38;5;130m", # 갈색 (Door)
-    "dark_grey": "\033[90m",  # 어두운 회색 (Floor)
+    "dark_grey": "\033[90m", # 어두운 회색 (Floor)
     "reset": "\033[0m"
 }
 
@@ -22,10 +22,15 @@ class ConsoleUI:
     def __init__(self):
         # 화면을 지우는 명령 설정 ('nt'는 윈도우, 나머지는 유닉스 계열)
         self.clear_command = 'cls' if os.name == 'nt' else 'clear'
+        self.messages = [] # 메시지 로그를 저장할 리스트
 
     def _clear_screen(self):
         """화면을 깨끗하게 지웁니다."""
         os.system(self.clear_command)
+
+    def add_message(self, message: str):
+        """메시지 로그에 새로운 메시지를 추가합니다."""
+        self.messages.append(message)
 
     def show_main_menu(self):
         """게임 시작 메뉴를 표시하고 플레이어 이름을 입력받습니다."""
@@ -37,47 +42,54 @@ class ConsoleUI:
         print("  몬스터(M)에게 이동하면 전투가 시작됩니다.")
         print("  키(k)를 찾아서 잠긴 문(+)을 여세요.\n")
         
-        name = input("  당신의 이름은 무엇입니까? (Enter) > ")
+        name = input("  당신의 이름은 무엇입니까? > ")
         return name if name else "Hero"
 
     def show_game_over_screen(self, message):
         """게임 종료 화면을 표시합니다."""
         self._clear_screen()
         print(f"{COLOR_MAP['red']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['red']}       G A M E   O V E R           {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['red']}        G A M E  O V E R           {COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['red']}==================================={COLOR_MAP['reset']}")
-        print(f"\n   {message}\n")
-        print("   콘솔 창을 닫아 게임을 종료하십시오.")
+        print(f"\n    {message}\n")
+        print("    콘솔 창을 닫아 게임을 종료하십시오.")
         # 입력이 없으면 계속 대기할 수 있으므로, 종료를 위해 sys.exit()을 사용하지 않습니다.
         # 사용자가 수동으로 콘솔을 닫도록 안내합니다.
         
-    def refresh(self, map_data, messages, player_stats):
+    def render_all(self, map_data, player_stats):
         """
         맵, 로그, 상태를 포함한 전체 화면을 렌더링합니다.
         
         Args:
             map_data (str): 렌더링할 맵 문자열 (RendererSystem에서 생성)
-            messages (list[str]): 최근 메시지 로그
             player_stats (dict): 플레이어 상태 정보
         """
         self._clear_screen()
         
         # 1. 맵 렌더링
-        print(f"{COLOR_MAP['white']}--- 던전 맵 ---"{COLOR_MAP['reset']})
-        print(map_data)
+        # 이 줄의 닫는 따옴표(")를 추가하여 SyntaxError를 해결했습니다.
+        print(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}")
+
+        # map_data는 이제 2D 리스트이므로 직접 출력하는 대신, 각 타일을 렌더링해야 합니다.
+        for y_idx, row in enumerate(map_data):
+            rendered_row = []
+            for x_idx, (char, color) in enumerate(row):
+                rendered_row.append(f"{COLOR_MAP[color]}{char}")
+            print("".join(rendered_row) + f"{COLOR_MAP['reset']}")
+
         
         # 2. 플레이어 상태
-        print(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---"{COLOR_MAP['reset']})
+        print(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}")
         print(f" 이름: {player_stats.get('name', 'N/A')}")
         print(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']} | 공격력: {player_stats.get('attack', 0)} | 방어력: {player_stats.get('defense', 0)}")
-        print(f" 열쇠: {", ".join(player_stats.get('inventory', ['없음']))}")
+        print(f" 열쇠: {', '.join(player_stats.get('inventory', ['없음']))}")
         
         # 3. 메시지 로그
-        print(f"\n{COLOR_MAP['blue']}--- 로그 ---"{COLOR_MAP['reset']})
+        print(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}")
         # 최신 메시지 5개만 출력
-        for msg in messages[-5:]:
+        for msg in self.messages[-5:]:
             print(f"> {msg}")
         
         # 4. 입력 가이드
-        print(f"\n{COLOR_MAP['green']}[W/A/S/D] 이동 | [Q] 종료{COLOR_MAP['reset']}")
+        print(f"\n{COLOR_MAP['green']}[이동] WASD, 방향키, HJKL, YUBN | [Q] 종료 | [I] 인벤토리{COLOR_MAP['reset']}")
         sys.stdout.flush() # 출력 버퍼 강제 비우기
