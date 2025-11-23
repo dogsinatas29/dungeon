@@ -1,4 +1,5 @@
 import sys # input() 사용을 위해 필요
+import readchar # readchar 임포트 추가
 from events.event_manager import event_manager
 from events.game_events import PlayerMovedEvent, GameMessageEvent, DoorOpenedEvent, DoorClosedEvent, KeyUsedEvent, InputReceivedEvent # 추가된 이벤트 임포트
 from dungeon.utils.collision import calculate_bounding_box, is_aabb_colliding, check_entity_collision, get_colliding_tile_coords
@@ -29,7 +30,7 @@ class InputSystem(System): # System 상속
     def update(self):
         # 렌더링 시스템이 화면을 그린 후, 사용자 입력을 대기합니다.
         # 이 방식은 게임을 턴 기반으로 만듭니다.
-        key = input("") # 사용자 입력 대기 (블로킹 호출)
+        key = readchar.readchar() # 사용자 입력 대기 (블로킹 호출)
         if key: # 키 입력이 있으면 이벤트를 발행합니다.
             logging.debug(f"InputSystem: Key detected - {key}")
             event_manager.publish(InputReceivedEvent(key=key))
