@@ -1,18 +1,8 @@
-2025년 11월 22일 - 이벤트 시스템 통합:
-- `events` 디렉토리와 `events/event_manager.py`, `events/game_events.py` 파일 생성 및 구현.
-- `dungeon/system.py`의 `CollisionSystem`을 수정하여 `PlayerMovedEvent`를 발행하도록 함.
-- `dungeon/system.py`에 `LoggingSystem`을 추가하여 `PlayerMovedEvent`를 구독하고 몬스터 근접 메시지를 처리하도록 함.
-- `dungeon/system.py`의 `RenderingSystem`을 수정하여 `PlayerMovedEvent`를 구독하고 카메라 계산 및 기본 UI 상태로 렌더링을 처리하도록 함.
-- `dungeon/engine.py`에서 시스템 초기화를 업데이트하고, 전역 UI 상태 변수를 제거했으며, 카메라 계산 및 직접적인 `rendering_system.update()` 호출을 제거하고, `collision_result` 메시지 처리를 조정함.
-- `events/event_manager.py`의 싱글톤 구현을 `_initialized` 플래그를 사용하여 더욱 견고하게 개선함.
-- `events/game_events.py`의 `PlayerMovedEvent`에 `entity_id` 속성을 추가.
-- `dungeon/system.py`의 `CollisionSystem`에서 `PlayerMovedEvent` 발행 시 `entity_id`를 포함하도록 수정.
-- `dungeon/system.py`에 `System` 기본 클래스 정의를 추가.
-- `dungeon/system.py`의 `LoggingSystem`을 `System`을 상속하도록 변경하고, 생성자 및 `handle_player_moved_event` 로직을 업데이트하여 단순화된 플레이어 이동 메시지만 로깅하도록 수정.
-- [통합] `dungeon/engine.py`에 `LoggingSystem` 초기화 및 통합 완료.
-- `dungeon/component.py`에 `ColliderComponent`를 추가하고 중복된 `ItemUseRequestComponent` 정의를 제거.
-- `dungeon/utils/collision.py` 파일을 생성하여 AABB 충돌 검사 및 관련 유틸리티 함수들을 정의.
-- `dungeon/system.py`의 `CollisionSystem.update()`를 수정하여 `dungeon/utils/collision.py`의 유틸리티 함수들을 활용하여 일반화된 엔티티 충돌 감지를 수행하도록 변경.
-- `dungeon/engine.py`에서 플레이어 및 몬스터 엔티티 생성 시 `ColliderComponent`를 추가.
-- `dungeon/system.py`의 `CombatSystem` 생성자에서 `dungeon_map` 인자를 제거.
-- `dungeon/engine.py`에서 `CombatSystem` 초기화 시 `dungeon_map` 인자를 제거하도록 업데이트.
+### [2025년 11월 23일]
+*   **이벤트 시스템 확장**: `events/game_events.py`에 `DoorOpenedEvent`, `DoorClosedEvent`, `KeyUsedEvent`, `GameMessageEvent` 추가.
+*   **MovementSystem 수정**: 문의 잠금 해제 및 열쇠 사용 로직에 `InventorySystem` 메서드를 활용하고, 문 관련 이벤트(`DoorOpenedEvent`, `DoorClosedEvent`, `KeyUsedEvent`) 및 메시지 이벤트(`GameMessageEvent`)를 발행하도록 변경.
+*   **InventorySystem 기능 추가**: `has_item` 및 `remove_item` 메서드를 추가하여 인벤토리 내 아이템 확인 및 제거 기능 구현.
+*   **LoggingSystem 개선**: `GameMessageEvent`, `DoorOpenedEvent`, `DoorClosedEvent`, `KeyUsedEvent`를 구독하고 처리하여 중앙 집중식 메시지 로깅 구현.
+*   **시스템 전반의 메시지 발행 통일**: `Engine`, `ProjectileSystem`, `CombatSystem`, `DeathSystem`, `GameOverSystem`, `InteractionSystem`, `InventorySystem` 내의 `self.ui_instance.add_message` 호출을 `event_manager.publish(GameMessageEvent(message=...))`로 변경하여 모든 메시지 출력을 이벤트 시스템으로 통합.
+*   **Engine 초기화 수정**: `MovementSystem` 초기화 시 `InventorySystem` 인스턴스를 전달하도록 `engine.py` 수정.
+*   **Map 클래스 초기화 조정**: `dungeon/engine.py` 내 `_get_or_create_map` 메서드에서 `DungeonMap.generate_map` 호출 시 인자를 제거하여 맵 초기화 로직을 `DungeonMap` 클래스 내부로 통합.

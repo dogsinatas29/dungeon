@@ -14,7 +14,7 @@ logging.basicConfig(filename='game_debug.log', level=logging.DEBUG,
 
 # --- 필요한 모듈 및 클래스 임포트 (기존 코드 기반) ---
 from events.event_manager import event_manager
-from .map_manager import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
+from .map import DungeonMap, EXIT_NORMAL, EXIT_LOCKED, ITEM_TILE, ROOM_ENTRANCE
 from .renderer import UI, ANSI
 from . import data_manager
 from .items import Item
@@ -90,10 +90,14 @@ class Engine:
         # 던전 맵 생성 (초기 맵)
         self.current_dungeon_level = (1, 0)
         self.all_dungeon_maps = {}
-        self.dungeon_map = self._get_or_create_map(self.current_dungeon_level, self.all_dungeon_maps, self.ui_instance, self.item_definitions, self.monster_definitions)
+        self.dungeon_map = self._get_or_create_map(self.current_dungeon_level, self.all_dungeon_maps, self.ui_instance, self.item_definitions, self.monster_definitions, self.entity_manager)
+
+        self.rendering_system = RenderingSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
+        self.inventory_system = InventorySystem(self.entity_manager, self.ui_instance, self.item_definitions) # MovementSystem보다 먼저 초기화
+        self.logging_system = LoggingSystem(self.entity_manager, self.ui_instance)
 
         # 시스템 초기화
-        self.movement_system = MovementSystem(self.entity_manager, self.dungeon_map)
+        self.movement_system = MovementSystem(self.entity_manager, self.dungeon_map, self.inventory_system)
         self.collision_system = CollisionSystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
         self.interaction_system = InteractionSystem(self.entity_manager, self.dungeon_map, self.player_entity_id, self.ui_instance)
         self.projectile_system = ProjectileSystem(self.entity_manager, self.dungeon_map, self.ui_instance)
@@ -102,9 +106,6 @@ class Engine:
         self.death_system = DeathSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
         self.game_over_system = GameOverSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
         self.ai_system = AISystem(self.entity_manager, self.dungeon_map, self.player_entity_id)
-        self.rendering_system = RenderingSystem(self.entity_manager, self.dungeon_map, self.ui_instance, self.player_entity_id)
-        self.inventory_system = InventorySystem(self.entity_manager, self.ui_instance, self.item_definitions)
-        self.logging_system = LoggingSystem(self.entity_manager, self.ui_instance)
 
         # 초기 던전 엔티티 생성 및 플레이어 위치 설정
         self.dungeon_generation_system.generate_dungeon_entities(self.current_dungeon_level)
@@ -115,15 +116,15 @@ class Engine:
             self.dungeon_map.reveal_tiles(player_pos_comp.x, player_pos_comp.y)
 
         # 초기 메시지
-        self.ui_instance.add_message("환영합니다! 던전에 오신 것을 환영합니다!")
+        event_manager.publish(GameMessageEvent(message="환영합니다! 던전에 오신 것을 환영합니다!"))
 
         self.simulated_inputs: List[str] = []
         self.last_frame_time = time.time()
 
-    def _get_or_create_map(self, level_tuple, all_dungeon_maps, ui_instance, item_definitions, monster_definitions):
+    def _get_or_create_map(self, level_tuple, all_dungeon_maps, ui_instance, item_definitions, monster_definitions, entity_manager: EntityManager):
         if level_tuple not in all_dungeon_maps:
-            new_map = DungeonMap(MAP_WIDTH, MAP_HEIGHT, self.rng, level=level_tuple)
-            new_map.generate_map(level_tuple, ui_instance)
+            new_map = DungeonMap(MAP_WIDTH, MAP_HEIGHT, self.rng, dungeon_level_tuple=level_tuple, ui_instance=ui_instance, entity_manager=entity_manager)
+            new_map.generate_map()
             all_dungeon_maps[level_tuple] = new_map
         return all_dungeon_maps[level_tuple]
 
@@ -142,9 +143,9 @@ class Engine:
 
         if inventory_open:
             if key == readchar.key.UP:
-                self.ui_instance.add_message("인벤토리: 위")
+                event_manager.publish(GameMessageEvent(message="인벤토리: 위"))
             elif key == readchar.key.DOWN:
-                self.ui_instance.add_message("인벤토리: 아래")
+                event_manager.publish(GameMessageEvent(message="인벤토리: 아래"))
             elif key == 'i':
                 inventory_open = False
             player_action_taken = False
@@ -182,28 +183,28 @@ class Engine:
                             amount=player_attack_comp.power, 
                             attacker_id=self.player_entity_id
                         ))
-                        self.ui_instance.add_message(f"플레이어가 {self.entity_manager.get_component(target_monster_entity_id, NameComponent).name}을(를) 공격했습니다!")
+                        event_manager.publish(GameMessageEvent(message=f"플레이어가 {self.entity_manager.get_component(target_monster_entity_id, NameComponent).name}을(를) 공격했습니다!"))
                         player_action_taken = True
                 else:
                     self.entity_manager.add_component(self.player_entity_id, MoveRequestComponent(entity_id=self.player_entity_id, dx=dx, dy=dy))
                     player_action_taken = True
                     
             elif key == '.': # 대기
-                self.ui_instance.add_message("플레이어가 대기합니다.")
+                event_manager.publish(GameMessageEvent(message="플레이어가 대기합니다."))
                 player_action_taken = True
 
             elif key == 'i': # 인벤토리 열기 (토글)
                 inventory_open = True
-                self.ui_instance.add_message("인벤토리를 엽니다.")
+                event_manager.publish(GameMessageEvent(message="인벤토리를 엽니다."))
                 player_action_taken = False
             
             elif key == 'q': # 게임 종료
-                self.ui_instance.add_message("게임을 종료합니다.")
+                event_manager.publish(GameMessageEvent(message="게임을 종료합니다."))
                 sys.exit(0)
 
             elif key == 'r': # 아이템 루팅
                 message, looted = self.inventory_system.loot_items(self.player_entity_id, self.dungeon_map)
-                self.ui_instance.add_message(message)
+                # self.ui_instance.add_message(message) # loot_items 내부에서 메시지를 발행하므로 중복 제거
                 if looted:
                     player_action_taken = True
 
@@ -220,7 +221,7 @@ class Engine:
                         self.entity_manager.add_component(self.player_entity_id, ItemUseRequestComponent(entity_id=self.player_entity_id, item_id=item_id))
                         player_action_taken = True
                     else:
-                        self.ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
+                        event_manager.publish(GameMessageEvent(message=f"퀵슬롯 {slot_num}번이 비어있습니다."))
 
                 elif 6 <= slot_num <= 10: # 스킬 퀵슬롯
                     skill_id = quickslot_comp.skill_slots.get(slot_num)
@@ -230,15 +231,15 @@ class Engine:
                             mana_comp.current_mp -= skill_def.cost_value
                             if skill_def.skill_subtype == 'PROJECTILE':
                                 # TODO: use_projectile_skill 함수 Engine 클래스 메서드로 이동 또는 ProjectileSystem 통합
-                                self.ui_instance.add_message(f"'{skill_def.name}' 스킬 사용 (구현 예정)")
+                                event_manager.publish(GameMessageEvent(message=f"'{skill_def.name}' 스킬 사용 (구현 예정)"))
                                 player_action_taken = True
                             else:
-                                self.ui_instance.add_message(f"'{skill_def.name}' 스킬은 아직 구현되지 않았습니다.")
+                                event_manager.publish(GameMessageEvent(message=f"'{skill_def.name}' 스킬은 아직 구현되지 않았습니다."))
                             player_action_taken = True
                         else:
-                            self.ui_instance.add_message("스킬을 사용하기 위한 MP가 부족하거나 스킬을 찾을 수 없습니다.")
+                            event_manager.publish(GameMessageEvent(message="스킬을 사용하기 위한 MP가 부족하거나 스킬을 찾을 수 없습니다."))
                     else:
-                        self.ui_instance.add_message(f"퀵슬롯 {slot_num}번이 비어있습니다.")
+                        event_manager.publish(GameMessageEvent(message=f"퀵슬롯 {slot_num}번이 비어있습니다."))
 
         return player_action_taken
 
@@ -287,7 +288,7 @@ class Engine:
             game_over_comp = self.entity_manager.get_component(self.player_entity_id, GameOverComponent)
             if game_over_comp:
                 message = "게임 승리!" if game_over_comp.win else "게임 오버!"
-                self.ui_instance.add_message(f"{message} 'q'를 눌러 종료하세요.")
+                event_manager.publish(GameMessageEvent(message=f"{message} 'q'를 눌러 종료하세요."))
                 self.ui_instance.refresh()
                 key = readchar.readchar() # 게임 오버 상태에서는 블로킹 입력 대기
                 if key == 'q':
