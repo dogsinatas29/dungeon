@@ -2,3 +2,4 @@
 *   **UI 입력 가이드 개선**: `dungeon/ui.py` 파일에서 메인 메뉴의 플레이어 이름 입력 프롬프트에서 불필요한 `(Enter)` 가이드를 제거했습니다.
 *   **실시간 입력 반영**: `dungeon/ui.py` 파일의 `render_all` 함수 내 게임 조작 가이드를 실시간 키 입력 방식에 맞춰 WASD, 방향키, HJKL, YUBN 등 다양한 이동 옵션과 인벤토리([I]) 단축키를 명시하도록 업데이트했습니다.
 *   **엔진 입력 처리 확인**: `dungeon/engine.py`는 이미 `readchar` 라이브러리를 사용하여 실시간 키 입력을 처리하고 있으므로 별도 수정 사항이 없습니다.
+*   **NameError 수정**: `dungeon/system.py` 파일에 `DungeonMap` 클래스를 임포트하여 `MovementSystem` 초기화 시 `NameError`가 발생하지 않도록 수정했습니다.

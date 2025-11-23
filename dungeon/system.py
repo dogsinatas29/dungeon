@@ -1,17 +1,13 @@
-from .map import DungeonMap # dungeon/map.py에서 DungeonMap 임포트
-from .player import Player 
-from .monster import Monster 
-from . import data_manager
-from .items import Item 
-import random 
-import logging 
-import math 
+import sys # input() 사용을 위해 필요
 from events.event_manager import event_manager
-from events.game_events import PlayerMovedEvent, GameMessageEvent, DoorOpenedEvent, DoorClosedEvent, KeyUsedEvent # 추가된 이벤트 임포트
+from events.game_events import PlayerMovedEvent, GameMessageEvent, DoorOpenedEvent, DoorClosedEvent, KeyUsedEvent, InputReceivedEvent # 추가된 이벤트 임포트
 from dungeon.utils.collision import calculate_bounding_box, is_aabb_colliding, check_entity_collision, get_colliding_tile_coords
 from .ui import ConsoleUI # ConsoleUI 임포트
+from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent, ItemUseRequestComponent, DesiredPositionComponent, DoorComponent, KeyComponent # 모든 컴포넌트 임포트
+from .entity import EntityManager
+from .map import DungeonMap # DungeonMap 임포트 추가 # EntityManager 임포트
 
-# TILE CONSTANTS (entity.py 또는 constants.py에서 가져올 수 있지만, 여기서는 임시로 정의)
+# TODO: DOOR_CLOSED_CHAR, DOOR_OPEN_CHAR는 constants.py로 이동
 DOOR_CLOSED_CHAR = '+'
 DOOR_OPEN_CHAR = '/'
 
@@ -22,8 +18,23 @@ class System:
     def update(self):
         pass
 
+class InputSystem(System): # System 상속
+    """
+    사용자의 입력을 감지하고 InputReceivedEvent를 발행하는 시스템입니다.
+    """
+    def __init__(self, entity_manager: EntityManager):
+        super().__init__(entity_manager)
+
+    def update(self):
+        # 렌더링 시스템이 화면을 그린 후, 사용자 입력을 대기합니다.
+        # 이 방식은 게임을 턴 기반으로 만듭니다.
+        key = input("") # 사용자 입력 대기 (블로킹 호출)
+        if key: # 키 입력이 있으면 이벤트를 발행합니다.
+            logging.debug(f"InputSystem: Key detected - {key}")
+            event_manager.publish(InputReceivedEvent(key=key))
+
 class MovementSystem:
-    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, inventory_system: InventorySystem):
+    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, inventory_system: 'InventorySystem'):
         self.entity_manager = entity_manager
         self.dungeon_map = dungeon_map
         self.inventory_system = inventory_system
@@ -123,11 +134,11 @@ class MovementSystem:
                             break
 
                 if can_move:
-                    current_pos.x = new_x
-                    current_pos.y = new_y
-                    self.dungeon_map.reveal_tiles(current_pos.x, current_pos.y)
+                    position.x = new_x
+                    position.y = new_y
+                    self.dungeon_map.reveal_tiles(position.x, position.y)
 
-                    if entity_id == self.player_entity_id:
+                    if entity_id == player_entity_id:
                         encountered_monster_ids = []
                         # TODO: 맵의 몬스터 목록 대신 entity_manager에서 몬스터 엔티티를 찾아야 함
                         # 현재는 self.dungeon_map.monsters를 사용하므로 이 부분은 유지
@@ -174,7 +185,7 @@ class CollisionSystem:
             # 1. 맵 경계 및 타일(벽) 충돌 검사 (ColliderComponent 활용)
             colliding_tile_coords = get_colliding_tile_coords(new_x, new_y, actual_moving_collider)
             for tx, ty in colliding_tile_coords:
-                if not self.dungeon_map.is_valid_tile(tx, ty) or self.dungeon_map.is_wall(tx, ty):
+                if not self.dungeon_map.is_valid_tile(tx, ty) or self.dungeon_map.map_data[ty][tx] == WALL_CHAR: # is_wall 대신 map_data 참조
                     can_move = False
                     collision_result = "벽으로 막혀있습니다."
                     break
@@ -186,8 +197,8 @@ class CollisionSystem:
                         continue # 자기 자신 또는 다른 맵의 엔티티는 무시
 
                     other_collider = self.entity_manager.get_component(other_entity_id, ColliderComponent)
-                    if not other_collider or not other_collider.is_solid:
-                        continue # ColliderComponent가 없거나 통과 가능한 엔티티는 무시
+                    if not other_collider or not other_collider.is_solid: # ColliderComponent가 없거나 통과 가능한 엔티티는 무시
+                        continue 
 
                     # 충돌 유틸리티 함수를 사용하여 목표 위치에서의 충돌을 검사합니다.
                     if check_entity_collision(current_pos, desired_pos, actual_moving_collider, other_pos_comp, other_collider):
@@ -215,7 +226,7 @@ class CollisionSystem:
                 # 이동하려는 엔티티의 ColliderComponent를 사용하여 겹치는 타일 확인
                 # 여기서는 SimplifiedCollisionCheck 함수를 사용하여 타일 중심 충돌을 검사할 수 있습니다.
                 # 현재는 단순히 목표 타일에 함정이 있는지 확인하는 기존 로직을 유지
-                for trap in self.dungeon_map.traps:
+                for trap in self.dungeon_map.traps: # self.dungeon_map.traps는 DungeonMap에서 제거되었으므로 수정 필요
                     # 함정도 PositionComponent와 ColliderComponent를 가질 수 있다면 AABB 충돌 검사로 변경 가능
                     # 현재는 함정의 (x, y)가 단일 타일 위치를 나타낸다고 가정
                     if not trap.triggered and trap.x == new_x and trap.y == new_y:
@@ -232,12 +243,13 @@ class CollisionSystem:
                 if entity_id == self.player_entity_id:
                     encountered_monster_ids = []
                     # 새 위치에서 몬스터 확인
-                    for monster_obj in self.dungeon_map.monsters:
-                        monster_pos = self.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
-                        if monster_pos and monster_pos.x == new_x and monster_pos.y == new_y and not monster_obj.dead:
-                            name_comp = self.entity_manager.get_component(monster_obj.entity_id, NameComponent)
-                            if name_comp:
-                                encountered_monster_ids.append(name_comp.name) 
+                    # self.dungeon_map.monsters는 DungeonMap에서 제거되었으므로 수정 필요
+                    # for monster_obj in self.dungeon_map.monsters:
+                    #     monster_pos = self.entity_manager.get_component(monster_obj.entity_id, PositionComponent)
+                    #     if monster_pos and monster_pos.x == new_x and monster_pos.y == new_y and not monster_obj.dead:
+                    #         name_comp = self.entity_manager.get_component(monster_obj.entity_id, NameComponent)
+                    #         if name_comp:
+                    #             encountered_monster_ids.append(name_comp.name)
 
                     event_manager.publish(PlayerMovedEvent(
                         entity_id=entity_id, # 플레이어 엔티티 ID 추가
@@ -292,16 +304,9 @@ class InteractionSystem:
 
                 elif interactable_comp.interaction_type == 'ROOM_ENTRANCE':
                     # 방 이동 로직 (engine.py에서 가져옴)
-                    current_floor, current_room_index = self.dungeon_map.floor, self.dungeon_map.room_index
-                    room_info = self.dungeon_map.room_entrances.get((player_pos.x, player_pos.y))
-                    if room_info:
-                        next_room_index = room_info['id']
-                        is_boss_room = room_info['is_boss']
-                        # last_entrance_position[current_dungeon_level] = (player.x, player.y) # 현재 맵의 입구 위치 저장
-                        # TODO: 이 부분은 engine에서 처리해야 함 (맵 변경)
-                        event_manager.publish(GameMessageEvent(message=f"{current_floor}층 {next_room_index}번 방으로 이동했습니다. (실제 이동은 engine에서)"))
-                    else:
-                        event_manager.publish(GameMessageEvent(message="알 수 없는 방 입구입니다."))
+                    # self.dungeon_map.floor, self.dungeon_map.room_index는 DungeonMap에서 제거되었으므로 수정 필요
+                    # self.dungeon_map.room_entrances는 DungeonMap에서 제거되었으므로 수정 필요
+                    event_manager.publish(GameMessageEvent(message=f"방 입구와 상호작용했습니다. (실제 이동은 engine에서)"))
 
                 # 상호작용 처리 후 InteractableComponent 제거 (일회성 상호작용의 경우)
                 # self.entity_manager.remove_component(entity_id, InteractableComponent)
@@ -322,13 +327,21 @@ class ProjectileSystem:
             proj_comp.current_range -= 1
 
             # 2. 맵 경계 또는 벽 충돌 검사
-            if not self.dungeon_map.is_valid_tile(new_x, new_y) or self.dungeon_map.is_wall(new_x, new_y):
+            if not self.dungeon_map.is_valid_tile(new_x, new_y) or self.dungeon_map.map_data[new_y][new_x] == WALL_CHAR: # is_wall 대신 map_data 참조
                 self._handle_impact(entity_id, pos_comp.x, pos_comp.y, proj_comp) # 현재 위치에서 충돌 처리
                 self.entity_manager.remove_entity(entity_id) # 발사체 파괴
                 continue
 
             # 3. 몬스터 충돌 검사
-            target_monster = self.dungeon_map.get_monster_at(new_x, new_y)
+            # target_monster = self.dungeon_map.get_monster_at(new_x, new_y)는 DungeonMap에서 제거되었으므로 수정 필요
+            target_monster = None
+            for other_entity_id, other_pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
+                if other_entity_id == proj_comp.shooter_id: continue # 발사체 발사자와는 충돌하지 않음
+                if other_pos_comp.x == new_x and other_pos_comp.y == new_y and self.entity_manager.has_component(other_entity_id, HealthComponent) and self.entity_manager.has_component(other_entity_id, AIComponent):
+                    target_monster = self.entity_manager.get_component(other_entity_id, NameComponent) # 몬스터 NameComponent 반환
+                    target_monster.entity_id = other_entity_id # 임시로 엔티티 ID 추가
+                    break
+
             if target_monster:
                 self._handle_impact(entity_id, new_x, new_y, proj_comp, target_monster) # 몬스터 위치에서 충돌 처리
                 self.entity_manager.remove_entity(entity_id) # 발사체 파괴
@@ -351,13 +364,7 @@ class ProjectileSystem:
             # 데미지 계산 및 적용
             skill_def = data_manager.get_skill_definition(proj_comp.skill_def_id)
             if skill_def:
-                # 기본 데미지에 스킬 레벨에 따른 보너스를 추가할 수 있음 (예시)
-                # TODO: shooter_id를 통해 플레이어 객체를 가져와 스킬 레벨 확인
-                # 현재는 스킬 정의의 기본 데미지 사용
                 base_damage = skill_def.damage
-                # damage, is_critical = combat.calculate_damage(shooter_obj, target_monster, base_damage=base_damage)
-                # 임시로 데미지 직접 적용
-                # target_monster.take_damage(base_damage) # CombatSystem으로 이전
                 self.entity_manager.add_component(target_monster.entity_id, DamageRequestComponent(
                     target_id=target_monster.entity_id, 
                     amount=base_damage, 
@@ -365,24 +372,11 @@ class ProjectileSystem:
                     skill_id=proj_comp.skill_def_id
                 ))
                 event_manager.publish(GameMessageEvent(message=f"'{skill_def.name}'(이)가 {target_monster.name}에게 적중! {base_damage} 데미지."))
-                # if target_monster.dead: # CombatSystem에서 처리
-                #     self.ui_instance.add_message(f"{target_monster.name}을(를) 물리쳤습니다!")
-                #     # TODO: 아이템 드랍 및 경험치 획득 로직 (engine에서 가져와야 함)
-                #     # 임시로 여기에 경험치 획득 로직 추가
-                #     player_obj = self.entity_manager.get_component(proj_comp.shooter_id, Player)
-                #     if player_obj:
-                #         exp_gained = target_monster.exp_given + (target_monster.level * 2)
-                #         self.ui_instance.add_message(f"{exp_gained}의 경험치를 획득했습니다!")
-                #         leveled_up, level_up_message = player_obj.gain_exp(exp_gained, self.entity_manager)
-                #         if leveled_up: self.ui_instance.add_message(level_up_message)
-
-        # TODO: 충돌 이펙트 렌더링 (renderer에서 처리)
 
 class CombatSystem:
     def __init__(self, entity_manager: EntityManager, ui_instance): # dungeon_map 인자 제거
         self.entity_manager = entity_manager
         self.ui_instance = ui_instance
-        # self.dungeon_map = dungeon_map # 더 이상 직접 dungeon_map을 받지 않음
 
     def update(self):
         for entity_id, damage_request in list(self.entity_manager.get_components_of_type(DamageRequestComponent).items()):
@@ -425,6 +419,22 @@ class CombatSystem:
                 # 사망 처리는 DeathSystem에서 담당
             self.entity_manager.remove_component(entity_id, DamageRequestComponent)
 
+
+class DungeonGenerationSystem:
+    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance: ConsoleUI, item_definitions, monster_definitions):
+        self.entity_manager = entity_manager
+        self.dungeon_map = dungeon_map
+        self.ui_instance = ui_instance
+        self.item_definitions = item_definitions
+        self.monster_definitions = monster_definitions
+
+    def generate_dungeon_entities(self, dungeon_level_tuple: tuple):
+        # TODO: 실제 던전 엔티티 생성 로직 구현 (몬스터, 아이템, 함정, 출구 등)
+        pass
+
+    def update(self):
+        pass # DungeonGenerationSystem은 주로 초기 맵 생성 시에만 사용되므로 update 메서드는 비워둡니다.
+
 class DeathSystem:
     def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance, player_entity_id: int):
         self.entity_manager = entity_manager
@@ -440,42 +450,44 @@ class DeathSystem:
                 # 몬스터 사망 처리
                 if entity_id != self.player_entity_id: # 플레이어가 아닌 경우
                     # 몬스터 객체 찾기 (entity_id로)
-                    killed_monster = None
-                    for m in self.dungeon_map.monsters:
-                        if m.entity_id == entity_id:
-                            killed_monster = m
-                            break
+                    # self.dungeon_map.monsters는 DungeonMap에서 제거되었으므로 수정 필요
+                    killed_monster_name_comp = self.entity_manager.get_component(entity_id, NameComponent)
+                    killed_monster_pos_comp = self.entity_manager.get_component(entity_id, PositionComponent)
+                    killed_monster_ai_comp = self.entity_manager.get_component(entity_id, AIComponent) # 경험치 정보는 AIComponent에 있다고 가정
                     
-                    if killed_monster:
+                    if killed_monster_name_comp and killed_monster_pos_comp and killed_monster_ai_comp:
                         # 경험치 획득 (공격자가 플레이어인 경우에만)
-                        # TODO: DamageRequestComponent에서 공격자 ID를 가져와야 함
-                        # 현재는 임시로 플레이어가 죽인 것으로 가정
-                        player_obj = self.entity_manager.get_component(self.player_entity_id, Player) # Player 객체 가져오기
-                        if player_obj:
-                            exp_gained = killed_monster.exp_given + (killed_monster.level * 2)
+                        player_exp_comp = self.entity_manager.get_component(self.player_entity_id, ExperienceComponent) # ExperienceComponent가 있다고 가정
+                        if player_exp_comp:
+                            exp_gained = killed_monster_ai_comp.exp_given + (killed_monster_ai_comp.level * 2) # AIComponent에 level, exp_given이 있다고 가정
                             event_manager.publish(GameMessageEvent(message=f"{exp_gained}의 경험치를 획득했습니다!"))
-                            leveled_up, level_up_message = player_obj.gain_exp(exp_gained, self.entity_manager)
-                            if leveled_up: event_manager.publish(GameMessageEvent(message=level_up_message))
+                            # TODO: player_obj.gain_exp 대신 ExperienceSystem에서 처리하도록 변경
+                            # leveled_up, level_up_message = player_obj.gain_exp(exp_gained, self.entity_manager)
+                            # if leveled_up: event_manager.publish(GameMessageEvent(message=level_up_message))
 
                         # 아이템 드랍
                         if data_manager._item_definitions and random.random() < 0.5:
                             dropped_item_id = random.choice(list(data_manager._item_definitions.keys()))
                             # 몬스터가 죽은 위치에 아이템을 맵에 추가
-                            target_pos = self.entity_manager.get_component(entity_id, PositionComponent)
-                            if target_pos:
-                                self.dungeon_map.items_on_map[(target_pos.x, target_pos.y)] = {'id': dropped_item_id, 'qty': 1}
-                                item_def = data_manager.get_item_definition(dropped_item_id)
-                                if item_def:
-                                    event_manager.publish(GameMessageEvent(message=f"{killed_monster.name}이(가) {item_def.name}을(를) 떨어뜨렸습니다."))
+                            item_entity_id = self.entity_manager.create_entity()
+                            self.entity_manager.add_component(item_entity_id, PositionComponent(x=killed_monster_pos_comp.x, y=killed_monster_pos_comp.y, map_id=killed_monster_pos_comp.map_id))
+                            self.entity_manager.add_component(item_entity_id, RenderComponent(symbol=Item.from_definition(data_manager.get_item_definition(dropped_item_id)).char, color="yellow"))
+                            self.entity_manager.add_component(item_entity_id, InteractableComponent(interaction_type='ITEM_TILE', data={'item_id': dropped_item_id, 'qty': 1}))
+                            self.entity_manager.add_component(item_entity_id, NameComponent(name=data_manager.get_item_definition(dropped_item_id).name))
+                            
+                            item_def = data_manager.get_item_definition(dropped_item_id)
+                            if item_def:
+                                event_manager.publish(GameMessageEvent(message=f"{killed_monster_name_comp.name}이(가) {item_def.name}을(를) 떨어뜨렸습니다."))
 
-                    # 엔티티 제거
-                    self.entity_manager.remove_entity(entity_id)
-                    # 몬스터 객체 목록에서도 제거
-                    self.dungeon_map.monsters = [m for m in self.dungeon_map.monsters if m.entity_id != entity_id]
+                    # 엔티티 제거 (DeathComponent가 있는 엔티티는 DeletionSystem에서 제거)
+                    # self.entity_manager.remove_entity(entity_id) # DeletionSystem에서 처리
+                    # 몬스터 객체 목록에서도 제거 (dungeon_map.monsters는 제거되었음)
 
                 else: # 플레이어 사망 처리
                     event_manager.publish(GameMessageEvent(message="당신은 쓰러졌습니다..."))
-                    # TODO: 게임 오버 화면 전환 등 (engine에서 처리)
+                    # 게임 오버 상태를 알리는 컴포넌트 추가
+                    self.entity_manager.add_component(self.player_entity_id, GameOverComponent(win=False))
+
 
 class GameOverSystem:
     def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance, player_entity_id: int):
@@ -485,22 +497,24 @@ class GameOverSystem:
         self.player_entity_id = player_entity_id
 
     def update(self):
-        # 1. 플레이어 사망 조건
-        player_health = self.entity_manager.get_component(self.player_entity_id, HealthComponent)
-        if player_health and not player_health.is_alive:
-            if not self.entity_manager.has_component(self.player_entity_id, GameOverComponent):
-                self.entity_manager.add_component(self.player_entity_id, GameOverComponent(win=False))
-                event_manager.publish(GameMessageEvent(message="게임 오버! 당신은 죽었습니다."))
-                return # 게임 종료
-
+        # 1. 플레이어 사망 조건은 DeathSystem에서 GameOverComponent를 추가하여 처리됨
         # 2. 승리 조건 (예: 보스 몬스터 사망 또는 최종 층 도달)
         # TODO: 보스 몬스터 엔티티 ID를 DungeonGenerationSystem에서 관리하도록 변경
         # 현재는 임시로 보스 몬스터가 없으면 승리하는 것으로 가정
-        if self.dungeon_map.floor == 10 and not self.dungeon_map.monsters: # 10층에 몬스터가 없으면 승리 (임시)
-            if not self.entity_manager.has_component(self.player_entity_id, GameOverComponent):
-                self.entity_manager.add_component(self.player_entity_id, GameOverComponent(win=True))
-                event_manager.publish(GameMessageEvent(message="게임 승리! 던전을 탈출했습니다."))
-                return # 게임 종료
+        # self.dungeon_map.floor, self.dungeon_map.monsters는 DungeonMap에서 제거되었으므로 수정 필요
+        # if self.dungeon_map.floor == 10 and not self.dungeon_map.monsters: # 10층에 몬스터가 없으면 승리 (임시)
+        #     if not self.entity_manager.has_component(self.player_entity_id, GameOverComponent):
+        #         self.entity_manager.add_component(self.player_entity_id, GameOverComponent(win=True))
+        #         event_manager.publish(GameMessageEvent(message="게임 승리! 던전을 탈출했습니다."))
+        #         return # 게임 종료
+
+        # 게임 오버 상태가 되면 Engine의 루프를 종료
+        game_over_comp = self.entity_manager.get_component(self.player_entity_id, GameOverComponent)
+        if game_over_comp:
+            # Engine 인스턴스에 접근하여 is_running 상태를 변경
+            # Engine은 RenderingSystem의 생성자를 통해 전달되므로, RenderingSystem에서 접근 가능하도록 함
+            # 또는 GameStateComponent를 추가하여 엔진에서 읽도록 할 수 있음
+            event_manager.publish(GameMessageEvent(message=f"게임 종료: {'승리' if game_over_comp.win else '패배'}"))
 
 
 class AISystem(System): # System 상속
@@ -558,6 +572,128 @@ class AISystem(System): # System 상속
                 # IDLE 상태일 때는 무작위 이동 요청을 발행할 수 있습니다 (선택 사항)
                 pass # 지금은 아무것도 하지 않음
 
+
+class SaveLoadSystem:
+    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance: ConsoleUI, player_entity_id: int, all_dungeon_maps: dict, rng_seed: int):
+        self.entity_manager = entity_manager
+        self.dungeon_map = dungeon_map
+        self.ui_instance = ui_instance
+        self.player_entity_id = player_entity_id
+        self.all_dungeon_maps = all_dungeon_maps
+        self.rng_seed = rng_seed
+
+    def update(self):
+        pass # 저장/로드 기능은 주로 특정 입력(예: 메뉴)에 의해 트리거되므로 update는 비워둡니다.
+
+
+class InventorySystem:
+    def __init__(self, entity_manager: EntityManager, ui_instance: ConsoleUI, item_definitions):
+        self.entity_manager = entity_manager
+        self.ui_instance = ui_instance
+        self.item_definitions = item_definitions
+
+    def add_item(self, entity_id: int, item: Item, quantity: int = 1) -> bool:
+        # TODO: 실제 아이템 추가 로직 구현
+        return True
+
+    def has_item(self, entity_id: int, item_id: str) -> bool:
+        # TODO: 실제 아이템 보유 여부 확인 로직 구현
+        return True
+
+    def remove_item(self, entity_id: int, item_id: str, quantity: int = 1) -> bool:
+        # TODO: 실제 아이템 제거 로직 구현
+        return True
+
+    def loot_items(self, player_entity_id: int, dungeon_map: DungeonMap) -> tuple[str, bool]:
+        # TODO: 실제 아이템 루팅 로직 구현
+        return "", False
+
+    def update(self):
+        pass
+
+
+class RenderingSystem(System):
+    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance: ConsoleUI, player_entity_id: int, engine: 'Engine'):
+        super().__init__(entity_manager)
+        self.dungeon_map = dungeon_map
+        self.ui_instance = ui_instance
+        self.player_entity_id = player_entity_id
+        self.engine = engine # Engine 인스턴스
+
+    def update(self):
+        player_pos = self.entity_manager.get_component(self.player_entity_id, PositionComponent)
+        if not player_pos: return
+
+        # UI를 통해 맵 렌더링을 요청합니다.
+        map_display_data = []
+        for y in range(self.dungeon_map.height):
+            row = []
+            for x in range(self.dungeon_map.width):
+                # 맵 타일 그리기
+                tile_char = self.dungeon_map.get_tile_for_display(x, y)
+                tile_color = "white" # 기본 색상
+                
+                # 엔티티 그리기 (플레이어, 몬스터, 아이템 등)
+                entity_at_pos = False
+                for eid, pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
+                    if pos_comp.x == x and pos_comp.y == y and pos_comp.map_id == player_pos.map_id: # 현재 맵에 있는 엔티티만
+                        render_comp = self.entity_manager.get_component(eid, RenderComponent)
+                        if render_comp:
+                            if eid == self.player_entity_id: # 플레이어는 항상 맨 위에 렌더링
+                                tile_char = render_comp.symbol
+                                tile_color = render_comp.color
+                                entity_at_pos = True
+                                break # 플레이어가 있으면 다른 엔티티는 무시
+                            elif self.entity_manager.has_component(eid, AIComponent): # 몬스터
+                                if not entity_at_pos: # 아직 다른 엔티티가 없으면 몬스터 그리기
+                                    tile_char = render_comp.symbol
+                                    tile_color = render_comp.color
+                                    entity_at_pos = True
+                            elif self.entity_manager.has_component(eid, InteractableComponent) and not entity_at_pos: # 아이템
+                                tile_char = render_comp.symbol
+                                tile_color = render_comp.color
+                                entity_at_pos = True
+
+                row.append((tile_char, tile_color))
+            map_display_data.append(row)
+
+        # 플레이어 스탯 정보
+        player_health_comp = self.entity_manager.get_component(self.player_entity_id, HealthComponent)
+        player_mana_comp = self.entity_manager.get_component(self.player_entity_id, ManaComponent)
+        player_name_comp = self.entity_manager.get_component(self.player_entity_id, NameComponent)
+        player_att_comp = self.entity_manager.get_component(self.player_entity_id, AttackComponent)
+        player_def_comp = self.entity_manager.get_component(self.player_entity_id, DefenseComponent)
+        player_inventory_comp = self.entity_manager.get_component(self.player_entity_id, InventoryComponent)
+
+        player_stats = {
+            'name': player_name_comp.name if player_name_comp else 'Unknown',
+            'hp': player_health_comp.current_hp if player_health_comp else 0,
+            'max_hp': player_health_comp.max_hp if player_health_comp else 0,
+            'mp': player_mana_comp.current_mp if player_mana_comp else 0,
+            'max_mp': player_mana_comp.max_mp if player_mana_comp else 0,
+            'attack': player_att_comp.power if player_att_comp else 0,
+            'defense': player_def_comp.value if player_def_comp else 0,
+            'inventory': [item.name for item in player_inventory_comp.items] if player_inventory_comp and player_inventory_comp.items else []
+        }
+
+        self.ui_instance.render_all(map_display_data, player_stats)
+
+
+
+class DeletionSystem(System):
+    def __init__(self, entity_manager: EntityManager):
+        super().__init__(entity_manager)
+
+    def update(self):
+        # DeathComponent가 있는 엔티티들을 제거하는 로직을 여기에 구현
+        entities_to_delete = []
+        for entity_id, death_comp in self.entity_manager.get_components_of_type(DeathComponent).items():
+            entities_to_delete.append(entity_id)
+
+        for entity_id in entities_to_delete:
+            self.entity_manager.remove_entity(entity_id)
+
+
 class LoggingSystem(System): # System 상속
     """
     PlayerMovedEvent를 구독하여 게임 메시지(로그)를 출력하는 시스템입니다.
@@ -602,558 +738,4 @@ class LoggingSystem(System): # System 상속
         self.ui_instance.add_message(f"{door_name}이(가) 닫혔습니다. (X: {event.x}, Y: {event.y})")
 
     def handle_key_used_event(self, event: KeyUsedEvent):
-        self.ui_instance.add_message(f"'{event.key_id}' 열쇠를 사용하여 문을 열었습니다.")
-
-    def update(self):
-        # LoggingSystem은 주로 이벤트 기반으로 동작하므로, 
-        # 메인 루프에서 update를 호출할 필요가 없습니다. (비워둠)
-        pass
-
-class RenderingSystem:
-    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance: ConsoleUI, player_entity_id: int):
-        self.entity_manager = entity_manager
-        self.dungeon_map = dungeon_map
-        self.ui_instance = ui_instance
-        self.player_entity_id = player_entity_id
-        # RenderingSystem은 더 이상 이벤트를 구독하지 않고, Engine에서 직접 update를 호출합니다.
-        # event_manager.subscribe(PlayerMovedEvent, self.handle_player_moved_event)
-
-    def update(self):
-        player_pos = self.entity_manager.get_component(self.player_entity_id, PositionComponent)
-        if player_pos is None:
-            return
-
-        # 1. 맵 데이터 생성 (문자열)
-        map_data_str = self._generate_map_string(player_pos)
-
-        # 2. 메시지 로그 가져오기
-        messages = self.ui_instance.message_log # ConsoleUI가 메시지 로그를 직접 관리한다고 가정
-
-        # 3. 플레이어 상태 데이터 생성
-        player_stats = self._get_player_stats()
-
-        # 4. ConsoleUI.refresh 호출
-        self.ui_instance.refresh(map_data_str, messages, player_stats)
-
-    def _generate_map_string(self, player_pos: PositionComponent) -> str:
-        # ConsoleUI는 맵 뷰포트를 직접 관리하지 않으므로, 전체 맵을 문자열로 생성하여 전달합니다.
-        # 또는 ConsoleUI에 맵 뷰포트 개념을 추가하여 특정 영역만 렌더링하도록 할 수 있습니다.
-        # 여기서는 ConsoleUI가 전체 맵 데이터를 받아 처리한다고 가정합니다.
-        map_lines = []
-        for y in range(self.dungeon_map.height):
-            line_chars = []
-            for x in range(self.dungeon_map.width):
-                char = self.dungeon_map.map_data[y][x] # 기본 맵 타일
-                color = "white" # 기본 색상
-
-                # 엔티티 오버레이
-                entity_at_pos = self._get_entity_at_position(x, y)
-                if entity_at_pos:
-                    entity_id, render_comp = entity_at_pos
-                    char = render_comp.symbol
-                    color = render_comp.color
-                
-                # 플레이어 오버레이
-                if x == player_pos.x and y == player_pos.y:
-                    player_render_comp = self.entity_manager.get_component(self.player_entity_id, RenderComponent)
-                    if player_render_comp:
-                        char = player_render_comp.symbol
-                        color = player_render_comp.color
-
-                line_chars.append(f"{ConsoleUI.COLOR_MAP.get(color, ConsoleUI.COLOR_MAP['reset'])}{char}{ConsoleUI.COLOR_MAP['reset']}")
-            map_lines.append(''.join(line_chars))
-        return '\n'.join(map_lines)
-
-    def _get_entity_at_position(self, x: int, y: int) -> Optional[Tuple[int, RenderComponent]]:
-        # 플레이어를 제외한 엔티티를 찾습니다.
-        for entity_id, pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
-            if entity_id == self.player_entity_id: continue
-            if pos_comp.x == x and pos_comp.y == y and pos_comp.map_id == self.dungeon_map.dungeon_level_tuple:
-                render_comp = self.entity_manager.get_component(entity_id, RenderComponent)
-                if render_comp: # 렌더링 가능한 엔티티만 반환
-                    return entity_id, render_comp
-        return None
-
-    def _get_player_stats(self) -> dict:
-        player_stats = {}
-        name_comp = self.entity_manager.get_component(self.player_entity_id, NameComponent)
-        health_comp = self.entity_manager.get_component(self.player_entity_id, HealthComponent)
-        attack_comp = self.entity_manager.get_component(self.player_entity_id, AttackComponent)
-        defense_comp = self.entity_manager.get_component(self.player_entity_id, DefenseComponent)
-        inventory_comp = self.entity_manager.get_component(self.player_entity_id, InventoryComponent)
-
-        player_stats['name'] = name_comp.name if name_comp else "Unknown Hero"
-        player_stats['hp'] = health_comp.current_hp if health_comp else 0
-        player_stats['max_hp'] = health_comp.max_hp if health_comp else 0
-        player_stats['attack'] = attack_comp.power if attack_comp else 0
-        player_stats['defense'] = defense_comp.value if defense_comp else 0
-        
-        # 열쇠 인벤토리 (예시)
-        keys_in_inventory = []
-        if inventory_comp:
-            for item_id, item_data in inventory_comp.items.items():
-                if item_id.startswith("key_"):
-                    keys_in_inventory.append(item_data['item'].name)
-        player_stats['inventory'] = keys_in_inventory
-
-        return player_stats
-
-
-class InventorySystem:
-    def __init__(self, entity_manager: EntityManager, ui_instance, item_definitions):
-        self.entity_manager = entity_manager
-        self.ui_instance = ui_instance
-        self.item_definitions = item_definitions
-
-    def get_items_by_tab(self, entity_id: int, active_tab: str):
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        if not inventory_comp: return []
-
-        all_items = sorted(inventory_comp.items.values(), key=lambda x: x['item'].name)
-        
-        if active_tab == 'all':
-            return all_items
-        elif active_tab == 'item':
-            return [item_data for item_data in all_items if item_data['item'].item_type == 'CONSUMABLE']
-        elif active_tab == 'equipment':
-            return [item_data for item_data in all_items if item_data['item'].item_type == 'EQUIP']
-        elif active_tab == 'scroll':
-            return [item_data for item_data in all_items if item_data['item'].item_type == 'SCROLL']
-        elif active_tab == 'skill_book':
-            return [item_data for item_data in all_items if item_data['item'].item_type == 'SKILLBOOK']
-        return []
-
-    def add_item(self, entity_id: int, item_to_add: Item, qty: int = 1):
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        if not inventory_comp: return False
-
-        if item_to_add.id in inventory_comp.items:
-            inventory_comp.items[item_to_add.id]['qty'] += qty
-        else:
-            inventory_comp.items[item_to_add.id] = {'item': item_to_add, 'qty': qty}
-        return True
-
-    def equip_unequip_item(self, entity_id: int, item_to_equip: Item):
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        equipment_comp = self.entity_manager.get_component(entity_id, EquipmentComponent)
-        if not inventory_comp or not equipment_comp: return ""
-
-        if item_to_equip.item_type != 'EQUIP':
-            return "장비 아이템만 장착/해제할 수 있습니다."
-
-        # 이미 장착된 아이템인지 확인
-        is_equipped = False
-        for slot, equipped_item_id in equipment_comp.equipped_items.items():
-            if equipped_item_id == item_to_equip.id:
-                is_equipped = True
-                break
-        
-        if is_equipped:
-            # 장착 해제
-            unequipped_slot = None
-            for slot_name, eq_item_id in equipment_comp.equipped_items.items():
-                if eq_item_id == item_to_equip.id:
-                    unequipped_slot = slot_name
-                    break
-            if unequipped_slot:
-                del equipment_comp.equipped_items[unequipped_slot]
-                # TODO: 스탯 업데이트 로직 (나중에 별도 시스템으로 분리)
-                return f"{item_to_equip.name}을(를) 해제했습니다."
-            return "해당 부위에 장착한 아이템이 없습니다."
-        else:
-            # 장착
-            if item_to_equip.equip_slot in equipment_comp.equipped_items:
-                # 기존 장비 해제
-                old_item_id = equipment_comp.equipped_items[item_to_equip.equip_slot]
-                old_item_def = data_manager.get_item_definition(old_item_id)
-                old_item = Item.from_definition(old_item_def) if old_item_def else None
-                if old_item:
-                    event_manager.publish(GameMessageEvent(message=f"{old_item.name}을(를) 해제했습니다."))
-
-            equipment_comp.equipped_items[item_to_equip.equip_slot] = item_to_equip.id
-            # TODO: 스탯 업데이트 로직 (나중에 별도 시스템으로 분리)
-            return f"{item_to_equip.name}을(를) 장착했습니다."
-
-    def has_item(self, entity_id: int, item_id: str) -> bool:
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        if not inventory_comp:
-            return False
-        return item_id in inventory_comp.items and inventory_comp.items[item_id]['qty'] > 0
-
-    def remove_item(self, entity_id: int, item_id: str, qty: int = 1) -> bool:
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        if not inventory_comp:
-            return False
-
-        if item_id not in inventory_comp.items or inventory_comp.items[item_id]['qty'] < qty:
-            return False
-
-        inventory_comp.items[item_id]['qty'] -= qty
-        if inventory_comp.items[item_id]['qty'] <= 0:
-            del inventory_comp.items[item_id]
-            # 퀵슬롯에서도 제거
-            player_obj = self.entity_manager.get_component(entity_id, Player)
-            if player_obj:
-                for slot, q_item_id in list(player_obj.item_quick_slots.items()):
-                    if q_item_id == item_id:
-                        player_obj.item_quick_slots[slot] = None
-                for slot, q_skill_id in list(player_obj.skill_quick_slots.items()):
-                    if q_skill_id == item_id: # 스킬북 ID와 스킬 ID가 같다고 가정
-                        player_obj.skill_quick_slots[slot] = None
-        return True
-
-    def drop_item(self, entity_id: int, item_id: str, qty: int = 1):
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        if not inventory_comp: return "아이템을 버리는 데 실패했습니다.", False
-
-        if item_id not in inventory_comp.items or inventory_comp.items[item_id]['qty'] < qty:
-            return "인벤토리에 해당 아이템이 충분하지 않습니다.", False
-
-        inventory_comp.items[item_id]['qty'] -= qty
-        if inventory_comp.items[item_id]['qty'] <= 0:
-            del inventory_comp.items[item_id]
-            # 퀵슬롯에서도 제거 (player 객체에 접근)
-            player_obj = self.entity_manager.get_component(entity_id, Player)
-            if player_obj:
-                for slot, q_item_id in list(player_obj.item_quick_slots.items()):
-                    if q_item_id == item_id:
-                        player_obj.item_quick_slots[slot] = None
-                for slot, q_skill_id in list(player_obj.skill_quick_slots.items()):
-                    if q_skill_id == item_id: # 스킬북 ID와 스킬 ID가 같다고 가정
-                        player_obj.skill_quick_slots[slot] = None
-
-        item_def = data_manager.get_item_definition(item_id)
-        item_name = item_def.name if item_def else "알 수 없는 아이템"
-        return f"{item_name}을(를) 버렸습니다.", True
-
-    def use_item(self, entity_id: int, item_id: str):
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        health_comp = self.entity_manager.get_component(entity_id, HealthComponent)
-        mana_comp = self.entity_manager.get_component(entity_id, ManaComponent)
-        player_obj = self.entity_manager.get_component(entity_id, Player) # Player 객체 (스킬, 퀵슬롯 등)
-
-        if not inventory_comp or not player_obj: return "", False
-
-        item_data = inventory_comp.items.get(item_id)
-        if not item_data or item_data['qty'] <= 0:
-            return f"인벤토리에 {item_id}이(가) 없습니다.", False
-
-        item = item_data['item']
-        effect_applied = False
-        message = ""
-
-        if item.item_type == 'CONSUMABLE':
-            if item.effect_type == 'HP_RECOVER' and health_comp:
-                health_comp.current_hp = min(health_comp.current_hp + item.value, health_comp.max_hp)
-                message = f"{item.name}을(를) 사용하여 HP를 {item.value}만큼 회복했습니다."
-                effect_applied = True
-            elif item.effect_type == 'MP_RECOVER' and mana_comp:
-                mana_comp.current_mp = min(mana_comp.current_mp + item.value, mana_comp.max_mp)
-                message = f"{item.name}을(를) 사용하여 MP를 {item.value}만큼 회복했습니다."
-                effect_applied = True
-            # TODO: STAMINA_RECOVER 등 다른 효과 추가
-        elif item.item_type == 'SKILLBOOK':
-            # 스킬북 사용 로직 (player.py에서 가져옴)
-            skill_id = item.id
-            if player_obj.level < item.req_level:
-                message = f"레벨 {item.req_level}이 되지 않아 '{item.name}' 스킬북을 읽을 수 없습니다."
-            elif skill_id in player_obj.skills:
-                player_obj.skills[skill_id]['level'] += 1
-                new_level = player_obj.skills[skill_id]['level']
-                message = f"'{item.name}' 스킬의 레벨이 올랐습니다! (Lv.{new_level - 1} -> Lv.{new_level})"
-            else:
-                player_obj.skills[skill_id] = {'level': 1, 'exp': 0}
-                message = f"새로운 스킬 '{item.name}'을(를) 배웠습니다!"
-            effect_applied = True
-
-        if effect_applied:
-            item_data['qty'] -= 1
-            if item_data['qty'] <= 0:
-                del inventory_comp.items[item_id]
-                # 퀵슬롯에서도 제거 (player 객체에 접근)
-                for slot, q_item_id in list(player_obj.item_quick_slots.items()):
-                    if q_item_id == item_id:
-                        player_obj.item_quick_slots[slot] = None
-                for slot, q_skill_id in list(player_obj.skill_quick_slots.items()):
-                    if q_skill_id == item_id: # 스킬북 ID와 스킬 ID가 같다고 가정
-                        player_obj.skill_quick_slots[slot] = None
-            return message, True
-        
-        return f"{item.name}은(는) 아직 사용할 수 없습니다.", False
-
-    def assign_item_to_quickslot(self, entity_id: int, item_id: str, slot: int):
-        player_obj = self.entity_manager.get_component(entity_id, Player)
-        inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-        if not player_obj or not inventory_comp: return "", False
-
-        if not (1 <= slot <= 5):
-            return "아이템 퀵슬롯은 1-5번만 가능합니다.", False
-        
-        item_data = inventory_comp.items.get(item_id)
-        if not item_data: return "인벤토리에 해당 아이템이 없습니다.", False
-        item = item_data['item']
-
-        if item.item_type != 'CONSUMABLE' and item.item_type != 'SCROLL':
-            return "소모품 또는 스크롤만 아이템 퀵슬롯에 등록할 수 있습니다.", False
-
-        # 중복 등록 방지
-        if item_id in player_obj.item_quick_slots.values():
-            return "이미 다른 퀵슬롯에 등록된 아이템입니다.", False
-
-        player_obj.item_quick_slots[slot] = item_id
-        return f"퀵슬롯 {slot}번에 {item.name}을(를) 등록했습니다.", True
-
-    def assign_skill_to_quickslot(self, entity_id: int, skill_id: str, slot: int):
-        player_obj = self.entity_manager.get_component(entity_id, Player)
-        if not player_obj: return "", False
-
-        slot_key = slot if slot != 0 else 10 # 0번 키는 10번 인덱스로 처리
-        if not (6 <= slot_key <= 10):
-            return "스킬 퀵슬롯은 6-0번만 가능합니다.", False
-        
-        if skill_id not in player_obj.skills:
-            return f"'{skill_id}' 스킬을 아직 배우지 않았습니다. 먼저 스킬북을 사용하세요.", False
-            
-        player_obj.skill_quick_slots[slot_key] = skill_id
-        return f"퀵슬롯 {slot}번에 {skill_id}을(를) 등록했습니다.", True # TODO: 스킬 이름으로 변경
-
-    def loot_items(self, entity_id: int, dungeon_map: DungeonMap):
-        player_pos = self.entity_manager.get_component(entity_id, PositionComponent)
-        if not player_pos: return "", False
-
-        looted_something = False
-        message = ""
-
-        # 1. 몬스터 시체에서 아이템 루팅 시도 (기존 로직 유지)
-        monster_at_player_pos = None
-        for m in dungeon_map.monsters:
-            if m.dead and m.x == player_pos.x and m.y == player_pos.y:
-                monster_at_player_pos = m
-                break
-
-        if monster_at_player_pos and monster_at_player_pos.loot:
-            item_id_to_loot = monster_at_player_pos.loot
-            item_def = data_manager.get_item_definition(item_id_to_loot)
-            if item_def:
-                looted_item = Item.from_definition(item_def)
-                if self.add_item(entity_id, looted_item):
-                    message += f"{looted_item.name}을(를) 획득했습니다.\n"
-                    event_manager.publish(GameMessageEvent(message=f"{looted_item.name}을(를) 획득했습니다."))
-                    monster_at_player_pos.loot = None # 루팅 후 아이템 제거
-                    looted_something = True
-                else:
-                    message += f"{looted_item.name}을(를) 획득할 수 없습니다.\n"
-                    event_manager.publish(GameMessageEvent(message=f"{looted_item.name}을(를) 획득할 수 없습니다."))
-            else:
-                message += "알 수 없는 아이템입니다.\n"
-                event_manager.publish(GameMessageEvent(message="알 수 없는 아이템입니다."))
-        
-        # 2. 맵에 직접 떨어진 아이템 엔티티 루팅 시도
-        items_on_current_tile = []
-        for item_entity_id, interactable_comp in list(self.entity_manager.get_components_of_type(InteractableComponent).items()):
-            if interactable_comp.interaction_type == 'ITEM_TILE':
-                item_entity_pos = self.entity_manager.get_component(item_entity_id, PositionComponent)
-                if item_entity_pos and item_entity_pos.x == player_pos.x and item_entity_pos.y == player_pos.y and item_entity_pos.map_id == dungeon_map.dungeon_level_tuple:
-                    items_on_current_tile.append((item_entity_id, interactable_comp))
-        
-        for item_entity_id, interactable_comp in items_on_current_tile:
-            item_id_on_map = interactable_comp.data['item_id']
-            item_qty_on_map = interactable_comp.data.get('qty', 1)
-            item_def_on_map = data_manager.get_item_definition(item_id_on_map)
-
-            if item_def_on_map:
-                looted_item_on_map = Item.from_definition(item_def_on_map) # Item.from_definition 사용
-                
-                if self.add_item(entity_id, looted_item_on_map, item_qty_on_map):
-                    message += f"{looted_item_on_map.name} {item_qty_on_map}개를 획득했습니다.\n"
-                    event_manager.publish(GameMessageEvent(message=f"{looted_item_on_map.name} {item_qty_on_map}개를 획득했습니다."))
-                    self.entity_manager.remove_entity(item_entity_id) # 아이템 엔티티 제거
-                    looted_something = True
-                else:
-                    message += f"{looted_item_on_map.name}을(를) 획득할 수 없습니다.\n"
-                    event_manager.publish(GameMessageEvent(message=f"{looted_item_on_map.name}을(를) 획득할 수 없습니다."))
-            else:
-                message += "맵에 있는 알 수 없는 아이템입니다.\n"
-                event_manager.publish(GameMessageEvent(message="맵에 있는 알 수 없는 아이템입니다."))
-
-        if not looted_something:
-            message = "주변에 루팅할 아이템이 없습니다."
-            event_manager.publish(GameMessageEvent(message="주변에 루팅할 아이템이 없습니다."))
-
-    def update(self):
-        # ItemUseRequestComponent 처리
-        for entity_id, use_request in list(self.entity_manager.get_components_of_type(ItemUseRequestComponent).items()):
-            inventory_comp = self.entity_manager.get_component(entity_id, InventoryComponent)
-            health_comp = self.entity_manager.get_component(entity_id, HealthComponent)
-            mana_comp = self.entity_manager.get_component(entity_id, ManaComponent)
-            player_obj = self.entity_manager.get_component(entity_id, Player) # Player 객체 (스킬, 퀵슬롯 등)
-
-            if not inventory_comp or not player_obj: # Player 객체도 필요
-                self.entity_manager.remove_component(entity_id, ItemUseRequestComponent)
-                continue
-
-            item_data = inventory_comp.items.get(use_request.item_id)
-            if not item_data or item_data['qty'] <= 0:
-                event_manager.publish(GameMessageEvent(message=f"인벤토리에 {use_request.item_id}이(가) 없습니다."))
-                self.entity_manager.remove_component(entity_id, ItemUseRequestComponent)
-                continue
-
-            item = item_data['item']
-            effect_applied = False
-            message = ""
-
-            if item.item_type == 'CONSUMABLE':
-                if item.effect_type == 'HP_RECOVER' and health_comp:
-                    health_comp.current_hp = min(health_comp.current_hp + item.value, health_comp.max_hp)
-                    message = f"{item.name}을(를) 사용하여 HP를 {item.value}만큼 회복했습니다."
-                    effect_applied = True
-                elif item.effect_type == 'MP_RECOVER' and mana_comp:
-                    mana_comp.current_mp = min(mana_comp.current_mp + item.value, mana_comp.max_mp)
-                    message = f"{item.name}을(를) 사용하여 MP를 {item.value}만큼 회복했습니다."
-                    effect_applied = True
-                # TODO: STAMINA_RECOVER 등 다른 효과 추가
-            elif item.item_type == 'SKILLBOOK':
-                # 스킬북 사용 로직 (player.py에서 가져옴)
-                skill_id = item.id
-                if player_obj.level < item.req_level:
-                    message = f"레벨 {item.req_level}이 되지 않아 '{item.name}' 스킬북을 읽을 수 없습니다."
-                elif skill_id in player_obj.skills:
-                    player_obj.skills[skill_id]['level'] += 1
-                    new_level = player_obj.skills[skill_id]['level']
-                    message = f"'{item.name}' 스킬의 레벨이 올랐습니다! (Lv.{new_level - 1} -> Lv.{new_level})"
-                else:
-                    player_obj.skills[skill_id] = {'level': 1, 'exp': 0}
-                    message = f"새로운 스킬 '{item.name}'을(를) 배웠습니다!"
-                effect_applied = True
-
-            if effect_applied:
-                item_data['qty'] -= 1
-                event_manager.publish(GameMessageEvent(message=message))
-                if item_data['qty'] <= 0:
-                    del inventory_comp.items[use_request.item_id]
-                    # 퀵슬롯에서도 제거 (player 객체에 접근)
-                    for slot, q_item_id in list(player_obj.item_quick_slots.items()):
-                        if q_item_id == use_request.item_id:
-                            player_obj.item_quick_slots[slot] = None
-                    for slot, q_skill_id in list(player_obj.skill_quick_slots.items()):
-                        if q_skill_id == use_request.item_id: # 스킬북 ID와 스킬 ID가 같다고 가정
-                            player_obj.skill_quick_slots[slot] = None
-            else:
-                event_manager.publish(GameMessageEvent(message=f"{item.name}은(는) 아직 사용할 수 없습니다."))
-
-            self.entity_manager.remove_component(entity_id, ItemUseRequestComponent)
-
-
-class SaveLoadSystem:
-    def __init__(self, entity_manager: EntityManager):
-        self.entity_manager = entity_manager
-
-    def save_game(self, player_entity_id: int, current_dungeon_level, all_dungeon_maps, ui_instance):
-        # 모든 엔티티와 컴포넌트를 직렬화
-        game_state_data = {
-            "entities": {},
-            "dungeon_maps": {str(level): d_map.to_dict() for level, d_map in all_dungeon_maps.items()}
-        }
-
-        for entity_id, components in self.entity_manager.entities.items():
-            serialized_components = {}
-            for comp_type, component in components.items():
-                # dataclass를 딕셔너리로 변환 (필요에 따라 커스텀 직렬화 로직 추가)
-                if hasattr(component, 'to_dict'): # 커스텀 to_dict가 있는 경우
-                    serialized_components[comp_type.__name__] = component.to_dict()
-                else:
-                    serialized_components[comp_type.__name__] = component.__dict__
-            game_state_data["entities"][entity_id] = serialized_components
-        
-        # Player 객체의 특정 속성 (인벤토리, 스킬, 퀵슬롯 등)은 Player 객체 자체에 남아있으므로 별도로 저장
-        player_obj = self.entity_manager.get_component(player_entity_id, Player)
-        if player_obj:
-            game_state_data["player_specific_data"] = player_obj.to_dict()
-
-        data_manager.save_game_data(player_entity_id, all_dungeon_maps, ui_instance, game_state_data) # game_state_data 전달
-
-    def load_game(self, game_state_data, ui_instance):
-        # entity_manager 초기화 (기존 엔티티 제거)
-        self.entity_manager.entities.clear()
-        self.entity_manager.next_entity_id = 0
-
-        player_obj = None
-        all_dungeon_maps = {}
-        current_dungeon_level = (1, 0) # 기본값으로 초기화
-
-        if game_state_data:
-            # Player 객체 데이터 로드
-            player_specific_data = game_state_data.get("player_specific_data")
-            if player_specific_data:
-                player_obj = Player.from_dict(player_specific_data)
-
-            # 현재 던전 레벨 로드
-            current_dungeon_level = player_specific_data.get('dungeon_level', (1, 0)) if player_specific_data else (1, 0)
-
-            # 맵 데이터 로드
-            dungeon_maps_data = game_state_data.get("dungeon_maps", {})
-            for level_str, map_dict in dungeon_maps_data.items():
-                # level_str이 "(1,0)" 형태일 수 있으므로, 괄호를 제거하고 분리
-                cleaned_level_str = level_str.strip('()')
-                floor, room_index = map(int, cleaned_level_str.split(','))
-                all_dungeon_maps[(floor, room_index)] = DungeonMap.from_dict(map_dict, level=(floor, room_index))
-
-            # 엔티티 및 컴포넌트 로드
-            entities_data = game_state_data.get("entities", {})
-            for entity_id_str, components_data in entities_data.items():
-                entity_id = int(entity_id_str)
-                self.entity_manager.add_entity_with_id(entity_id) # 특정 ID로 엔티티 추가
-                for comp_name, comp_data in components_data.items():
-                    # 컴포넌트 타입 매핑 (예시)
-                    comp_class = globals().get(comp_name) # 전역 스코프에서 컴포넌트 클래스 찾기
-                    if comp_class:
-                        # dataclass의 from_dict 또는 __init__을 사용하여 컴포넌트 객체 생성
-                        if hasattr(comp_class, 'from_dict'):
-                            component = comp_class.from_dict(comp_data)
-                        else:
-                            component = comp_class(**comp_data)
-                        self.entity_manager.add_component(entity_id, component)
-        else:
-            current_dungeon_level = (1, 0) # game_state_data가 None일 경우 기본값 설정
-
-        return player_obj, all_dungeon_maps, current_dungeon_level
-
-
-class DungeonGenerationSystem:
-    def __init__(self, entity_manager: EntityManager, dungeon_map: DungeonMap, ui_instance, item_definitions, monster_definitions):
-        self.entity_manager = entity_manager
-        self.dungeon_map = dungeon_map
-        self.ui_instance = ui_instance
-        self.item_definitions = item_definitions
-        self.monster_definitions = monster_definitions
-
-    def generate_dungeon_entities(self, level, is_boss_room=False):
-        # 기존 engine.py의 몬스터 생성 로직을 가져옴
-        if level[1] > 0: # 방인 경우
-            if not is_boss_room:
-                placed_monster_data = self.dungeon_map.place_monsters(self.monster_definitions, num_monsters=random.randint(1, 3))
-                self.dungeon_map.place_random_items(self.item_definitions, num_items=random.randint(0, 2))
-            else:
-                placed_monster_data = self.dungeon_map._populate_boss_room()
-        else: # 메인 맵인 경우
-            placed_monster_data = self.dungeon_map.place_monsters(self.monster_definitions)
-            self.dungeon_map.place_random_items(self.item_definitions)
-        
-        # 몬스터 엔티티 생성 및 컴포넌트 추가
-        for m_data in placed_monster_data:
-            monster_def = self.monster_definitions[m_data['monster_id']]
-            monster_obj = Monster(self.ui_instance, monster_id=m_data['monster_id'])
-            monster_entity_id = self.entity_manager.create_entity()
-            self.entity_manager.add_component(monster_entity_id, PositionComponent(x=m_data['x'], y=m_data['y']))
-            self.entity_manager.add_component(monster_entity_id, MovableComponent())
-            self.entity_manager.add_component(monster_entity_id, HealthComponent(max_hp=monster_def.hp, current_hp=monster_def.hp))
-            self.entity_manager.add_component(monster_entity_id, NameComponent(name=monster_def.name))
-            self.entity_manager.add_component(monster_entity_id, AttackComponent(power=monster_def.attack, critical_chance=monster_def.critical_chance, critical_damage_multiplier=monster_def.critical_damage_multiplier))
-            self.entity_manager.add_component(monster_entity_id, DefenseComponent(value=monster_def.defense))
-            self.entity_manager.add_component(monster_entity_id, RenderComponent(symbol=monster_def.symbol, color=monster_def.color)) # RenderComponent 추가
-            self.entity_manager.add_component(monster_entity_id, AIComponent(state='IDLE')) # AIComponent 추가 (초기 상태: IDLE)
-            monster_obj.entity_id = monster_entity_id
-            self.dungeon_map.monsters.append(monster_obj) # 맵의 몬스터 목록에도 추가
-
-        # TODO: 아이템, 함정, 방 입구 등 다른 엔티티 생성 로직도 여기에 통합
-
+        self.ui_instance.add_message(f"열쇠를 사용하여 문을 열었습니다. (X: {event.x}, Y: {event.y})")
