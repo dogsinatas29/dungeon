@@ -21,15 +21,15 @@
 -   **`data/spawn_data.txt`**: 몬스터와 아이템의 스폰 위치, 확률, 드롭 아이템을 결정하는 메타 데이터.
 
 #### 3. Features & Utilities (기능 및 유틸리티)
--   **`map_manager.py`**: 던전 맵 생성 및 관리 로직. 충돌 감지, 시야 계산 등을 담당.
--   **`renderer.py`**: 입력(Input) 처리 및 출력(Output), 터미널 렌더링을 담당하는 UI 인터페이스.
+-   **`map.py`**: 던전 맵 생성 및 관리 로직. 충돌 감지, 시야 계산 등을 담당. (기존 `dungeon_map.py`에서 변경됨)
+-   **`ui.py`**: 입력(Input) 처리 및 출력(Output), 터미널 렌더링을 담당하는 UI 인터페이스. (기존 `renderer.py`에서 변경됨)
 -   **`data/UI_layout.json`**: UI 레이아웃과 관련된 설정(좌표, 크기 등)을 저장하는 데이터 파일.
 
 ## 개발 가이드라인
 
 -   **코딩 스타일**: 파이썬 PEP 8 표준을 준수합니다.
 -   **의존성**: `readchar` 라이브러리를 사용합니다.
--   **UI**: 모든 UI 구성 요소는 `dungeon/renderer.py`에서 렌더링됩니다.
+-   **UI**: 모든 UI 구성 요소는 `dungeon/ui.py`에서 렌더링됩니다.
 -   **게임 데이터**: 플레이어 및 맵 데이터는 `game_data/` 디렉토리에 JSON 파일로 저장됩니다.
 
 ## 게임 데이터 정의
@@ -58,11 +58,20 @@
 ### 2025년 10월 12일 토요일
 -   **ECS 아키텍처 관련 버그 수정**: `AttributeError: 'Monster' object has no attribute 'x'`, `AttributeError: 'Monster' object has no attribute 'max_hp'`, `KeyError: None`, `NameError: name 'Player' is not defined`, `AttributeError: 'Player' object has no attribute 'max_hp'`, `AttributeError: 'Player' object has no attribute 'color'`, `UnboundLocalError: cannot access local variable 'current_dungeon_level'`, `AttributeError: 'EntityManager' object has no attribute 'has_component'` 등 ECS 전환 과정에서 발생한 다양한 버그를 수정하고 안정화했습니다. 특히, 몬스터 및 플레이어의 스탯/위치 정보가 컴포넌트를 통해 올바르게 관리되도록 수정했습니다.
 
+### 2025년 11월 24일 월요일
+-   **UI 입력 가이드 개선**: `dungeon/ui.py` 파일에서 메인 메뉴의 플레이어 이름 입력 프롬프트에서 불필요한 `(Enter)` 가이드를 제거했습니다.
+-   **실시간 입력 반영**: `dungeon/ui.py` 파일의 `render_all` 함수 내 게임 조작 가이드를 실시간 키 입력 방식에 맞춰 WASD, 방향키, HJKL, YUBN 등 다양한 이동 옵션과 인벤토리([I]) 단축키를 명시하도록 업데이트했습니다.
+-   **엔진 입력 처리 확인**: `dungeon/engine.py`는 이미 `readchar` 라이브러리를 사용하여 실시간 키 입력을 처리하고 있으므로 별도 수정 사항이 없습니다.
+-   **NameError 수정**: `dungeon/system.py` 파일에 `DungeonMap` 클래스를 임포트하여 `MovementSystem` 초기화 시 `NameError`가 발생하지 않도록 수정했습니다.
+-   **NameError 수정**: `dungeon/system.py` 파일에 `Item` 클래스를 임포트하여 `InventorySystem` 클래스 내 `add_item` 메서드에서 `NameError`가 발생하지 않도록 수정했습니다.
+-   **실시간 입력 처리 구현**: `dungeon/system.py` 파일의 `InputSystem`에서 `input()` 대신 `readchar.readchar()`를 사용하여 Enter 키 없이 바로 입력이 처리되도록 수정하고, `readchar` 모듈을 임포트했습니다.
+-   **NameError 수정**: `dungeon/system.py` 파일에 `logging` 모듈을 임포트하여 `InputSystem`에서 `NameError`가 발생하지 않도록 수정했습니다.
+
 ## 일반적인 명령어
 
 -   **게임 실행**:
     ```bash
-    python3 /home/dogsinatas/python_project/dungeon/Start.py
+    python3 main.py
     ```
 -   **저장 데이터 삭제**:
     ```bash
