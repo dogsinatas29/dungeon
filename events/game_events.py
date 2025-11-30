@@ -37,3 +37,10 @@ class KeyUsedEvent:
 @dataclass
 class GameMessageEvent:
     message: str
+
+@dataclass
+class MonsterDiedEvent:
+    monster_entity_id: int
+    killer_entity_id: int
+    exp_given: int
+

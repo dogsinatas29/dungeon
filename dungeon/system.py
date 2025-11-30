@@ -1,8 +1,9 @@
 import sys # input() 사용을 위해 필요
 import readchar # readchar 임포트 추가
 import logging # logging 임포트 추가
+import random # random 모듈 임포트
 from events.event_manager import event_manager
-from events.game_events import PlayerMovedEvent, GameMessageEvent, DoorOpenedEvent, DoorClosedEvent, KeyUsedEvent, InputReceivedEvent # 추가된 이벤트 임포트
+from events.game_events import PlayerMovedEvent, GameMessageEvent, DoorOpenedEvent, DoorClosedEvent, KeyUsedEvent, InputReceivedEvent, MonsterDiedEvent # MonsterDiedEvent 임포트 추가
 from dungeon.utils.collision import calculate_bounding_box, is_aabb_colliding, check_entity_collision, get_colliding_tile_coords
 from .ui import ConsoleUI # ConsoleUI 임포트
 from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent, ItemUseRequestComponent, DesiredPositionComponent, DoorComponent, KeyComponent # 모든 컴포넌트 임포트
@@ -418,6 +419,17 @@ class CombatSystem:
                 target_health.current_hp = 0
                 target_health.is_alive = False
                 event_manager.publish(GameMessageEvent(message=f"{target_name.name}이(가) 쓰러졌습니다!"))
+                
+                # 몬스터 사망 시 MonsterDiedEvent 발행
+                if damage_request.attacker_id == player_entity_id: # 플레이어가 죽인 경우에만
+                    killed_monster_ai_comp = self.entity_manager.get_component(damage_request.target_id, AIComponent)
+                    if killed_monster_ai_comp:
+                        exp_given = killed_monster_ai_comp.exp_given
+                        event_manager.publish(MonsterDiedEvent(
+                            monster_entity_id=damage_request.target_id,
+                            killer_entity_id=damage_request.attacker_id,
+                            exp_given=exp_given
+                        ))
                 
                 # 사망 처리는 DeathSystem에서 담당
             self.entity_manager.remove_component(entity_id, DamageRequestComponent)
