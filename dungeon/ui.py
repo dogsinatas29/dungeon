@@ -2,6 +2,7 @@
 
 import os
 import sys
+import readchar # readchar 임포트 추가
 
 # 터미널 색상 코드를 사용한 렌더링을 위한 딕셔너리
 COLOR_MAP = {
@@ -34,35 +35,6 @@ class ConsoleUI:
 
     def show_main_menu(self):
         """게임 시작 메뉴를 표시하고 플레이어 이름을 입력받습니다."""
-        self._clear_screen()
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print("\n  [조작법] W:위, S:아래, A:왼쪽, D:오른쪽, Q:종료")
-        print("  몬스터(M)에게 이동하면 전투가 시작됩니다.")
-        print("  키(k)를 찾아서 잠긴 문(+)을 여세요.\n")
-        
-    def get_player_name(self):
-        """플레이어 이름을 입력받습니다."""
-        self._clear_screen()
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print("\n  당신의 이름은 무엇입니까? (최대 10자) > ", end='', flush=True)
-        name = input()
-        return name[:10] if name else "Hero"
-
-    def get_key_input(self):
-        """키 입력을 받습니다. Enter를 누를 필요가 없습니다."""
-        import readchar # readchar는 이 함수 내에서만 사용되므로 여기에 임포트
-        while True:
-            key = readchar.readchar()
-            if key == '\x03':  # Ctrl+C
-                raise KeyboardInterrupt
-            return key
-
-    def show_main_menu(self):
-        """메인 메뉴를 표시하고 사용자 입력을 받아 반환합니다."""
         self._clear_screen()
         print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
