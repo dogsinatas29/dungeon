@@ -135,5 +135,5 @@ class ConsoleUI:
             print(f"> {msg}")
         
         # 4. 입력 가이드
-        print(f"\n{COLOR_MAP['green']}[이동] WASD, 방향키, HJKL, YUBN | [Q] 종료 | [I] 인벤토리{COLOR_MAP['reset']}")
+        print(f"\n{COLOR_MAP['green']}[이동] 방향키, HJKL, YUBN | [Q] 종료 | [I] 인벤토리{COLOR_MAP['reset']}")
         sys.stdout.flush()
