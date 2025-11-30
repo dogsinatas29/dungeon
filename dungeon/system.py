@@ -31,7 +31,7 @@ class InputSystem(System): # System 상속
     def update(self):
         # 렌더링 시스템이 화면을 그린 후, 사용자 입력을 대기합니다.
         # 이 방식은 게임을 턴 기반으로 만듭니다.
-        key = readchar.readchar() # 사용자 입력 대기 (블로킹 호출)
+        key = readchar.readkey() # 사용자 입력 대기 (블로킹 호출)
         if key: # 키 입력이 있으면 이벤트를 발행합니다.
             logging.debug(f"InputSystem: Key detected - {key}")
             event_manager.publish(InputReceivedEvent(key=key))
