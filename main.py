@@ -9,7 +9,7 @@ if os.path.dirname(__file__) not in sys.path:
     sys.path.append(os.path.dirname(__file__))
 
 # 필요한 모듈 임포트
-from dungeon.engine import Engine
+from dungeon.engine import run_game # Engine 클래스 대신 run_game 함수 임포트
 from dungeon.ui import ConsoleUI
 
 def main():
@@ -19,21 +19,27 @@ def main():
     ui = ConsoleUI()
     
     # 2. 메인 메뉴 표시 및 플레이어 이름 입력
-    player_name = ui.show_main_menu()
-    
-    # 3. 게임 엔진 초기화
-    try:
-        engine = Engine(ui_instance=ui, player_name=player_name)
-    except Exception as e:
-        ui.show_game_over_screen(f"게임 초기화 실패: {e}")
+    choice = ui.show_main_menu()
+
+    if choice == 0: # 새 게임
+        player_name = ui.get_player_name()
+        run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
+    elif choice == 1: # 이어하기
+        # TODO: 이어하기 로직 구현 (현재는 새 게임과 동일하게 처리)
+        player_name = ui.get_player_name()
+        run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
+    elif choice == 2: # 게임 종료
         return
 
-    # 4. 게임 루프 실행
-    try:
-        engine.run_game_loop()
+    except KeyboardInterrupt:
+        print("\n[시스템] 게임 종료 요청.")
+        sys.exit(0)
     except Exception as e:
         # 게임 루프 중 예상치 못한 오류 발생 시
         ui.show_game_over_screen(f"게임 실행 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
         
 if __name__ == "__main__":
     main()

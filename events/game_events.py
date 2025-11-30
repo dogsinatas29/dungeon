@@ -2,6 +2,10 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 @dataclass
+class InputReceivedEvent:
+    key: str
+
+@dataclass
 class PlayerMovedEvent:
     entity_id: int
     old_pos: Tuple[int, int]
