@@ -8,3 +8,4 @@
 *   **NameError 수정**: `dungeon/system.py` 파일에 `logging` 모듈을 임포트하여 `InputSystem`에서 `NameError`가 발생하지 않도록 수정했습니다.
 *   **README.md 업데이트**: 최신 변경 사항과 프로젝트 구조를 반영하여 `README.md` 파일을 업데이트했습니다. `map_manager.py`를 `map.py`로, `renderer.py`를 `ui.py`로 변경하고, 실시간 입력 구현 세부 정보 및 일반 명령어(`python3 main.py`)를 반영했습니다.
 *   **NameError 수정**: `dungeon/engine.py` 파일에 `readchar` 모듈을 임포트하여 `_handle_input_event` 함수에서 `NameError`가 발생하지 않도록 수정했습니다.
+*   **NameError 수정**: `dungeon/system.py` 파일에 `Player` 클래스를 임포트하여 `MovementSystem`에서 `NameError`가 발생하지 않도록 수정했습니다.

@@ -4,11 +4,6 @@ import random
 import logging
 from typing import List, Tuple, Dict, Any, Optional
 
-# --- Component Imports ---
-from .component import PositionComponent, RenderComponent, ColliderComponent, DoorComponent, KeyComponent, InteractableComponent, NameComponent, HealthComponent, AIComponent, InventoryComponent # InventoryComponent 추가
-from .entity import EntityManager, make_door, make_key # make_door, make_key 임포트
-from . import data_manager 
-
 # --- Tile Definitions ---
 WALL_CHAR = '#'
 FLOOR_CHAR = '.'
@@ -17,6 +12,7 @@ DOOR_OPEN_CHAR = '/'
 KEY_CHAR = 'k'
 EXIT_CHAR = '>' 
 START_CHAR = '<'
+UNKNOWN_CHAR = ' ' # 안개 또는 미탐색 영역 표시
 
 class Rect:
     """A rectangular room or corridor."""
@@ -38,13 +34,11 @@ class Rect:
                 self.y1 <= other.y2 + 1 and self.y2 >= other.y1 - 1)
 
 class DungeonMap:
-    def __init__(self, width: int, height: int, rng, dungeon_level_tuple: Tuple[int, int] = (1, 0), ui_instance=None, entity_manager: EntityManager = None):
+    def __init__(self, width: int, height: int, rng, dungeon_level_tuple: Tuple[int, int] = (1, 0)):
         self.width = width
         self.height = height
         self.rng = rng
         self.dungeon_level_tuple = dungeon_level_tuple
-        self.ui_instance = ui_instance
-        self.entity_manager = entity_manager
         
         self.map_data: List[List[str]] = [] 
         self.rooms: List[Rect] = [] 
@@ -107,12 +101,7 @@ class DungeonMap:
         if self.rooms:
             self.exit_x, self.exit_y = self.rooms[-1].center
             
-            # 출구 주변에 잠긴 문 생성 (예시)
-            door_x, door_y = self.exit_x, self.exit_y - 1 
-            if self.is_valid_tile(door_x, door_y) and self.map_data[door_y][door_x] == FLOOR_CHAR and self.entity_manager:
-                make_door(self.entity_manager, door_x, door_y, self.dungeon_level_tuple, is_locked=True, key_id="exit_key")
-                # make_key(self.entity_manager, self.rooms[0].center[0], self.rooms[0].center[1], self.dungeon_level_tuple, key_id="exit_key") 
-                # 열쇠는 DungeonGenerationSystem에서 배치할 예정이므로 여기서는 주석 처리
+            # 맵은 이제 순수하게 타일 데이터만 관리하며, 엔티티 생성은 DungeonGenerationSystem에서 담당합니다.
 
         logging.debug("DungeonMap.generate_map: 맵 생성 완료")
 
@@ -139,23 +128,12 @@ class DungeonMap:
     def get_tile_for_display(self, x: int, y: int) -> str:
         """주어진 좌표의 타일 문자를 렌더링을 위해 반환합니다."""
         if not self.is_valid_tile(x, y):
-            return f"{ANSI.BLUE}{WALL_CHAR}{ANSI.RESET}" 
+            return WALL_CHAR 
 
         if self.fog_enabled and (x, y) not in self.visited:
-            return f"{ANSI.BLACK}{FLOOR_CHAR}{ANSI.RESET}" 
+            return UNKNOWN_CHAR  # 미탐색/안개 지역은 알 수 없는 문자로 표시
 
-        char = self.map_data[y][x]
-        color = ANSI.WHITE
-
-        if char == WALL_CHAR:
-            color = ANSI.BLUE
-        elif char == FLOOR_CHAR:
-            color = ANSI.WHITE 
-        
-        # 엔티티 렌더링은 Engine의 RenderingSystem에서 처리해야 함
-        # 여기서는 기본 맵 타일만 반환
-
-        return f"{color}{char}{ANSI.RESET}"
+        return self.map_data[y][x]
 
     def reveal_tiles(self, center_x: int, center_y: int, radius: int = 5):
         """지정된 중심점으로부터 반경 내의 타일을 방문 처리합니다."""
@@ -170,7 +148,7 @@ class DungeonMap:
         """두 점 사이에 시야를 가리는 벽이 있는지 확인합니다."""
         points = self._get_line(x1, y1, x2, y2)
         for x, y in points:
-            if self.is_wall(x, y):
+            if self.map_data[y][x] == WALL_CHAR: # self.is_wall 대신 직접 map_data 참조
                 return True
         return False
 
@@ -200,15 +178,6 @@ class DungeonMap:
                 y += sy
         return line
 
-    def get_monster_at(self, x: int, y: int) -> Optional[int]:
-        """주어진 위치에 몬스터 엔티티가 있는지 확인하고 ID를 반환합니다."""
-        if not self.entity_manager: return None
-        for entity_id, pos_comp in self.entity_manager.get_components_of_type(PositionComponent).items():
-            if pos_comp.x == x and pos_comp.y == y and pos_comp.map_id == self.dungeon_level_tuple:
-                if self.entity_manager.has_component(entity_id, HealthComponent) and self.entity_manager.has_component(entity_id, AIComponent):
-                    return entity_id
-        return None
-
     def to_dict(self) -> Dict[str, Any]:
         return {
             "width": self.width,
@@ -227,8 +196,8 @@ class DungeonMap:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], rng, ui_instance=None, entity_manager: EntityManager = None):
-        d_map = cls(data["width"], data["height"], rng, data["dungeon_level_tuple"], ui_instance, entity_manager)
+    def from_dict(cls, data: Dict[str, Any], rng):
+        d_map = cls(data["width"], data["height"], rng, data["dungeon_level_tuple"])
         d_map.map_data = data["map_data"]
         d_map.start_x = data["start_x"]
         d_map.start_y = data["start_y"]

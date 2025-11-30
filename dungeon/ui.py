@@ -42,8 +42,48 @@ class ConsoleUI:
         print("  몬스터(M)에게 이동하면 전투가 시작됩니다.")
         print("  키(k)를 찾아서 잠긴 문(+)을 여세요.\n")
         
-        name = input("  당신의 이름은 무엇입니까? > ")
-        return name if name else "Hero"
+    def get_player_name(self):
+        """플레이어 이름을 입력받습니다."""
+        self._clear_screen()
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        print("\n  당신의 이름은 무엇입니까? (최대 10자) > ", end='', flush=True)
+        name = input()
+        return name[:10] if name else "Hero"
+
+    def get_key_input(self):
+        """키 입력을 받습니다. Enter를 누를 필요가 없습니다."""
+        import readchar # readchar는 이 함수 내에서만 사용되므로 여기에 임포트
+        while True:
+            key = readchar.readchar()
+            if key == '\x03':  # Ctrl+C
+                raise KeyboardInterrupt
+            return key
+
+    def show_main_menu(self):
+        """메인 메뉴를 표시하고 사용자 입력을 받아 반환합니다."""
+        self._clear_screen()
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        print("\n  [메뉴]")
+        print("  1. 새 게임")
+        print("  2. 이어하기")
+        print("  3. 게임 종료")
+        print(f"\n{COLOR_MAP['green']}[선택] 1, 2, 3을 입력하세요.{COLOR_MAP['reset']}", end='', flush=True)
+
+        while True:
+            choice = self.get_key_input()
+            if choice == '1':
+                return 0 # Start new game
+            elif choice == '2':
+                return 1 # Load game
+            elif choice == '3':
+                return 2 # Exit game
+            else:
+                # 잘못된 입력 시 메시지 표시 또는 무시 (여기서는 무시)
+                pass
 
     def show_game_over_screen(self, message):
         """게임 종료 화면을 표시합니다."""

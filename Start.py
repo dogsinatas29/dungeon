@@ -4,7 +4,6 @@ import os
 import json
 import sys
 import shutil
-import readchar
 import logging # 로깅 모듈 임포트
 
 # 로깅 설정
@@ -22,7 +21,7 @@ from dungeon.data_manager import (
     load_item_definitions, get_item_definition, load_skill_definitions,
     save_game_data, load_game_data, delete_save_data
 )
-from dungeon.renderer import UI, ANSI
+from dungeon.ui import ConsoleUI, ANSI
 
 # --- 데이터 로드 ---
 ITEM_DEFINITIONS = load_item_definitions()
@@ -38,8 +37,7 @@ def start_game(ui, new_game=False):
     if new_game or not game_state_data:
         if new_game and game_state_data:
             delete_save_data() # 새 게임 선택 시 기존 데이터 삭제
-        
-        ui.add_message("디버그: 플레이어 이름 입력 대기 중...")
+
         player_name = ui.get_player_name()
         ui.add_message(f"디버그: 플레이어 이름 입력됨 - {player_name}")
         player_instance = Player(name=player_name)
@@ -70,12 +68,12 @@ def start_game(ui, new_game=False):
     
     if game_result == "DEATH":
         delete_save_data()
-        ui.show_game_over_screen()
+        ui.show_game_over_screen("당신은 죽었습니다!")
 
 
 def main_menu():
     """메인 메뉴를 표시하고 사용자 입력을 처리합니다."""
-    ui = UI()
+    ui = ConsoleUI()
     while True:
         choice = ui.show_main_menu()
         if choice == 0: # 새 게임
