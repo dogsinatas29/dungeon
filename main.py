@@ -11,24 +11,28 @@ if os.path.dirname(__file__) not in sys.path:
 # 필요한 모듈 임포트
 from dungeon.engine import run_game # Engine 클래스 대신 run_game 함수 임포트
 from dungeon.ui import ConsoleUI
+from dungeon.data_manager import load_item_definitions
 
 def main():
     """게임 초기화 및 메인 루프 실행"""
     
     # 1. UI 초기화
     ui = ConsoleUI()
+
+    # 2. 아이템 정의 로드
+    ITEM_DEFINITIONS = load_item_definitions(ui) # ui_instance를 전달
     
-    # 2. 메인 메뉴 표시 및 플레이어 이름 입력
+    # 3. 메인 메뉴 표시 및 플레이어 이름 입력
     choice = ui.show_main_menu()
 
     try:
         if choice == 0: # 새 게임
             player_name = ui.get_player_name()
-            run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
+            run_game(player_name=player_name, item_definitions=ITEM_DEFINITIONS, ui_instance=ui)
         elif choice == 1: # 이어하기
             # TODO: 이어하기 로직 구현 (현재는 새 게임과 동일하게 처리)
             player_name = ui.get_player_name()
-            run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
+            run_game(player_name=player_name, item_definitions=ITEM_DEFINITIONS, ui_instance=ui)
         elif choice == 2: # 게임 종료
             return
 

@@ -27,7 +27,7 @@ from dungeon.ui import ConsoleUI, ANSI
 ITEM_DEFINITIONS = load_item_definitions()
 SKILL_DEFINITIONS = load_skill_definitions()
 
-def start_game(ui, new_game=False):
+def start_game(ui, player_name: str, new_game=False):
     """새 게임 또는 이어하기를 시작합니다."""
     game_state_data = None
 
@@ -38,6 +38,7 @@ def start_game(ui, new_game=False):
         if new_game and game_state_data:
             delete_save_data() # 새 게임 선택 시 기존 데이터 삭제
 
+        ui.add_message(f"디버그: 플레이어 이름 입력됨 - {player_name}")
         player_instance = Player(name=player_name)
         # 새 게임 시작 시 초기 게임 상태 데이터 생성 (ECS 컴포넌트 포함)
         initial_game_state = {
@@ -61,7 +62,7 @@ def start_game(ui, new_game=False):
 
     ui_instance = ui
     ui.add_message("디버그: 게임 엔진 시작 전...")
-    game_result = engine.run_game(player_name, ITEM_DEFINITIONS, ui_instance)
+    game_result = engine.run_game(player_name, ITEM_DEFINITIONS, ui_instance) # ITEM_DEFINITIONS 전달
     ui.add_message("디버그: 게임 엔진 종료 후.")
     
     if game_result == "DEATH":
@@ -75,13 +76,15 @@ def main_menu():
     while True:
         choice = ui.show_main_menu()
         if choice == 0: # 새 게임
-            start_game(ui, new_game=True)
+            player_name = ui.get_player_name()
+            start_game(ui, player_name, new_game=True)
         elif choice == 1: # 이어하기
+            player_name = ui.get_player_name() # 이어하기 시에도 플레이어 이름 필요
             if not load_game_data():
                 ui.add_message("저장된 게임이 없습니다. 새 게임을 시작합니다.")
-                start_game(ui, new_game=True)
+                start_game(ui, player_name, new_game=True)
             else:
-                start_game(ui, new_game=False)
+                start_game(ui, player_name, new_game=False)
         elif choice == 2: # 게임 종료
             break
     del ui
