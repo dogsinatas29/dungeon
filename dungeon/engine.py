@@ -274,10 +274,11 @@ class Engine:
                 time.sleep((1 / 30) - frame_time)
 
 
-def run_game(player_name: str = "Hero", rng_seed: Optional[int] = None):
+def run_game(player_name: str, item_definitions, ui_instance: ConsoleUI, rng_seed: Optional[int] = None):
     """게임 인스턴스를 생성하고 실행합니다."""
-    ui_instance = ConsoleUI()
+    # ui_instance는 Start.py 또는 main.py에서 생성되어 전달되므로 여기서는 생성하지 않습니다.
     engine = Engine(ui_instance, player_name, rng_seed)
+    engine.item_definitions = item_definitions # 전달받은 item_definitions 사용
     engine.run_game_loop()
 
 if __name__ == '__main__':

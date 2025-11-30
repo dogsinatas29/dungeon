@@ -38,8 +38,6 @@ def start_game(ui, new_game=False):
         if new_game and game_state_data:
             delete_save_data() # 새 게임 선택 시 기존 데이터 삭제
 
-        player_name = ui.get_player_name()
-        ui.add_message(f"디버그: 플레이어 이름 입력됨 - {player_name}")
         player_instance = Player(name=player_name)
         # 새 게임 시작 시 초기 게임 상태 데이터 생성 (ECS 컴포넌트 포함)
         initial_game_state = {
@@ -63,7 +61,7 @@ def start_game(ui, new_game=False):
 
     ui_instance = ui
     ui.add_message("디버그: 게임 엔진 시작 전...")
-    game_result = engine.run_game(ITEM_DEFINITIONS, ui_instance)
+    game_result = engine.run_game(player_name, ITEM_DEFINITIONS, ui_instance)
     ui.add_message("디버그: 게임 엔진 종료 후.")
     
     if game_result == "DEATH":
