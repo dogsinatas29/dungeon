@@ -21,15 +21,16 @@ def main():
     # 2. 메인 메뉴 표시 및 플레이어 이름 입력
     choice = ui.show_main_menu()
 
-    if choice == 0: # 새 게임
-        player_name = ui.get_player_name()
-        run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
-    elif choice == 1: # 이어하기
-        # TODO: 이어하기 로직 구현 (현재는 새 게임과 동일하게 처리)
-        player_name = ui.get_player_name()
-        run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
-    elif choice == 2: # 게임 종료
-        return
+    try:
+        if choice == 0: # 새 게임
+            player_name = ui.get_player_name()
+            run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
+        elif choice == 1: # 이어하기
+            # TODO: 이어하기 로직 구현 (현재는 새 게임과 동일하게 처리)
+            player_name = ui.get_player_name()
+            run_game(player_name=player_name) # ui_instance는 run_game 내에서 생성
+        elif choice == 2: # 게임 종료
+            return
 
     except KeyboardInterrupt:
         print("\n[시스템] 게임 종료 요청.")
