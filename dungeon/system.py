@@ -8,11 +8,11 @@ from .ui import ConsoleUI # ConsoleUI 임포트
 from .component import PositionComponent, MovableComponent, MoveRequestComponent, InteractableComponent, ProjectileComponent, DamageRequestComponent, HealthComponent, NameComponent, AttackComponent, DefenseComponent, DeathComponent, GameOverComponent, InventoryComponent, EquipmentComponent, QuickSlotComponent, RenderComponent, ManaComponent, ColliderComponent, AIComponent, ItemUseRequestComponent, DesiredPositionComponent, DoorComponent, KeyComponent # 모든 컴포넌트 임포트
 from .entity import EntityManager
 from .map import DungeonMap # DungeonMap 임포트 추가
-from .items import Item # Item 클래스 임포트 추가 # EntityManager 임포트
+from .items import Item # Item 클래스 임포트 추가
+from .player import Player # Player 클래스 임포트 추가
 
 # TODO: DOOR_CLOSED_CHAR, DOOR_OPEN_CHAR는 constants.py로 이동
 DOOR_CLOSED_CHAR = '+'
-DOOR_OPEN_CHAR = '/'
 
 class System:
     def __init__(self, entity_manager: EntityManager):
