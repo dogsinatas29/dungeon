@@ -33,8 +33,45 @@ class ConsoleUI:
         """메시지 로그에 새로운 메시지를 추가합니다."""
         self.messages.append(message)
 
+    def get_player_name(self):
+        """플레이어 이름을 한 글자씩 입력받습니다."""
+        self._clear_screen()
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        prompt = "\n  당신의 이름은 무엇입니까? (최대 10자) > "
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+
+        name_chars = []
+        while True:
+            key = readchar.readkey() # readkey()는 특수 키도 처리
+            
+            if key == readchar.key.ENTER: # Enter 키 입력 시 종료
+                break
+            elif key == readchar.key.BACKSPACE: # Backspace 처리
+                if name_chars:
+                    name_chars.pop()
+                    sys.stdout.write("\b \b") # 커서 뒤로 이동, 문자 지우기, 다시 뒤로 이동
+                    sys.stdout.flush()
+            elif len(name_chars) < 10 and key.isprintable(): # 최대 10자, 출력 가능한 문자만
+                name_chars.append(key)
+                sys.stdout.write(key)
+                sys.stdout.flush()
+        
+        sys.stdout.write("\n") # 마지막 엔터 처리
+        return "".join(name_chars) if name_chars else "Hero"
+
+    def get_key_input(self):
+        """키 입력을 받습니다. Enter를 누를 필요가 없습니다."""
+        while True:
+            key = readchar.readkey() # readchar.readkey()로 변경
+            if key == '\x03':  # Ctrl+C
+                raise KeyboardInterrupt
+            return key
+
     def show_main_menu(self):
-        """게임 시작 메뉴를 표시하고 플레이어 이름을 입력받습니다."""
+        """메인 메뉴를 표시하고 사용자 입력을 받아 반환합니다."""
         self._clear_screen()
         print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
@@ -65,8 +102,6 @@ class ConsoleUI:
         print(f"{COLOR_MAP['red']}==================================={COLOR_MAP['reset']}")
         print(f"\n    {message}\n")
         print("    콘솔 창을 닫아 게임을 종료하십시오.")
-        # 입력이 없으면 계속 대기할 수 있으므로, 종료를 위해 sys.exit()을 사용하지 않습니다.
-        # 사용자가 수동으로 콘솔을 닫도록 안내합니다.
         
     def render_all(self, map_data, player_stats):
         """
@@ -79,10 +114,8 @@ class ConsoleUI:
         self._clear_screen()
         
         # 1. 맵 렌더링
-        # 이 줄의 닫는 따옴표(")를 추가하여 SyntaxError를 해결했습니다.
         print(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}")
 
-        # map_data는 이제 2D 리스트이므로 직접 출력하는 대신, 각 타일을 렌더링해야 합니다.
         for y_idx, row in enumerate(map_data):
             rendered_row = []
             for x_idx, (char, color) in enumerate(row):
@@ -98,10 +131,9 @@ class ConsoleUI:
         
         # 3. 메시지 로그
         print(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}")
-        # 최신 메시지 5개만 출력
         for msg in self.messages[-5:]:
             print(f"> {msg}")
         
         # 4. 입력 가이드
         print(f"\n{COLOR_MAP['green']}[이동] WASD, 방향키, HJKL, YUBN | [Q] 종료 | [I] 인벤토리{COLOR_MAP['reset']}")
-        sys.stdout.flush() # 출력 버퍼 강제 비우기
+        sys.stdout.flush()
