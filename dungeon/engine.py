@@ -9,8 +9,8 @@ from .map import DungeonMap
 
 # 필요한 모듈 임포트
 from .ecs import World, EventManager, initialize_event_listeners
-from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, LevelComponent, InventoryComponent
-from .systems import InputSystem, MovementSystem, RenderSystem 
+from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, LevelComponent, InventoryComponent, AIComponent
+from .systems import InputSystem, MovementSystem, RenderSystem, MonsterAISystem 
 from .renderer import Renderer
 
 
@@ -76,21 +76,39 @@ class Engine:
         self.world.add_component(message_entity.entity_id, MessageComponent())
         
         # 4. 몬스터 엔티티 생성 (각 방의 중앙에 배치, 시작 방 제외)
-        for room in dungeon_map.rooms[1:]: # 첫 번째 방(플레이어 시작) 제외
+        for i, room in enumerate(dungeon_map.rooms[1:]): # 첫 번째 방(플레이어 시작) 제외
             monster_x, monster_y = room.center
             monster_entity = self.world.create_entity()
             self.world.add_component(monster_entity.entity_id, PositionComponent(x=monster_x, y=monster_y))
-            self.world.add_component(monster_entity.entity_id, RenderComponent(char='g', color='green'))
-            self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name="Goblin"))
+            
+            # AI 패턴 결정 (0: 정지, 1: 도망, 2: 추적)
+            behavior = i % 3
+            color = "green"
+            type_name = "Goblin"
+            
+            if behavior == AIComponent.CHASE: 
+                color = "red"
+                type_name = "Aggressive Goblin"
+            elif behavior == AIComponent.FLEE: 
+                color = "blue"
+                type_name = "Cowardly Goblin"
+            else:
+                type_name = "Lazy Goblin"
+            
+            self.world.add_component(monster_entity.entity_id, RenderComponent(char='g', color=color))
+            self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
+            self.world.add_component(monster_entity.entity_id, AIComponent(behavior=behavior, detection_range=8))
 
     def _initialize_systems(self):
         """시스템 등록 (실행 순서가 중요함)"""
         self.input_system = InputSystem(self.world)
+        self.monster_ai_system = MonsterAISystem(self.world)
         self.movement_system = MovementSystem(self.world)
         self.render_system = RenderSystem(self.world)
         
-        # 시스템 순서 등록: 입력 -> 이동 -> 렌더링
+        # 시스템 순서 등록: 입력 -> AI -> 이동 -> 렌더링
         self.world.add_system(self.input_system)
+        self.world.add_system(self.monster_ai_system)
         self.world.add_system(self.movement_system)
         self.world.add_system(self.render_system)
 

@@ -2,7 +2,7 @@
 
 from typing import Set, Tuple, List, Any
 from .ecs import System, Entity, Event, EventManager # EventManager는 필요 없음
-from .components import PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent
+from .components import PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, AIComponent
 import readchar
 
 # --- Event 정의 (시스템 통신 표준) ---
@@ -176,6 +176,56 @@ class MovementSystem(System):
             return collided_entity.entity_id, "MONSTER"
             
         return collided_entity.entity_id, "OTHER"
+
+
+class MonsterAISystem(System):
+    """몬스터의 행동 패턴에 따라 DesiredPositionComponent를 추가합니다."""
+    _required_components: Set = {MonsterComponent, PositionComponent, AIComponent}
+
+    def process(self):
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        
+        player_pos = player_entity.get_component(PositionComponent)
+        if not player_pos: return
+
+        monsters = self.world.get_entities_with_components(self._required_components)
+        
+        for monster in monsters:
+            # 안전장치: 플레이어는 제외
+            if monster.entity_id == player_entity.entity_id: continue
+            
+            ai = monster.get_component(AIComponent)
+            pos = monster.get_component(PositionComponent)
+            if not ai or not pos: continue
+            
+            # 맨해튼 거리 계산
+            dist = abs(player_pos.x - pos.x) + abs(player_pos.y - pos.y)
+            
+            # 탐지 범위 밖이면 무시
+            if dist > ai.detection_range:
+                continue
+            
+            dx, dy = 0, 0
+            
+            if ai.behavior == AIComponent.CHASE:
+                # 플레이어 방향으로 이동 결정
+                if player_pos.x > pos.x: dx = 1
+                elif player_pos.x < pos.x: dx = -1
+                elif player_pos.y > pos.y: dy = 1
+                elif player_pos.y < pos.y: dy = -1
+                
+            elif ai.behavior == AIComponent.FLEE:
+                # 플레이어 반대 방향으로 이동 결정
+                if player_pos.x > pos.x: dx = -1
+                elif player_pos.x < pos.x: dx = 1
+                elif player_pos.y > pos.y: dy = -1
+                elif player_pos.y < pos.y: dy = 1
+            
+            if dx != 0 or dy != 0:
+                if monster.has_component(DesiredPositionComponent):
+                    monster.remove_component(DesiredPositionComponent)
+                monster.add_component(DesiredPositionComponent(dx=dx, dy=dy))
 
 
 class RenderSystem(System):

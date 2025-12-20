@@ -39,6 +39,16 @@ class MonsterComponent(Component):
         self.type_name = type_name
         self.level = level
 
+class AIComponent(Component):
+    """몬스터의 AI 행동 패턴 정의"""
+    STATIONARY = 0 # 정지형
+    FLEE = 1       # 도망형
+    CHASE = 2      # 추적형
+    
+    def __init__(self, behavior: int = STATIONARY, detection_range: int = 5):
+        self.behavior = behavior
+        self.detection_range = detection_range
+
 class InventoryComponent(Component):
     """아이템 및 장비 데이터를 저장"""
     def __init__(self, items: dict = None, equipped: dict = None):

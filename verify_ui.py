@@ -12,6 +12,15 @@ try:
     
     print(f"Renderer size: {eng.renderer.width}x{eng.renderer.height}")
     
+    print("Checking monsters and AI...")
+    from dungeon.components import MonsterComponent, AIComponent
+    monsters = eng.world.get_entities_with_components({MonsterComponent, AIComponent})
+    print(f"Found {len(monsters)} monsters with AI.")
+    for m in monsters:
+        comp = m.get_component(MonsterComponent)
+        ai = m.get_component(AIComponent)
+        print(f" - Monster: {comp.type_name}, AI Behavior: {ai.behavior}")
+
     print("Attempting to render frame (PLAYING)...")
     eng._render()
     print("Render PLAYING successful.")
