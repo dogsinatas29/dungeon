@@ -51,9 +51,10 @@ class AIComponent(Component):
 
 class InventoryComponent(Component):
     """아이템 및 장비 데이터를 저장"""
-    def __init__(self, items: dict = None, equipped: dict = None):
+    def __init__(self, items: dict = None, equipped: dict = None, quick_slots: list = None):
         self.items = items if items else {}
         self.equipped = equipped if equipped else {}
+        self.quick_slots = quick_slots if quick_slots else [None] * 5 # 기본 5슬롯
 
 class LevelComponent(Component):
     """레벨, 경험치, 직업 데이터"""

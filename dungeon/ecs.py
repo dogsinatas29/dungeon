@@ -98,6 +98,11 @@ class World:
         self._next_entity_id += 1
         return entity
 
+    def delete_entity(self, entity_id: int):
+        """엔티티를 월드에서 영구적으로 제거합니다."""
+        if entity_id in self._entities:
+            del self._entities[entity_id]
+
     def add_component(self, entity_id: int, component: Component):
         if entity_id in self._entities:
             self._entities[entity_id].add_component(component)

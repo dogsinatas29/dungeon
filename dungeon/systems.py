@@ -228,6 +228,60 @@ class MonsterAISystem(System):
                 monster.add_component(DesiredPositionComponent(dx=dx, dy=dy))
 
 
+class CombatSystem(System):
+    """엔티티 간 충돌 시 전투(데미지 계산)를 처리합니다."""
+    def process(self):
+        pass
+
+    def handle_collision_event(self, event: CollisionEvent):
+        """충돌 이벤트 발생 시 공격자와 대상이 있으면 전투 처리"""
+        if event.collision_type != "MONSTER" and event.target_entity_id is None:
+            return
+
+        attacker = self.world.get_entity(event.entity_id)
+        target = self.world.get_entity(event.target_entity_id)
+        
+        if not attacker or not target:
+            return
+
+        a_stats = attacker.get_component(StatsComponent)
+        t_stats = target.get_component(StatsComponent)
+        
+        if not a_stats or not t_stats:
+            return
+
+        # 1. 데미지 계산 (공격력 - 방어력, 최소 1)
+        damage = max(1, a_stats.attack - t_stats.defense)
+        t_stats.current_hp -= damage
+        
+        attacker_name = self._get_entity_name(attacker)
+        target_name = self._get_entity_name(target)
+        
+        self.event_manager.push(MessageEvent(f"{attacker_name}이(가) {target_name}에게 {damage}의 데미지를 입혔습니다!"))
+        
+        # 2. 사망 처리
+        if t_stats.current_hp <= 0:
+            t_stats.current_hp = 0
+            self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
+            # 몬스터 사망 시 맵에서 제거 (플레이어 사망은 Engine에서 처리)
+            if target.has_component(MonsterComponent):
+                # 턴 종료 후 안전하게 제거하기 위해 일단 사망 상태만 표시하거나 즉시 제거
+                # ECS 구조상 즉시 제거 가능
+                self.world.delete_entity(target.entity_id)
+
+    def _get_entity_name(self, entity) -> str:
+        """엔티티의 이름을 가져옵니다 (메시지용)"""
+        monster = entity.get_component(MonsterComponent)
+        if monster:
+            return monster.type_name
+        
+        # 플레이어인 경우 (Engine에 저장된 이름 사용이 좋으나 여기서는 간단히 Hero)
+        if entity.entity_id == self.world.get_player_entity().entity_id:
+            return "Hero"
+            
+        return f"Entity {entity.entity_id}"
+
+
 class RenderSystem(System):
     """
     ConsoleUI 모듈과 연동하여 최종 렌더링을 준비하고 이벤트를 처리합니다.

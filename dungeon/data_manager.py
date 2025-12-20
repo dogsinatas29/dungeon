@@ -6,7 +6,7 @@ import os
 # -----------------------------------------------------------------------
 class ItemDefinition:
     # 'item_type' 대신 CSV 헤더와 동일하게 'type'으로 인자명을 통일합니다.
-    def __init__(self, name, type, description, symbol, color, required_level, attack, defense, hp_effect, mp_effect):
+    def __init__(self, name, type, description, symbol, color, required_level, attack, defense, hp_effect, mp_effect, hand_type=1):
         self.name = name
         self.type = type # 'self.type'에 'type' 인자를 할당합니다.
         self.description = description
@@ -17,6 +17,7 @@ class ItemDefinition:
         self.defense = int(defense)
         self.hp_effect = int(hp_effect)
         self.mp_effect = int(mp_effect)
+        self.hand_type = int(hand_type) # 1: 한손, 2: 양손
 
 # 참고: Python 내장 함수 'type'과 이름이 겹치지만, **row 언패킹을 위해 이 이름을 사용해야 합니다.**
 

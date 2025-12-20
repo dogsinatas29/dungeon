@@ -1,6 +1,9 @@
-name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_effect
-낡은 검,WEAPON,오래되어 녹슨 검.,/,#8B4513,1,5,0,0,0
-가죽 갑옷,ARMOR,가벼운 가죽 갑옷.,[,#D2B48C,1,0,3,0,0
-체력 물약,CONSUMABLE,HP를 20 회복시켜주는 물약.,!,#FF0000,1,0,0,20,0
-마력 물약,CONSUMABLE,MP를 15 회복시켜주는 물약.,;,#0000FF,1,0,0,0,15
-강철 검,WEAPON,튼튼한 강철 검.,/,#A9A9A9,5,10,0,0,0
+name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_effect,hand_type
+낡은 검,WEAPON,오래되어 녹슨 검.,/,#8B4513,1,5,0,0,0,1
+가죽 갑옷,ARMOR,가벼운 가죽 갑옷.,[,#D2B48C,1,0,3,0,0,1
+체력 물약,CONSUMABLE,HP를 20 회복시켜주는 물약.,!,#FF0000,1,0,0,20,0,0
+마력 물약,CONSUMABLE,MP를 15 회복시켜주는 물약.,;,#0000FF,1,0,0,0,15,0
+강철 검,WEAPON,튼튼한 강철 검.,/,#A9A9A9,5,10,0,0,0,1
+방패,SHIELD,튼튼한 나무 방패.,),#8B4513,1,0,5,0,0,1
+양손 대검,WEAPON,강력하지만 무거운 대검.,/,#708090,3,15,0,0,0,2
+활,WEAPON,원거리 공격이 가능한 활.,{,#8B4513,2,8,0,0,0,2
