@@ -24,6 +24,11 @@ class StatsComponent(Component):
         self.current_hp = current_hp
         self.attack = attack
         self.defense = defense
+        
+        # 기본 능력치 (장비 효과 제외)
+        self.base_attack = attack
+        self.base_defense = defense
+        
         self.max_mp = max_mp
         self.current_mp = current_mp
         self.max_stamina = max_stamina
@@ -51,10 +56,12 @@ class AIComponent(Component):
 
 class InventoryComponent(Component):
     """아이템 및 장비 데이터를 저장"""
-    def __init__(self, items: dict = None, equipped: dict = None, quick_slots: list = None):
+    def __init__(self, items: dict = None, equipped: dict = None, item_slots: list = None, skill_slots: list = None, skills: list = None):
         self.items = items if items else {}
         self.equipped = equipped if equipped else {}
-        self.quick_slots = quick_slots if quick_slots else [None] * 5 # 기본 5슬롯
+        self.item_slots = item_slots if item_slots else [None] * 5 # 1~5번 아이템
+        self.skill_slots = skill_slots if skill_slots else [None] * 5 # 6~0번 스킬
+        self.skills = skills if skills else ["기본 공격"]
 
 class LevelComponent(Component):
     """레벨, 경험치, 직업 데이터"""
@@ -84,7 +91,7 @@ class MapComponent(Component):
 
 class MessageComponent(Component):
     """게임 메시지 로그를 저장하는 컴포넌트"""
-    def __init__(self, max_messages: int = 5):
+    def __init__(self, max_messages: int = 50):
         self.messages: List[str] = []
         self.max_messages = max_messages
         

@@ -50,7 +50,7 @@ def load_data_from_csv(file_name, definition_class, data_path="data"):
     file_path = os.path.join(data_path, file_name)
     
     try:
-        with open(file_path, mode='r', encoding='utf-8') as file:
+        with open(file_path, mode='r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 # DictReader의 row를 클래스 __init__ 인자에 언패킹하여 객체 생성

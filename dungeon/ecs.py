@@ -72,11 +72,23 @@ class EventManager:
             event_type = type(event)
             
             if event_type in self.listeners:
-                # 이벤트 리스너의 메서드 이름 규칙: handle_[event_type_name]
-                handler_name = f"handle_{event_type.__name__.lower()}"
+                # 이벤트 리스너의 메서드 이름 규칙: handle_snake_case (예: MessageEvent -> handle_message_event)
+                class_name = event_type.__name__
+                # CamelCase to snake_case
+                import re
+                snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).lower()
+                handler_name = f"handle_{snake_name}"
+                
+                # 하위 호환성을 위해 이전 방식(handle_messageevent)도 체크 가능하지만, 
+                # 현재 코드베이스가 모두 언더바를 사용하므로 언더바 방식으로 통일
                 
                 for listener in self.listeners[event_type]:
                     handler = getattr(listener, handler_name, None)
+                    # 만약 언더바 버전이 없으면 언더바 없는 버전도 시도
+                    if not handler:
+                        old_handler_name = f"handle_{class_name.lower()}"
+                        handler = getattr(listener, old_handler_name, None)
+                        
                     if handler:
                         handler(event)
 
@@ -139,9 +151,18 @@ class World:
         
         # 시스템이 처리할 이벤트 타입을 EventManager에 등록
         for event_type in self.event_manager.listeners.keys():
-            handler_name = f"handle_{event_type.__name__.lower()}"
+            class_name = event_type.__name__
+            import re
+            snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).lower()
+            handler_name = f"handle_{snake_name}"
+            
             if hasattr(system, handler_name):
                 self.event_manager.register(event_type, system)
+            else:
+                # 하위 호환성 (언더바 없는 버전)
+                old_handler_name = f"handle_{class_name.lower()}"
+                if hasattr(system, old_handler_name):
+                    self.event_manager.register(event_type, system)
 
     def process_systems(self):
         """등록된 모든 시스템의 process 메서드를 순차적으로 실행"""
@@ -162,6 +183,14 @@ def initialize_event_listeners(world: World):
 
     for system in world._systems:
         for event_type in world.event_manager.listeners.keys():
-            handler_name = f"handle_{event_type.__name__.lower()}"
+            class_name = event_type.__name__
+            import re
+            snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).lower()
+            handler_name = f"handle_{snake_name}"
+            
             if hasattr(system, handler_name):
                 world.event_manager.register(event_type, system)
+            else:
+                old_handler_name = f"handle_{class_name.lower()}"
+                if hasattr(system, old_handler_name):
+                    world.event_manager.register(event_type, system)

@@ -4,8 +4,8 @@
 # --- Tile Definitions ---
 BORDER_WALL = '#'
 INNER_WALL = '#'
-FLOOR = ' '
-FLOOR_CHAR = FLOOR # FLOOR_CHAR는 FLOOR와 동일
+FLOOR = '.'
+FLOOR_CHAR = '.' # FLOOR_CHAR는 FLOOR와 동일
 PLAYER = '@'
 START = '<'
 DOOR_CLOSED_CHAR = '+'

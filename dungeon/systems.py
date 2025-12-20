@@ -43,10 +43,6 @@ class InputSystem(System):
         if not player_entity: return False
 
         move_map = {
-            'w': (0, -1),
-            's': (0, 1),
-            'a': (-1, 0),
-            'd': (1, 0),
             readchar.key.UP: (0, -1),
             readchar.key.DOWN: (0, 1),
             readchar.key.LEFT: (-1, 0),
@@ -174,6 +170,10 @@ class MovementSystem(System):
         # 충돌 유형 결정
         if collided_entity.get_component(MonsterComponent):
             return collided_entity.entity_id, "MONSTER"
+        
+        # 플레이어 체크 (ID=1 가정 또는 컴포넌트 유무)
+        if collided_entity.entity_id == self.world.get_player_entity().entity_id:
+            return collided_entity.entity_id, "PLAYER"
             
         return collided_entity.entity_id, "OTHER"
 
@@ -235,7 +235,7 @@ class CombatSystem(System):
 
     def handle_collision_event(self, event: CollisionEvent):
         """충돌 이벤트 발생 시 공격자와 대상이 있으면 전투 처리"""
-        if event.collision_type != "MONSTER" and event.target_entity_id is None:
+        if event.collision_type not in ["MONSTER", "PLAYER"] and event.target_entity_id is None:
             return
 
         attacker = self.world.get_entity(event.entity_id)
@@ -257,7 +257,8 @@ class CombatSystem(System):
         attacker_name = self._get_entity_name(attacker)
         target_name = self._get_entity_name(target)
         
-        self.event_manager.push(MessageEvent(f"{attacker_name}이(가) {target_name}에게 {damage}의 데미지를 입혔습니다!"))
+        # 문구 수정: "A"이(가) 공격해서 "B"은(는) X의 데미지를 입었다.
+        self.event_manager.push(MessageEvent(f'"{attacker_name}"이(가) 공격해서 "{target_name}"은(는) {damage}의 데미지를 입었다.'))
         
         # 2. 사망 처리
         if t_stats.current_hp <= 0:
@@ -265,8 +266,6 @@ class CombatSystem(System):
             self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
             # 몬스터 사망 시 맵에서 제거 (플레이어 사망은 Engine에서 처리)
             if target.has_component(MonsterComponent):
-                # 턴 종료 후 안전하게 제거하기 위해 일단 사망 상태만 표시하거나 즉시 제거
-                # ECS 구조상 즉시 제거 가능
                 self.world.delete_entity(target.entity_id)
 
     def _get_entity_name(self, entity) -> str:
@@ -275,9 +274,10 @@ class CombatSystem(System):
         if monster:
             return monster.type_name
         
-        # 플레이어인 경우 (Engine에 저장된 이름 사용이 좋으나 여기서는 간단히 Hero)
-        if entity.entity_id == self.world.get_player_entity().entity_id:
-            return "Hero"
+        # 플레이어인 경우 Engine에 저장된 실제 이름 사용
+        player_entity = self.world.get_player_entity()
+        if player_entity and entity.entity_id == player_entity.entity_id:
+            return self.world.engine.player_name
             
         return f"Entity {entity.entity_id}"
 

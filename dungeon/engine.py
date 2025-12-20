@@ -10,7 +10,7 @@ from .map import DungeonMap
 # 필요한 모듈 임포트
 from .ecs import World, EventManager, initialize_event_listeners
 from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, LevelComponent, InventoryComponent, AIComponent
-from .systems import InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem 
+from .systems import InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, MessageEvent
 from .renderer import Renderer
 from .data_manager import load_item_definitions
 
@@ -74,15 +74,25 @@ class Engine:
             for name, item in item_defs.items():
                 sample_items[name] = {'item': item, 'qty': 1}
         
+        # 장착 아이템 설정 (객체 참조로 변경)
+        equipped = {slot: None for slot in ["머리", "몸통", "장갑", "신발", "손1", "손2", "액세서리1", "액세서리2"]}
+        if "가죽 갑옷" in sample_items:
+            equipped["몸통"] = sample_items["가죽 갑옷"]["item"]
+        if "낡은 검" in sample_items:
+            equipped["손1"] = sample_items["낡은 검"]["item"]
+        if "힘의 반지" in sample_items:
+            equipped["액세서리1"] = sample_items["힘의 반지"]["item"]
+
         self.world.add_component(player_entity.entity_id, InventoryComponent(
             items=sample_items, 
-            equipped={
-                "머리": None, "몸통": "가죽 갑옷", "장갑": None, 
-                "신발": None, "손1": "낡은 검", "손2": None, 
-                "액세서리1": None, "액세서리2": None
-            },
-            quick_slots=["체력 물약", "마력 물약", None, None, None]
+            equipped=equipped,
+            item_slots=["체력 물약", "마력 물약", "화염 스크롤", "순간 이동 스크롤", "마커"],
+            skill_slots=["기본 공격", "파이어볼", "힐", None, None],
+            skills=["기본 공격", "파이어볼", "힐"]
         ))
+        
+        # 초기 스탯 계산 (장비 보너스 적용)
+        self._recalculate_stats()
         
         # 2. 맵 엔티티 생성 (ID=2)
         map_entity = self.world.create_entity()
@@ -92,7 +102,10 @@ class Engine:
         
         # 3. 메시지 로그 엔티티 생성 (ID=3)
         message_entity = self.world.create_entity()
-        self.world.add_component(message_entity.entity_id, MessageComponent())
+        message_comp = MessageComponent()
+        message_comp.add_message(f"{self.player_name}님, 던전에 오신 것을 환영합니다!")
+        message_comp.add_message("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.")
+        self.world.add_component(message_entity.entity_id, message_comp)
         
         # 4. 몬스터 엔티티 생성 (각 방의 중앙에 배치, 시작 방 제외)
         for i, room in enumerate(dungeon_map.rooms[1:]): # 첫 번째 방(플레이어 시작) 제외
@@ -139,6 +152,9 @@ class Engine:
         self.world.add_system(self.movement_system)
         self.world.add_system(self.combat_system)
         self.world.add_system(self.render_system)
+        
+        # 이벤트 리스너 등록 (시스템과 이벤트 연결)
+        initialize_event_listeners(self.world)
 
     def _get_input(self) -> str:
         """사용자 입력을 받아 반환 (readchar 사용)"""
@@ -161,6 +177,12 @@ class Engine:
             if self.state == GameState.PLAYING:
                 if action == 'i' or action == 'I':
                     self.state = GameState.INVENTORY
+                    self._render()
+                    continue
+                
+                # 단축키 처리 (1~5번 아이템, 6~0번 스킬)
+                if action in "1234567890":
+                    self._trigger_quick_slot(action)
                     self._render()
                     continue
 
@@ -208,8 +230,7 @@ class Engine:
         elif self.inventory_category_index == 2: # 스크롤
             filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type == 'SCROLL']
         elif self.inventory_category_index == 3: # 스킬
-            # TODO: 스킬 시스템 연동 후 리스트업
-            filtered_items = []
+            filtered_items = [(s, {'item_name': s}) for s in inv.skills]
 
         item_count = len(filtered_items)
 
@@ -225,55 +246,218 @@ class Engine:
         elif action == readchar.key.RIGHT:
              self.inventory_category_index = (self.inventory_category_index + 1) % 4
              self.selected_item_index = 0
-        elif action == readchar.key.ENTER or action == '\r' or action == '\n':
+        elif action == readchar.key.ENTER or action == '\r' or action == '\n' or action == 'e' or action == 'E':
              if filtered_items and 0 <= self.selected_item_index < len(filtered_items):
-                 self._equip_selected_item(filtered_items[self.selected_item_index][1])
+                 item_id, item_data = filtered_items[self.selected_item_index]
+                 # E키 또는 ENTER 입력 시 행동 결정
+                 if self.inventory_category_index == 0: # 아이템 (소모품)
+                     if action == 'e' or action == 'E':
+                         self._assign_quick_slot(item_data['item'].name, "ITEM")
+                     else:
+                         self._use_item(item_id, item_data) # ENTER는 즉시 사용
+                 elif self.inventory_category_index == 1: # 장비
+                     self._equip_selected_item(item_data)
+                 elif self.inventory_category_index == 2: # 스크롤 (아이템 슬롯에 등록 가능하게)
+                     if action == 'e' or action == 'E':
+                         self._assign_quick_slot(item_data['item'].name, "ITEM")
+                     else:
+                         self._use_item(item_id, item_data) 
+                 elif self.inventory_category_index == 3: # 스킬
+                     self._assign_quick_slot(item_id, "SKILL")
 
-    def _equip_selected_item(self, item_data):
-        """선택된 아이템을 조건에 맞춰 장착"""
+    def _assign_quick_slot(self, name, category):
+        """이름을 기반으로 아이템/스킬을 적절한 퀵슬롯에 등록하거나 해제 (Toggle)"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        
+        inv = player_entity.get_component(InventoryComponent)
+        if not inv: return
+
+        # 대상 슬롯 리스트 결정
+        slots = inv.item_slots if category == "ITEM" else inv.skill_slots
+        slot_label = "아이템 퀵슬롯" if category == "ITEM" else "스킬 퀵슬롯"
+        offset = 0 if category == "ITEM" else 5
+
+        # 이미 등록되어 있는지 확인
+        if name in slots:
+            idx = slots.index(name)
+            slots[idx] = None
+            self.world.event_manager.push(MessageEvent(f"{name}을(를) {slot_label} {idx+1+offset}번에서 해제했습니다."))
+            return
+
+        # 비어있는 슬롯 찾기
+        for i in range(len(slots)):
+            if slots[i] is None:
+                slots[i] = name
+                self.world.event_manager.push(MessageEvent(f"{name}을(를) {slot_label} {i+1+offset}번에 등록했습니다."))
+                return
+        
+        self.world.event_manager.push(MessageEvent(f"{slot_label}이 가득 찼습니다!"))
+
+    def _trigger_quick_slot(self, key):
+        """단축키(1~0)를 눌러 퀵슬롯 아이템/스킬 실행"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        inv = player_entity.get_component(InventoryComponent)
+        if not inv: return
+
+        num = int(key)
+        if 1 <= num <= 5: # 아이템 슬롯 (1~5)
+            idx = num - 1
+            item_name = inv.item_slots[idx]
+            if item_name:
+                # 인벤토리에서 아이템 찾기
+                found_id = None
+                found_data = None
+                for id, data in inv.items.items():
+                    if data['item'].name == item_name:
+                        found_id = id
+                        found_data = data
+                        break
+                
+                if found_data:
+                    self._use_item(found_id, found_data)
+                else:
+                    self.world.event_manager.push(MessageEvent(f"{item_name}을(를) 인벤토리에서 찾을 수 없습니다."))
+            else:
+                self.world.event_manager.push(MessageEvent(f"{num}번 퀵슬롯이 비어있습니다."))
+        
+        else: # 스킬 슬롯 (6,7,8,9,0)
+            # 0번은 10번 슬롯 (index 4)
+            idx = 4 if num == 0 else num - 6
+            skill_name = inv.skill_slots[idx]
+            if skill_name:
+                self.world.event_manager.push(MessageEvent(f"{skill_name} 스킬을 사용합니다! (시스템 준비 중)"))
+                # TODO: 스킬 시스템 연동 (MP 소모, 효과 등)
+            else:
+                slot_num = 10 if num == 0 else num
+                self.world.event_manager.push(MessageEvent(f"{slot_num}번 스킬 슬롯이 비어있습니다."))
+
+    def _use_item(self, item_id, item_data):
+        """소모품 아이템 사용"""
         item = item_data['item']
         player_entity = self.world.get_player_entity()
         if not player_entity: return
         
-        from .components import InventoryComponent
+        stats = player_entity.get_component(StatsComponent)
+        inv = player_entity.get_component(InventoryComponent)
+        
+        if not stats or not inv: return
+
+        # 효과 적용
+        old_hp = stats.current_hp
+        old_mp = stats.current_mp
+        
+        if item.hp_effect != 0:
+            stats.current_hp = min(stats.max_hp, stats.current_hp + item.hp_effect)
+        if item.mp_effect != 0:
+            stats.current_mp = min(stats.max_mp, stats.current_mp + item.mp_effect)
+            
+        hp_recovered = stats.current_hp - old_hp
+        
+        # 메시지 추가
+        msg = f"{item.name}을(를) 사용했습니다."
+        if hp_recovered > 0:
+            msg += f" (HP {hp_recovered} 회복)"
+            
+        self.world.event_manager.push(MessageEvent(msg))
+        
+        # 수량 감소
+        item_data['qty'] -= 1
+        if item_data['qty'] <= 0:
+            del inv.items[item_id]
+            # 퀵슬롯에서도 제거
+            for i in range(len(inv.item_slots)):
+                if inv.item_slots[i] == item.name:
+                    inv.item_slots[i] = None
+            
+            # 인덱스 보정
+            self.selected_item_index = max(0, self.selected_item_index - 1)
+
+    def _equip_selected_item(self, item_data):
+        """선택된 아이템을 조건에 맞춰 장착하거나 해제 (Toggle)"""
+        item = item_data['item']
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        
         inv = player_entity.get_component(InventoryComponent)
         if not inv: return
 
-        # 타입별 장착 로직
+        # 1. 이미 장착 중인지 확인 (해제 로직)
+        already_slot = None
+        for slot, eq_item in inv.equipped.items():
+            if eq_item == item:
+                already_slot = slot
+                break
+        
+        if already_slot:
+            inv.equipped[already_slot] = None
+            # 양손 무기였을 경우 손2도 해제
+            if already_slot == "손1" and inv.equipped.get("손2") == "(양손 점유)":
+                inv.equipped["손2"] = None
+            
+            self.world.event_manager.push(MessageEvent(f"{item.name}의 장착을 해제했습니다."))
+            self._recalculate_stats()
+            return
+
+        # 2. 장착 로직
         if item.type == 'WEAPON':
             if item.hand_type == 2: # 양손 무기
-                inv.equipped["손1"] = item.name
+                inv.equipped["손1"] = item
                 inv.equipped["손2"] = "(양손 점유)"
             else: # 한손 무기
-                # 만약 기존에 양손 무기를 들고 있었다면 손2 비우기
                 if inv.equipped.get("손2") == "(양손 점유)":
                     inv.equipped["손2"] = None
                 
-                # 손1이 비어있으면 손1, 아니면 손2 (이도류)
                 if not inv.equipped.get("손1"):
-                    inv.equipped["손1"] = item.name
+                    inv.equipped["손1"] = item
                 elif not inv.equipped.get("손2"):
-                    inv.equipped["손2"] = item.name
+                    inv.equipped["손2"] = item
                 else:
-                    # 둘 다 차있으면 손1 교체
-                    inv.equipped["손1"] = item.name
+                    inv.equipped["손1"] = item
         
         elif item.type == 'SHIELD':
-            # 양손 무기 사용 중이면 해제
             if inv.equipped.get("손2") == "(양손 점유)":
                 inv.equipped["손1"] = None
-            inv.equipped["손2"] = item.name
+            inv.equipped["손2"] = item
             
         elif item.type == 'ARMOR':
-            inv.equipped["몸통"] = item.name
-        # TODO: 머리, 장갑, 신발 등 타입 추가 시 매핑 확장
+            inv.equipped["몸통"] = item
+        elif item.type == 'ACCESSORY':
+            if not inv.equipped.get("액세서리1"):
+                inv.equipped["액세서리1"] = item
+            elif not inv.equipped.get("액세서리2"):
+                inv.equipped["액세서리2"] = item
+            else:
+                inv.equipped["액세서리1"] = item # 둘 다 있으면 첫 번째 교체
+        # TODO: 머리, 장갑, 신발 등 타입 확장
         
         # 장착 메시지 추가
-        message_entity = self.world.get_entities_with_components([MessageComponent])
-        if message_entity:
-            msg_comp = message_entity[0].get_component(MessageComponent)
-            from .systems import MessageEvent
-            self.world.event_manager.push(MessageEvent(f"{item.name}을(를) 장착했습니다."))
+        self.world.event_manager.push(MessageEvent(f"{item.name}을(를) 장착했습니다."))
+        
+        # 능력치 재계산
+        self._recalculate_stats()
+
+    def _recalculate_stats(self):
+        """장착된 아이템을 기반으로 플레이어 능력치 재계산"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        
+        stats = player_entity.get_component(StatsComponent)
+        inv = player_entity.get_component(InventoryComponent)
+        if not stats or not inv: return
+        
+        # 기본 능력치로 초기화
+        stats.attack = stats.base_attack
+        stats.defense = stats.base_defense
+        
+        # 보너스 합산
+        for slot, item in inv.equipped.items():
+            # ItemDefinition 객체인 경우에만 스탯 합산
+            from .data_manager import ItemDefinition
+            if isinstance(item, ItemDefinition):
+                stats.attack += item.attack
+                stats.defense += item.defense
 
     def _render(self):
         """World 상태를 기반으로 Renderer를 사용하여 화면을 그립니다."""
@@ -315,8 +499,28 @@ class Engine:
                     if world_x >= map_comp.width: break
                     
                     char = map_comp.tiles[world_y][world_x]
-                    color = "dark_grey" if char == "." else "brown"
-                    self.renderer.draw_char(screen_x, screen_y, char, color)
+                    
+                    # 맵 시인성 개선: 바닥(.)과 인접하지 않은 벽(#)은 공백으로 처리
+                    if char == "#":
+                        is_visible_wall = False
+                        # 8방향 탐색
+                        for dy in [-1, 0, 1]:
+                            for dx in [-1, 0, 1]:
+                                if dx == 0 and dy == 0: continue
+                                nx, ny = world_x + dx, world_y + dy
+                                if 0 <= nx < map_comp.width and 0 <= ny < map_comp.height:
+                                    if map_comp.tiles[ny][nx] == ".":
+                                        is_visible_wall = True
+                                        break
+                            if is_visible_wall: break
+                        
+                        render_char = "#" if is_visible_wall else " "
+                        color = "brown"
+                    else:
+                        render_char = char
+                        color = "dark_grey" if char == "." else "brown"
+                    
+                    self.renderer.draw_char(screen_x, screen_y, render_char, color)
 
         # 구분선 (Horizontal) - 맵과 스탯 창 사이
         status_start_y = map_height + 1
@@ -383,12 +587,23 @@ class Engine:
         message_comp_list = self.world.get_entities_with_components({MessageComponent})
         if message_comp_list:
             message_comp = message_comp_list[0].get_component(MessageComponent)
-            # 최근 8개 메시지 표시
-            recent_messages = message_comp.messages[-8:]
+            # 최근 10개 메시지 표시 (영역 확장)
+            recent_messages = message_comp.messages[-10:]
             for i, msg in enumerate(recent_messages):
-                # 너비 제한으로 자르기
-                truncated_msg = (msg[:SIDEBAR_WIDTH-4] + '..') if len(msg) > SIDEBAR_WIDTH-4 else msg
-                self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y + 1 + i, f"> {truncated_msg}", "white")
+                # 너비 제한으로 자르기 (한글 너비 고려하여 보수적으로)
+                wrap_width = SIDEBAR_WIDTH - 6
+                truncated_msg = (msg[:wrap_width] + '..') if len(msg) > wrap_width else msg
+                
+                # 메시지 내용에 따른 색상 구분
+                msg_color = "white"
+                if "데미지를 입었다" in msg:
+                    msg_color = "red"
+                elif "쓰러졌습니다" in msg:
+                    msg_color = "gold"
+                elif "만났습니다" in msg:
+                    msg_color = "yellow"
+                
+                self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y + 1 + i, f"> {truncated_msg}", msg_color)
 
         # 4-2. 장비 (Equipment)
         eq_start_y = 10
@@ -401,7 +616,14 @@ class Engine:
                 for i, slot in enumerate(slots):
                     if eq_y >= 19: break # 사이드바 높이 제한 (스크롤/스킬 영역 확보)
                     item = inv_comp.equipped.get(slot)
-                    item_display = item if item else "----"
+                    
+                    # 아이템이 ItemDefinition 객체이면 이름을 가져오고, 아니면 그대로 사용 (---- 혹은 양손점유)
+                    from .data_manager import ItemDefinition
+                    if isinstance(item, ItemDefinition):
+                        item_display = item.name
+                    else:
+                        item_display = item if item else "----"
+                        
                     color = "white"
                     if item_display == "(양손 점유)":
                         color = "dark_grey"
@@ -410,25 +632,32 @@ class Engine:
                     self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, eq_y, f"{slot:<5}: {item_display}", color)
                     eq_y += 1
 
-        # 4-3. 퀵슬롯 (Quick Slots)
-        qs_start_y = 19  # 장비 슬롯이 늘어났으므로 시작 위치 조정
+        # 4-3. 퀵슬롯 (Item Slots 1-5)
+        qs_start_y = 19
         self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_start_y, "[ QUICK SLOTS ]", "gold")
         qs_y = qs_start_y + 1
         if player_entity:
             inv_comp = player_entity.get_component(InventoryComponent)
-            if inv_comp and hasattr(inv_comp, 'quick_slots'):
-                for i, item in enumerate(inv_comp.quick_slots):
+            if inv_comp and hasattr(inv_comp, 'item_slots'):
+                for i, item in enumerate(inv_comp.item_slots):
                     item_name = item if item else "----"
                     self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_y + i, f"{i+1}: {item_name}", "white")
-
-        # 4-4. 스킬 리스트 (Skill List)
-        skill_start_y = 25  # 여기도 조정
+        
+        # 4-4. 스킬 (Skill Slots 6-0)
+        skill_start_y = qs_start_y + 7
         self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y, "[ SKILLS ]", "gold")
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y + 1, "- Basic Attack", "white")
+        sk_y = skill_start_y + 1
+        if player_entity:
+            inv_comp = player_entity.get_component(InventoryComponent)
+            if inv_comp and hasattr(inv_comp, 'skill_slots'):
+                for i, item in enumerate(inv_comp.skill_slots):
+                    item_name = item if item else "----"
+                    num = 0 if i == 4 else i + 6
+                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, sk_y + i, f"{num}: {item_name}", "white")
 
         # 5. 입력 가이드 (Bottom fixed)
         guide_y = self.renderer.height - 1
-        self.renderer.draw_text(0, guide_y, " [MOVE] WASD/Arrows | [I] Inventory | [Q] Quit", "green")
+        self.renderer.draw_text(0, guide_y, " [MOVE] Arrows | [I] Inventory | [Q] Quit", "green")
         
         # 6. 인벤토리 팝업 렌더링 (INVENTORY 상태일 때만)
         if self.state == GameState.INVENTORY:
@@ -478,7 +707,7 @@ class Engine:
              inv_comp = player_entity.get_component(InventoryComponent)
              
              if inv_comp:
-                 # 필터링 로직
+                 # 카테고리별 필터링
                  filtered_items = []
                  if self.inventory_category_index == 0: # 아이템
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type == 'CONSUMABLE']
@@ -487,27 +716,30 @@ class Engine:
                  elif self.inventory_category_index == 2: # 스크롤
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type == 'SCROLL']
                  elif self.inventory_category_index == 3: # 스킬
-                     filtered_items = [] # TODO: Skill list
+                     filtered_items = [(s, {'item': type('obj', (object,), {'name': s})(), 'qty': 1}) for s in inv_comp.skills]
 
-                 if not filtered_items and self.inventory_category_index != 3:
+                 if not filtered_items:
                      self.renderer.draw_text(start_x + 2, start_y + 4, "  (비어 있음)", "dark_grey")
-                 elif self.inventory_category_index == 3:
-                     self.renderer.draw_text(start_x + 2, start_y + 4, "  - 기본 공격 (Lv.1)", "white")
                  else:
                      current_y = start_y + 4
                      for idx, (item_id, item_data) in enumerate(filtered_items):
                          if current_y >= start_y + POPUP_HEIGHT - 2: break
                          
-                         name = item_data['item'].name
+                         item = item_data['item']
+                         name = item.name
                          qty = item_data['qty']
                          prefix = "> " if idx == self.selected_item_index else "  "
                          color = "green" if idx == self.selected_item_index else "white"
                          
-                         self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{name} x{qty}", color)
+                         _s = ""
+                         if any(eq == item for eq in inv_comp.equipped.values()): _s += " [E]"
+                         if name in inv_comp.item_slots or name in inv_comp.skill_slots: _s += " [Q]"
+                         
+                         self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{name} x{qty}{_s}", color)
                          current_y += 1
-        
+
         # 5. 하단 도움말
-        help_text = "[←/→] 탭 전환  [↑/↓] 선택  [ESC/I] 닫기"
+        help_text = "[←/→] 탭 전환  [↑/↓] 선택  [E/ENTER] 장착/등록/사용  [ESC/I] 닫기"
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
 if __name__ == '__main__':
