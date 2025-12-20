@@ -1,0 +1,6 @@
+name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_effect
+낡은 검,WEAPON,오래되어 녹슨 검.,/,#8B4513,1,5,0,0,0
+가죽 갑옷,ARMOR,가벼운 가죽 갑옷.,[,#D2B48C,1,0,3,0,0
+체력 물약,CONSUMABLE,HP를 20 회복시켜주는 물약.,!,#FF0000,1,0,0,20,0
+마력 물약,CONSUMABLE,MP를 15 회복시켜주는 물약.,;,#0000FF,1,0,0,0,15
+강철 검,WEAPON,튼튼한 강철 검.,/,#A9A9A9,5,10,0,0,0

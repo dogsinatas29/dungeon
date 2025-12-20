@@ -5,8 +5,12 @@
 BORDER_WALL = '#'
 INNER_WALL = '#'
 FLOOR = ' '
+FLOOR_CHAR = FLOOR # FLOOR_CHAR는 FLOOR와 동일
 PLAYER = '@'
 START = '<'
+DOOR_CLOSED_CHAR = '+'
+DOOR_OPEN_CHAR = '/'
+UNKNOWN_CHAR = ' ' # 안개 또는 미탐색 영역 표시
 EXIT_NORMAL = '>'
 EXIT_LOCKED = 'X'
 ITEM_TILE = '*'

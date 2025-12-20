@@ -16,12 +16,12 @@ logging.basicConfig(
 
 from dungeon import engine
 from dungeon.player import Player
-from dungeon.map_manager import DungeonMap
+from dungeon.map import DungeonMap
 from dungeon.data_manager import (
     load_item_definitions, get_item_definition, load_skill_definitions,
     save_game_data, load_game_data, delete_save_data
 )
-from dungeon.ui import ConsoleUI, ANSI
+from dungeon.ui import ConsoleUI
 
 # --- 데이터 로드 ---
 ITEM_DEFINITIONS = load_item_definitions()
@@ -46,12 +46,16 @@ def start_game(ui, player_name: str, new_game=False):
                 player_instance.entity_id: {
                     "PositionComponent": {'x': 0, 'y': 0, 'map_id': "1F"},
                     "MovableComponent": {},
-                    "HealthComponent": {'max_hp': 100, 'current_hp': 100, 'is_alive': True},
+                    "StatsComponent": {
+                        'max_hp': 100, 
+                        'current_hp': 100, 
+                        'attack': 10,
+                        'defense': 5,
+                        'max_mp': 50,
+                        'current_mp': 50
+                    },
                     "NameComponent": {'name': player_name},
-                    "AttackComponent": {'power': 10, 'critical_chance': 0.05, 'critical_damage_multiplier': 1.5},
-                    "DefenseComponent": {'value': 5},
                     "InventoryComponent": {'items': {}, 'equipped': {}},
-                    "ManaComponent": {'max_mp': 50, 'current_mp': 50}
                 }
             },
             "player_specific_data": player_instance.to_dict(),
@@ -62,8 +66,17 @@ def start_game(ui, player_name: str, new_game=False):
 
     ui_instance = ui
     ui.add_message("디버그: 게임 엔진 시작 전...")
-    game_result = engine.run_game(player_name, ITEM_DEFINITIONS, ui_instance) # ITEM_DEFINITIONS 전달
+    
+    # Engine 인스턴스 생성 및 실행
+    # game_state_data를 전달하여 로드된 데이터(또는 초기 데이터)로 시작
+    game_engine = engine.Engine(player_name, game_state_data)
+    game_engine.run()
+    
     ui.add_message("디버그: 게임 엔진 종료 후.")
+    
+    # TODO: 게임 종료 코드를 Engine에서 반환받는 로직 추가 필요
+    game_result = "QUIT" 
+
     
     if game_result == "DEATH":
         delete_save_data()
@@ -94,7 +107,7 @@ if __name__ == "__main__":
         main_menu()
     except Exception as e:
         # 예외 발생 시 터미널 상태를 복구하고 에러 메시지 출력
-        sys.stdout.write(ANSI.SHOW_CURSOR)
+        sys.stdout.write("\033[?25h") # Show cursor directly using code
         sys.stdout.write("\033[0m")
         shutil.os.system('clear')
         print("치명적인 오류 발생:", e)

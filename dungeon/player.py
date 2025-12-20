@@ -1,5 +1,7 @@
 # player.py
 from . import data_manager
+from .components import StatsComponent
+
 
 class Player:
     def __init__(self, name, hp=100, mp=50, level=1, dungeon_level=(1, 0)):
@@ -33,8 +35,10 @@ class Player:
 
     def is_alive(self, entity_manager):
         """플레이어가 살아있는지 여부를 반환합니다."""
-        health_comp = entity_manager.get_component(self.entity_id, HealthComponent)
-        return health_comp.is_alive if health_comp else False
+    def is_alive(self, entity_manager):
+        """플레이어가 살아있는지 여부를 반환합니다."""
+        stats_comp = entity_manager.get_component(self.entity_id, StatsComponent)
+        return stats_comp.is_alive if stats_comp else False
 
     def gain_exp(self, amount, entity_manager):
         """경험치를 얻고 레벨업을 확인합니다."""
@@ -51,19 +55,12 @@ class Player:
     def level_up(self, entity_manager):
         """플레이어의 레벨을 올리고 스탯을 강화합니다."""
         self.level += 1
-        health_comp = entity_manager.get_component(self.entity_id, HealthComponent)
-        if health_comp:
-            health_comp.max_hp += 10
-            health_comp.current_hp = health_comp.max_hp # HP도 최대치로 회복
-        self.max_mp += 5
-        self.mp = self.max_mp
-        
-        attack_comp = entity_manager.get_component(self.entity_id, AttackComponent)
-        if attack_comp:
-            attack_comp.power += 2
-        defense_comp = entity_manager.get_component(self.entity_id, DefenseComponent)
-        if defense_comp:
-            defense_comp.value += 1
+        stats_comp = entity_manager.get_component(self.entity_id, StatsComponent)
+        if stats_comp:
+            stats_comp.max_hp += 10
+            stats_comp.current_hp = stats_comp.max_hp
+            stats_comp.attack += 2
+            stats_comp.defense += 1
 
         self.exp_to_next_level = int(self.exp_to_next_level * 1.5)
         

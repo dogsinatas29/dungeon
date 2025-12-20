@@ -2,6 +2,7 @@
 
 import os
 import sys
+import logging
 import readchar # readchar 임포트 추가
 
 # 터미널 색상 코드를 사용한 렌더링을 위한 딕셔너리
@@ -120,7 +121,9 @@ class ConsoleUI:
             rendered_row = []
             for x_idx, (char, color) in enumerate(row):
                 rendered_row.append(f"{COLOR_MAP[color]}{char}")
-            print("".join(rendered_row) + f"{COLOR_MAP['reset']}")
+            final_row_string = "".join(rendered_row) + f"{COLOR_MAP['reset']}"
+            logging.debug(f"ConsoleUI.render_all: 렌더링될 행 {y_idx}: '{final_row_string.replace('\033', '[ESC]')}'") # ESC 코드 표시
+            print(final_row_string)
 
         
         # 2. 플레이어 상태
@@ -136,4 +139,30 @@ class ConsoleUI:
         
         # 4. 입력 가이드
         print(f"\n{COLOR_MAP['green']}[이동] 방향키, HJKL, YUBN | [Q] 종료 | [I] 인벤토리{COLOR_MAP['reset']}")
+        sys.stdout.flush()
+
+    def render_inventory(self, player_inventory_items: dict, player_equipped_items: dict):
+        """인벤토리 화면을 렌더링합니다."""
+        self._clear_screen()
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}           인 벤 토 리           {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+        
+        print("\n--- 장비 --- ")
+        if player_equipped_items:
+            for slot, item_id in player_equipped_items.items():
+                print(f"  {slot}: {item_id}")
+        else:
+            print("  장착된 아이템 없음")
+
+        print("\n--- 아이템 --- ")
+        if player_inventory_items:
+            for item_id, item_data in player_inventory_items.items():
+                item_obj = item_data['item']
+                qty = item_data['qty']
+                print(f"  - {item_obj.name} (x{qty})")
+        else:
+            print("  아이템 없음")
+
+        print(f"\n{COLOR_MAP['green']}[I] 닫기{COLOR_MAP['reset']}")
         sys.stdout.flush()

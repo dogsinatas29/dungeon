@@ -67,6 +67,12 @@
 -   **실시간 입력 처리 구현**: `dungeon/system.py` 파일의 `InputSystem`에서 `input()` 대신 `readchar.readchar()`를 사용하여 Enter 키 없이 바로 입력이 처리되도록 수정하고, `readchar` 모듈을 임포트했습니다.
 -   **NameError 수정**: `dungeon/system.py` 파일에 `logging` 모듈을 임포트하여 `InputSystem`에서 `NameError`가 발생하지 않도록 수정했습니다.
 
+### 2025년 12월 20일 토요일 (GEMINI.md 기준 리팩토링)
+-   **프로젝트 구조 재정비**: `Start.py`와 `dungeon/engine.py`의 연결을 복구하여 게임 실행이 가능하도록 수정했습니다.
+-   **렌더링 시스템 교체**: `dungeon/renderer.py`를 신규 생성하고 **더블 버퍼링(Double Buffering)** 기술을 적용하여 UI 깜빡임 현상을 제거했습니다. 기존 `ConsoleUI` 클래스는 제거되었습니다.
+-   **ECS 데이터 표준화**: `HealthComponent`, `AttackComponent` 등 파편화된 컴포넌트를 `StatsComponent`로 통합하여 데이터 관리를 표준화했습니다. (`GEMINI.md` 준수)
+-   **안정성 강화**: `Start.py`의 예외 처리 로직에서 ANSI 코드 오류를 수정하고, 엔진 초기화 검증 스크립트(`verify_engine.py`)를 추가했습니다.
+
 ## 일반적인 명령어
 
 -   **게임 실행**:

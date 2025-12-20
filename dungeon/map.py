@@ -3,16 +3,14 @@
 import random
 import logging
 from typing import List, Tuple, Dict, Any, Optional
+from .constants import WALL, FLOOR, UNKNOWN_CHAR # 상수 임포트
 
 # --- Tile Definitions ---
-WALL_CHAR = '#'
-FLOOR_CHAR = '.'
 DOOR_CLOSED_CHAR = '+'
 DOOR_OPEN_CHAR = '/'
 KEY_CHAR = 'k'
 EXIT_CHAR = '>' 
 START_CHAR = '<'
-UNKNOWN_CHAR = ' ' # 안개 또는 미탐색 영역 표시
 
 class Rect:
     """A rectangular room or corridor."""
@@ -49,14 +47,14 @@ class DungeonMap:
         self.exit_type = EXIT_CHAR 
         
         self.visited: set[Tuple[int, int]] = set() 
-        self.fog_enabled = True 
+        self.fog_enabled = False # 디버깅을 위해 일시적으로 안개 비활성화 
         
         self.generate_map() 
         
     def generate_map(self):
         """방과 복도를 이용한 던전 맵을 생성합니다."""
         logging.debug("DungeonMap.generate_map: 맵 생성 시작")
-        self.map_data = [[WALL_CHAR for _ in range(self.width)] for _ in range(self.height)]
+        self.map_data = [[WALL for _ in range(self.width)] for _ in range(self.height)]
         self.rooms = []
         self.corridors = []
 
@@ -83,7 +81,7 @@ class DungeonMap:
                 for y_room in range(new_room.y1, new_room.y2):
                     for x_room in range(new_room.x1, new_room.x2):
                         if 0 <= x_room < self.width and 0 <= y_room < self.height:
-                            self.map_data[y_room][x_room] = FLOOR_CHAR
+                            self.map_data[y_room][x_room] = FLOOR
                 
                 if len(self.rooms) == 1:
                     self.start_x, self.start_y = new_room.center
@@ -108,13 +106,13 @@ class DungeonMap:
     def _create_h_tunnel(self, x1, x2, y):
         for x in range(min(x1, x2), max(x1, x2) + 1):
             if 0 <= x < self.width and 0 <= y < self.height:
-                self.map_data[y][x] = FLOOR_CHAR
+                self.map_data[y][x] = FLOOR
                 self.corridors.append((x, y))
 
     def _create_v_tunnel(self, y1, y2, x):
         for y in range(min(y1, y2), max(y1, y2) + 1):
             if 0 <= x < self.width and 0 <= y < self.height:
-                self.map_data[y][x] = FLOOR_CHAR
+                self.map_data[y][x] = FLOOR
                 self.corridors.append((x, y))
 
     def is_valid_tile(self, x: int, y: int) -> bool:
@@ -123,12 +121,12 @@ class DungeonMap:
     def is_wall(self, x: int, y: int) -> bool:
         if not self.is_valid_tile(x, y):
             return True 
-        return self.map_data[y][x] == WALL_CHAR
+        return self.map_data[y][x] == WALL
 
     def get_tile_for_display(self, x: int, y: int) -> str:
         """주어진 좌표의 타일 문자를 렌더링을 위해 반환합니다."""
         if not self.is_valid_tile(x, y):
-            return WALL_CHAR 
+            return WALL 
 
         if self.fog_enabled and (x, y) not in self.visited:
             return UNKNOWN_CHAR  # 미탐색/안개 지역은 알 수 없는 문자로 표시
@@ -148,7 +146,7 @@ class DungeonMap:
         """두 점 사이에 시야를 가리는 벽이 있는지 확인합니다."""
         points = self._get_line(x1, y1, x2, y2)
         for x, y in points:
-            if self.map_data[y][x] == WALL_CHAR: # self.is_wall 대신 직접 map_data 참조
+            if self.map_data[y][x] == WALL: # self.is_wall 대신 직접 map_data 참조
                 return True
         return False
 
