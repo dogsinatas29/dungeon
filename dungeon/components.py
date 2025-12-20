@@ -37,9 +37,13 @@ class MonsterComponent(Component):
     """몬스터 유형 식별자"""
     def __init__(self, type_name: str, level: int = 1):
         self.type_name = type_name
-    def __init__(self, type_name: str, level: int = 1):
-        self.type_name = type_name
         self.level = level
+
+class InventoryComponent(Component):
+    """아이템 및 장비 데이터를 저장"""
+    def __init__(self, items: dict = None, equipped: dict = None):
+        self.items = items if items else {}
+        self.equipped = equipped if equipped else {}
 
 class LevelComponent(Component):
     """레벨, 경험치, 직업 데이터"""

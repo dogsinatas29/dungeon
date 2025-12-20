@@ -19,7 +19,7 @@ class Renderer:
     화면 깜빡임을 방지하기 위한 더블 버퍼링 렌더러.
     프레임 버퍼를 메모리에 생성하고, 변경된 부분(또는 전체)을 한 번에 출력합니다.
     """
-    def __init__(self, width=80, height=24):
+    def __init__(self, width=120, height=30):
         self.width = width
         self.height = height
         self.buffer = [[" " for _ in range(width)] for _ in range(height)]

@@ -5,6 +5,8 @@
 ## 🎯 최종 목표
 터미널 기반의 로그라이크 게임 엔진을 ECS 패턴을 기반으로 완성하여, 규칙과 데이터를 실행 로직과 분리하여 관리합니다.
 
+![Dungeon Crawler UI](dungeon_ui.png)
+
 ## 🎮 Roguelike Game Engine Architecture (ECS)
 
 ### 📂 핵심 디렉토리 및 모듈 역할
@@ -71,7 +73,9 @@
 -   **프로젝트 구조 재정비**: `Start.py`와 `dungeon/engine.py`의 연결을 복구하여 게임 실행이 가능하도록 수정했습니다.
 -   **렌더링 시스템 교체**: `dungeon/renderer.py`를 신규 생성하고 **더블 버퍼링(Double Buffering)** 기술을 적용하여 UI 깜빡임 현상을 제거했습니다. 기존 `ConsoleUI` 클래스는 제거되었습니다.
 -   **ECS 데이터 표준화**: `HealthComponent`, `AttackComponent` 등 파편화된 컴포넌트를 `StatsComponent`로 통합하여 데이터 관리를 표준화했습니다. (`GEMINI.md` 준수)
--   **안정성 강화**: `Start.py`의 예외 처리 로직에서 ANSI 코드 오류를 수정하고, 엔진 초기화 검증 스크립트(`verify_engine.py`)를 추가했습니다.
+-   **UI 개선**: 게임 화면을 좌측(맵/스탯)과 우측(로그/인벤토리)으로 분할하는 스플릿 스크린 레이아웃을 적용했습니다. (해상도 120x30으로 확장)
+-   **인벤토리 시스템**: `i` 키를 눌러 호출할 수 있는 팝업형 인벤토리 시스템을 구현했습니다.
+-   **Game Design**: `GEMINI.md`에 상세 게임 기획(속성, 직업, 파밍 등)을 통합했습니다.
 
 ## 일반적인 명령어
 
