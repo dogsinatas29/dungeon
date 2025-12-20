@@ -52,7 +52,9 @@ def start_game(ui, player_name: str, new_game=False):
                         'attack': 10,
                         'defense': 5,
                         'max_mp': 50,
-                        'current_mp': 50
+                        'current_mp': 50,
+                        'max_stamina': 100,
+                        'current_stamina': 100
                     },
                     "NameComponent": {'name': player_name},
                     "InventoryComponent": {'items': {}, 'equipped': {}},

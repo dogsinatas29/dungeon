@@ -2,7 +2,8 @@
 
 from typing import Set, Tuple, List, Any
 from .ecs import System, Entity, Event, EventManager # EventManager는 필요 없음
-from .components import PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, MessageComponent
+from .components import PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent
+import readchar
 
 # --- Event 정의 (시스템 통신 표준) ---
 class MoveSuccessEvent(Event):
@@ -46,6 +47,20 @@ class InputSystem(System):
             's': (0, 1),
             'a': (-1, 0),
             'd': (1, 0),
+            readchar.key.UP: (0, -1),
+            readchar.key.DOWN: (0, 1),
+            readchar.key.LEFT: (-1, 0),
+            readchar.key.RIGHT: (1, 0),
+            # Explicit ANSI support for safety
+            '\x1b[A': (0, -1),
+            '\x1b[B': (0, 1),
+            '\x1b[D': (-1, 0),
+            '\x1b[C': (1, 0),
+            # Application cursor keys (sometimes sent by terminals)
+            '\x1bOA': (0, -1),
+            '\x1bOB': (0, 1),
+            '\x1bOD': (-1, 0),
+            '\x1bOC': (1, 0),
         }
 
         if action in move_map:
@@ -115,6 +130,15 @@ class MovementSystem(System):
                 old_x, old_y = position.x, position.y
                 position.x, position.y = new_x, new_y
                 self.event_manager.push(MoveSuccessEvent(entity.entity_id, old_x, old_y, new_x, new_y))
+                
+                # 스태미너 소모 (20이동당 1소모 = 1이동당 0.05소모)
+                stats = entity.get_component(StatsComponent)
+                if stats:
+                    stats.current_stamina -= 0.05
+                    if stats.current_stamina <= 0:
+                        stats.current_stamina = 0
+                        stats.current_hp = 0
+                        self.event_manager.push(MessageEvent("탈진하여 쓰러졌습니다! (Stamina 0)"))
 
             # DesiredPositionComponent 제거 (처리 완료)
             entity.remove_component(DesiredPositionComponent)

@@ -2,13 +2,17 @@
 
 import os
 import time
+import random
+import readchar # readchar 임포트 추가
 from typing import List, Dict, Tuple, Any
+from .map import DungeonMap
 
 # 필요한 모듈 임포트
 from .ecs import World, EventManager, initialize_event_listeners
 from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent
 from .systems import InputSystem, MovementSystem, RenderSystem 
 from .renderer import Renderer
+from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent
 
 
 
@@ -34,48 +38,40 @@ class Engine:
         # TODO: game_data(저장된 데이터)가 있으면 그것을 로드하는 로직 추가 필요
         # 현재는 하드코딩된 초기화만 유지
         
-        # 맵 데이터 (임시)
-        # 중요: 플레이어('@')와 몬스터('g')의 위치는 '.'으로 비워둡니다.
-        map_data = [
-            "##########",
-            "#........#",
-            "#........#", # <--- Y=2: 플레이어 시작 위치 (X=2) 포함. 이전 줄 길이 오류 수정.
-            "#.###..#.#",
-            "#... ...#.#", # <--- Y=4: 몬스터 위치 (X=4) 포함. (기존 '#...g..#.#')
-            "#......#.#",
-            "#........#",
-            "##########",
-        ]
+        # 맵 생성 (DungeonMap 사용)
+        width = 80
+        height = 15 # UI 공간 확보를 위해 맵 높이 축소
+        rng = random.Random()
         
-        # 몬스터 위치도 맵 데이터에서 제거했습니다.
+        # DungeonMap 인스턴스 생성 (자동으로 generate_map 호출됨)
+        dungeon_map = DungeonMap(width, height, rng)
         
-        width = len(map_data[0])
-        height = len(map_data)
+        # 맵 데이터 가져오기
+        map_data = dungeon_map.map_data
         
-        # 맵 데이터의 문자열 리스트를 타일 리스트로 변환 (엔티티 없이 깨끗한 맵)
-        map_tiles = [list(row) for row in map_data]
-
         # 1. 플레이어 엔티티 생성 (ID=1)
-        player_x, player_y = 2, 2 # 의도된 초기 위치 (2, 2)
+        player_x, player_y = dungeon_map.start_x, dungeon_map.start_y
         player_entity = self.world.create_entity() 
         self.world.add_component(player_entity.entity_id, PositionComponent(x=player_x, y=player_y))
         self.world.add_component(player_entity.entity_id, RenderComponent(char='@', color='yellow'))
         
         # 2. 맵 엔티티 생성 (ID=2)
         map_entity = self.world.create_entity()
-        map_component = MapComponent(width=width, height=height, tiles=map_tiles) 
+        # map_data는 이미 2D 리스트이므로 바로 전달
+        map_component = MapComponent(width=width, height=height, tiles=map_data) 
         self.world.add_component(map_entity.entity_id, map_component)
         
         # 3. 메시지 로그 엔티티 생성 (ID=3)
         message_entity = self.world.create_entity()
         self.world.add_component(message_entity.entity_id, MessageComponent())
         
-        # 4. 몬스터 엔티티 생성 (ID=4)
-        monster_x, monster_y = 4, 4 # 맵 데이터의 몬스터 위치
-        monster_entity = self.world.create_entity()
-        self.world.add_component(monster_entity.entity_id, PositionComponent(x=monster_x, y=monster_y))
-        self.world.add_component(monster_entity.entity_id, RenderComponent(char='g', color='green'))
-        self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name="Goblin"))
+        # 4. 몬스터 엔티티 생성 (각 방의 중앙에 배치, 시작 방 제외)
+        for room in dungeon_map.rooms[1:]: # 첫 번째 방(플레이어 시작) 제외
+            monster_x, monster_y = room.center
+            monster_entity = self.world.create_entity()
+            self.world.add_component(monster_entity.entity_id, PositionComponent(x=monster_x, y=monster_y))
+            self.world.add_component(monster_entity.entity_id, RenderComponent(char='g', color='green'))
+            self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name="Goblin"))
 
     def _initialize_systems(self):
         """시스템 등록 (실행 순서가 중요함)"""
@@ -89,8 +85,9 @@ class Engine:
         self.world.add_system(self.render_system)
 
     def _get_input(self) -> str:
-        """사용자 입력을 받아 반환"""
-        return input("이동 (w/a/s/d) 또는 q 종료: ").strip().lower()
+        """사용자 입력을 받아 반환 (readchar 사용)"""
+        # input() 대신 readchar.readkey()를 사용하여 Enter 없이 즉시 입력 처리
+        return readchar.readkey()
 
     # dungeon/engine.py 내 Engine.run 메서드 수정 (주요 부분만)
 
@@ -157,13 +154,44 @@ class Engine:
 
         # 3. 메시지 로그 렌더링
         message_comp_list = self.world.get_entities_with_components({MessageComponent})
+        y_offset = (map_comp_list[0].get_component(MapComponent).height if map_comp_list else 10)
+        
+        # 구분선
+        self.renderer.draw_text(0, y_offset, "-" * 80, "dark_grey")
+        current_y = y_offset + 1
+
+        # 4. 스탯 패널 렌더링 (플레이어 정보)
+        player_entity = self.world.get_player_entity()
+        if player_entity:
+            stats = player_entity.get_component(StatsComponent)
+            if stats:
+                # LINE 1: HP, MP, STAMINA
+                hp_str = f"HP: {stats.current_hp}/{stats.max_hp}"
+                mp_str = f"MP: {stats.current_mp}/{stats.max_mp}"
+                stm_str = f"STM: {int(stats.current_stamina)}/{int(stats.max_stamina)}"
+                
+                self.renderer.draw_text(2, current_y, f"{hp_str} | {mp_str} | {stm_str}", "white")
+                current_y += 1
+                
+                # LINE 2: LV, EXP, JOB (Placeholder)
+                # LV/EXP는 PlayerComponent가 없으므로 임시로 Player 클래스에서 가져오거나 컴포넌트 추가 필요
+                # 현재 Phase 2 계획상 LevelComponent가 아직 없으므로, StatsComponent나 Player 객체를 참조해야 함.
+                # 하지만 ECS 원칙상 컴포넌트만 참조해야 함. 
+                # 일단은 Player 객체(to_dict용)가 아닌 World에서 직접 로드하기 어려우므로,
+                # Start.py에서 초기화된 값만 보임.
+                # 임시: StatsComponent에 level 필드가 없으므로, 'LV: 1'로 하드코딩하거나 나중에 LevelComponent 추가.
+                # 일단 시스템 메시지 로그 공간 확보를 위해 간단히.
+                pass
+
+        # 5. 메시지 로그 (최근 3개만 표시)
         if message_comp_list:
             message_comp = message_comp_list[0].get_component(MessageComponent)
-            y_offset = (map_comp_list[0].get_component(MapComponent).height if map_comp_list else 10) + 1
-            
-            self.renderer.draw_text(0, y_offset, "--- Messages ---", "blue")
-            for i, msg in enumerate(message_comp.messages[-5:]):
-                self.renderer.draw_text(0, y_offset + 1 + i, f"> {msg}", "white")
+            for i, msg in enumerate(message_comp.messages[-3:]):
+                self.renderer.draw_text(0, current_y + i, f"> {msg}", "grey")
+        
+        # 6. 입력 가이드
+        guide_y = self.renderer.height - 1
+        self.renderer.draw_text(0, guide_y, "[Move] Arrow Keys/WASD | [Q] Quit", "green")
 
         self.renderer.render()
 
