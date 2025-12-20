@@ -9,10 +9,9 @@ from .map import DungeonMap
 
 # 필요한 모듈 임포트
 from .ecs import World, EventManager, initialize_event_listeners
-from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent
+from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, LevelComponent
 from .systems import InputSystem, MovementSystem, RenderSystem 
 from .renderer import Renderer
-from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent
 
 
 
@@ -54,6 +53,8 @@ class Engine:
         player_entity = self.world.create_entity() 
         self.world.add_component(player_entity.entity_id, PositionComponent(x=player_x, y=player_y))
         self.world.add_component(player_entity.entity_id, RenderComponent(char='@', color='yellow'))
+        self.world.add_component(player_entity.entity_id, StatsComponent(max_hp=100, current_hp=100, attack=10, defense=5, max_mp=50, current_mp=50, max_stamina=100, current_stamina=100))
+        self.world.add_component(player_entity.entity_id, LevelComponent(level=1, exp=0, exp_to_next=100, job="Novice"))
         
         # 2. 맵 엔티티 생성 (ID=2)
         map_entity = self.world.create_entity()
@@ -173,15 +174,18 @@ class Engine:
                 self.renderer.draw_text(2, current_y, f"{hp_str} | {mp_str} | {stm_str}", "white")
                 current_y += 1
                 
-                # LINE 2: LV, EXP, JOB (Placeholder)
-                # LV/EXP는 PlayerComponent가 없으므로 임시로 Player 클래스에서 가져오거나 컴포넌트 추가 필요
-                # 현재 Phase 2 계획상 LevelComponent가 아직 없으므로, StatsComponent나 Player 객체를 참조해야 함.
-                # 하지만 ECS 원칙상 컴포넌트만 참조해야 함. 
-                # 일단은 Player 객체(to_dict용)가 아닌 World에서 직접 로드하기 어려우므로,
-                # Start.py에서 초기화된 값만 보임.
-                # 임시: StatsComponent에 level 필드가 없으므로, 'LV: 1'로 하드코딩하거나 나중에 LevelComponent 추가.
-                # 일단 시스템 메시지 로그 공간 확보를 위해 간단히.
-                pass
+                # LINE 2: LV, EXP, JOB
+                level_comp = player_entity.get_component(LevelComponent)
+                if level_comp:
+                    lv_str = f"LV: {level_comp.level}"
+                    exp_str = f"EXP: {level_comp.exp}/{level_comp.exp_to_next}"
+                    job_str = f"Job: {level_comp.job}"
+                    
+                    self.renderer.draw_text(2, current_y, f"{lv_str} | {exp_str} | {job_str}", "white")
+                else:
+                    self.renderer.draw_text(2, current_y, "LV: 1 | EXP: 0/100 | Job: Unknown", "white")
+                
+                current_y += 1
 
         # 5. 메시지 로그 (최근 3개만 표시)
         if message_comp_list:

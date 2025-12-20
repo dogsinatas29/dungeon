@@ -37,7 +37,17 @@ class MonsterComponent(Component):
     """몬스터 유형 식별자"""
     def __init__(self, type_name: str, level: int = 1):
         self.type_name = type_name
+    def __init__(self, type_name: str, level: int = 1):
+        self.type_name = type_name
         self.level = level
+
+class LevelComponent(Component):
+    """레벨, 경험치, 직업 데이터"""
+    def __init__(self, level: int = 1, exp: int = 0, exp_to_next: int = 100, job: str = "Adventurer"):
+        self.level = level
+        self.exp = exp
+        self.exp_to_next = exp_to_next
+        self.job = job
 
 # --- 시스템 데이터 ---
 class DesiredPositionComponent(Component):
