@@ -30,6 +30,7 @@ class Engine:
         self.turn_number = 0
         self.player_name = player_name
         self.state = GameState.PLAYING # 초기 상태
+        self.is_attack_mode = False # 원거리 공격 모드
         self.selected_item_index = 0 # 인벤토리 선택 인덱스
         self.inventory_category_index = 0 # 0: 아이템, 1: 장비, 2: 스크롤, 3: 스킬
 
@@ -657,7 +658,10 @@ class Engine:
 
         # 5. 입력 가이드 (Bottom fixed)
         guide_y = self.renderer.height - 1
-        self.renderer.draw_text(0, guide_y, " [MOVE] Arrows | [I] Inventory | [Q] Quit", "green")
+        if self.is_attack_mode:
+            self.renderer.draw_text(0, guide_y, " [ATTACK] Arrows: Select Dir | [Space] Cancel ", "red")
+        else:
+            self.renderer.draw_text(0, guide_y, " [MOVE] Arrows | [I] Inventory | [Space] Attack Mode | [Q] Quit", "green")
         
         # 6. 인벤토리 팝업 렌더링 (INVENTORY 상태일 때만)
         if self.state == GameState.INVENTORY:

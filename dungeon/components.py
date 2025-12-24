@@ -19,7 +19,7 @@ class RenderComponent(Component):
 
 class StatsComponent(Component):
     """전투 및 능력치 데이터 (GEMINI.md 호환)"""
-    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0):
+    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE"):
         self.max_hp = max_hp
         self.current_hp = current_hp
         self.attack = attack
@@ -33,6 +33,7 @@ class StatsComponent(Component):
         self.current_mp = current_mp
         self.max_stamina = max_stamina
         self.current_stamina = current_stamina
+        self.element = element
         
     @property
     def is_alive(self):

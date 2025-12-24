@@ -24,5 +24,31 @@ WALL = INNER_WALL
 MAP_VIEWPORT_WIDTH = 60
 MAP_VIEWPORT_HEIGHT = 20
 
-# 기타 상수들을 여기에 추가할 수 있습니다.
+# --- Elemental System (속성 시스템) ---
+# 속성 정의
+ELEMENT_NONE = "NONE"
+ELEMENT_WATER = "WATER"
+ELEMENT_FIRE = "FIRE"
+ELEMENT_WOOD = "WOOD"
+ELEMENT_EARTH = "EARTH"
+ELEMENT_POISON = "POISON"
+
+# 속성 색상 매핑
+ELEMENT_COLORS = {
+    ELEMENT_NONE: "white",
+    ELEMENT_WATER: "blue",
+    ELEMENT_FIRE: "red",
+    ELEMENT_WOOD: "green",
+    ELEMENT_EARTH: "yellow",
+    ELEMENT_POISON: "magenta"
+}
+
+# 상성 관계 (A > B: A가 B를 공격할 때 우위)
+# 물(WATER) > 불(FIRE) > 나무(WOOD) > 흙(EARTH) > 물(WATER)
+ELEMENT_ADVANTAGE = {
+    ELEMENT_WATER: ELEMENT_FIRE,
+    ELEMENT_FIRE: ELEMENT_WOOD,
+    ELEMENT_WOOD: ELEMENT_EARTH,
+    ELEMENT_EARTH: ELEMENT_WATER
+}
 

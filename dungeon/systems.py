@@ -29,6 +29,14 @@ class MessageEvent(Event):
     def __init__(self, text: str):
         self.text = text
 
+class DirectionalAttackEvent(Event):
+    """플레이어가 특정 방향으로 원거리 공격을 수행할 때 발생"""
+    def __init__(self, attacker_id: int, dx: int, dy: int, range_dist: int):
+        self.attacker_id = attacker_id
+        self.dx = dx
+        self.dy = dy
+        self.range_dist = range_dist
+
 
 # --- 1.3 주요 시스템 클래스 (로직 구현) ---
 
@@ -41,6 +49,14 @@ class InputSystem(System):
         """Engine에서 직접 호출되어 목표 위치 컴포넌트 생성"""
         player_entity = self.world.get_player_entity()
         if not player_entity: return False
+
+        # 공격 모드 전환 (Space 키)
+        if action == ' ':
+            # Engine의 is_attack_mode 토글
+            self.world.engine.is_attack_mode = not self.world.engine.is_attack_mode
+            status = "진입" if self.world.engine.is_attack_mode else "해제"
+            self.event_manager.push(MessageEvent(f"공격 모드 {status}. 방향키로 공격하세요."))
+            return False # 턴을 소모하지 않음
 
         move_map = {
             readchar.key.UP: (0, -1),
@@ -62,7 +78,23 @@ class InputSystem(System):
         if action in move_map:
             dx, dy = move_map[action]
             
-            # 이전 DesiredPositionComponent 제거 및 새로 추가
+            # 공격 모드인 경우
+            if self.world.engine.is_attack_mode:
+                self.world.engine.is_attack_mode = False # 공격 후 모드 해제
+                
+                # 사거리 정보 가져오기 (기본 1, 장착 장비에 따라 확장 가능)
+                # TODO: InventoryComponent의 equipped 무기에서 range 값 가져오기
+                attack_range = 3 # 임시 테스트용 사거리
+                
+                self.event_manager.push(DirectionalAttackEvent(
+                    attacker_id=player_entity.entity_id,
+                    dx=dx,
+                    dy=dy,
+                    range_dist=attack_range
+                ))
+                return True # 턴 소모
+                
+            # 일반 이동 모드
             if player_entity.has_component(DesiredPositionComponent):
                 player_entity.remove_component(DesiredPositionComponent)
                 
@@ -233,6 +265,91 @@ class CombatSystem(System):
     def process(self):
         pass
 
+    def handle_directional_attack_event(self, event: DirectionalAttackEvent):
+        """특정 방향으로 사거리 내의 모든 적을 공격"""
+        attacker = self.world.get_entity(event.attacker_id)
+        if not attacker: return
+
+        a_stats = attacker.get_component(StatsComponent)
+        if not a_stats: return
+
+        a_pos = attacker.get_component(PositionComponent)
+        if not a_pos: return
+
+        # 맵 정보 가져오기
+        map_entities = self.world.get_entities_with_components({MapComponent})
+        if not map_entities: return
+        map_comp = map_entities[0].get_component(MapComponent)
+
+        attacker_name = self._get_entity_name(attacker)
+        self.event_manager.push(MessageEvent(f'"{attacker_name}"의 원거리 공격!'))
+
+        # 사거리만큼 일직선상 조사
+        for dist in range(1, event.range_dist + 1):
+            target_x = a_pos.x + (event.dx * dist)
+            target_y = a_pos.y + (event.dy * dist)
+
+            # 맵 경계/벽 체크 (공격 차단)
+            if not (0 <= target_x < map_comp.width and 0 <= target_y < map_comp.height):
+                break
+            if map_comp.tiles[target_y][target_x] == '#':
+                self.event_manager.push(MessageEvent("공격이 벽에 막혔습니다."))
+                break
+
+            # 해당 위치의 엔티티 찾기
+            targets_at_pos = [
+                e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                if e.get_component(PositionComponent).x == target_x
+                and e.get_component(PositionComponent).y == target_y
+                and e.entity_id != event.attacker_id
+            ]
+
+            for target in targets_at_pos:
+                self._apply_damage(attacker, target, dist)
+
+    def _apply_damage(self, attacker: Entity, target: Entity, distance: int):
+        """실제 데미지 적용 로직 (상성 및 거리 보정 포함)"""
+        a_stats = attacker.get_component(StatsComponent)
+        t_stats = target.get_component(StatsComponent)
+        
+        if not a_stats or not t_stats:
+            return
+
+        # 1. 속성 보정 계산
+        from .constants import ELEMENT_ADVANTAGE
+        
+        damage_multiplier = 1.0
+        advantage_msg = ""
+        
+        if ELEMENT_ADVANTAGE.get(a_stats.element) == t_stats.element:
+            damage_multiplier = 1.25
+            advantage_msg = " (효과가 굉장했다!)"
+        elif ELEMENT_ADVANTAGE.get(t_stats.element) == a_stats.element:
+            damage_multiplier = 0.75
+            advantage_msg = " (효과가 별로인 듯하다...)"
+            
+        # 2. 거리 보정 (선택 사항: 멀어질수록 약해짐, 근접 공격 시 보너스 등)
+        # 예: 1칸 기본, 그 이상 멀어지면 10%씩 감쇄 (최소 50%)
+        if distance > 1:
+            dist_multiplier = max(0.5, 1.0 - (distance - 1) * 0.1)
+            damage_multiplier *= dist_multiplier
+
+        # 3. 데미지 계산
+        damage = max(1, int(a_stats.attack * damage_multiplier) - t_stats.defense)
+        t_stats.current_hp -= damage
+        
+        attacker_name = self._get_entity_name(attacker)
+        target_name = self._get_entity_name(target)
+        
+        self.event_manager.push(MessageEvent(f'"{target_name}"은(는) {damage}의 데미지를 입었다.{advantage_msg}'))
+        
+        # 4. 사망 처리
+        if t_stats.current_hp <= 0:
+            t_stats.current_hp = 0
+            self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
+            if target.has_component(MonsterComponent):
+                self.world.delete_entity(target.entity_id)
+
     def handle_collision_event(self, event: CollisionEvent):
         """충돌 이벤트 발생 시 공격자와 대상이 있으면 전투 처리"""
         if event.collision_type not in ["MONSTER", "PLAYER"] and event.target_entity_id is None:
@@ -244,29 +361,7 @@ class CombatSystem(System):
         if not attacker or not target:
             return
 
-        a_stats = attacker.get_component(StatsComponent)
-        t_stats = target.get_component(StatsComponent)
-        
-        if not a_stats or not t_stats:
-            return
-
-        # 1. 데미지 계산 (공격력 - 방어력, 최소 1)
-        damage = max(1, a_stats.attack - t_stats.defense)
-        t_stats.current_hp -= damage
-        
-        attacker_name = self._get_entity_name(attacker)
-        target_name = self._get_entity_name(target)
-        
-        # 문구 수정: "A"이(가) 공격해서 "B"은(는) X의 데미지를 입었다.
-        self.event_manager.push(MessageEvent(f'"{attacker_name}"이(가) 공격해서 "{target_name}"은(는) {damage}의 데미지를 입었다.'))
-        
-        # 2. 사망 처리
-        if t_stats.current_hp <= 0:
-            t_stats.current_hp = 0
-            self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
-            # 몬스터 사망 시 맵에서 제거 (플레이어 사망은 Engine에서 처리)
-            if target.has_component(MonsterComponent):
-                self.world.delete_entity(target.entity_id)
+        self._apply_damage(attacker, target, distance=1)
 
     def _get_entity_name(self, entity) -> str:
         """엔티티의 이름을 가져옵니다 (메시지용)"""
