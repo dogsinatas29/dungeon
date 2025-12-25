@@ -52,7 +52,7 @@ def start_game(ui, player_name: str, new_game=False):
                         'defense': 5,
                         'max_mp': 50,
                         'current_mp': 50,
-                        'max_stamina': 100,
+                        'max_stamina': 100,\
                         'current_stamina': 100
                     },
                     "NameComponent": {'name': player_name},
@@ -64,6 +64,10 @@ def start_game(ui, player_name: str, new_game=False):
         }
         game_state_data = initial_game_state
         ui.add_message(f"{player_name}, 던전에 온 것을 환영하네.")
+    else: # 저장된 게임을 로드한 경우
+        # 저장된 데이터에서 플레이어 이름을 추출하여 사용
+        player_name = game_state_data["player_specific_data"]["name"]
+        ui.add_message(f"{player_name}님, 다시 던전으로 돌아오신 것을 환영합니다!")
 
     ui_instance = ui
     
@@ -90,12 +94,12 @@ def main_menu():
             player_name = ui.get_player_name()
             start_game(ui, player_name, new_game=True)
         elif choice == 1: # 이어하기
-            player_name = ui.get_player_name() # 이어하기 시에도 플레이어 이름 필요
-            if not load_game_data():
-                ui.add_message("저장된 게임이 없습니다. 새 게임을 시작합니다.")
-                start_game(ui, player_name, new_game=True)
+            if load_game_data():
+                start_game(ui, None, new_game=False) # 저장된 게임이 있으면 이름 입력 없이 시작
             else:
-                start_game(ui, player_name, new_game=False)
+                ui.add_message("저장된 게임이 없습니다. 새 게임을 시작합니다.")
+                player_name = ui.get_player_name()
+                start_game(ui, player_name, new_game=True)
         elif choice == 2: # 게임 종료
             break
     del ui

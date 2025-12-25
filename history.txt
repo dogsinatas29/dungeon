@@ -1,2 +1,6 @@
-### 2025년 12월 13일
-*   `dungeon/engine.py` 파일의 `run` 메서드에서 `self.run_game_loop()` 호출을 제거하여 `AttributeError`를 수정했습니다. 메인 게임 루프가 `run` 메서드 내에서 직접 실행되도록 변경했습니다.
+Start.py 수정: 저장된 게임 로드 시 플레이어 이름 처리 방식 개선.
+- `start_game` 함수에서 저장된 게임 데이터(`game_state_data`)가 로드되면, 해당 데이터에서 실제 플레이어 이름을 추출하여 `engine.Engine`에 전달하도록 변경했습니다.
+- `main_menu` 함수에서 '이어하기'를 선택했을 때, 저장된 게임이 있다면 `ui.get_player_name()` 호출 없이 바로 `start_game`을 호출하도록 수정했습니다. 저장된 게임이 없을 경우에만 이름을 입력받아 새 게임을 시작합니다.
+
+dungeon/engine.py 수정: `Engine` 클래스 생성자에서 플레이어 이름 처리 로직 개선.
+- `Engine` 클래스의 `__init__` 메서드에서 `player_name` 인자가 `None`으로 전달되고 `game_data`가 존재할 경우, `game_data`에서 실제 플레이어 이름을 추출하여 `self.player_name`에 할당하도록 로직을 추가했습니다.

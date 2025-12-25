@@ -36,7 +36,13 @@ class Engine:
         self.is_running = False
         self.world = World(self) # World 초기화 시 Engine 자신을 참조
         self.turn_number = 0
-        self.player_name = player_name
+        
+        # game_data가 있고 player_name이 None이면, 저장된 데이터에서 이름 로드
+        if game_data and player_name is None:
+            self.player_name = game_data["player_specific_data"]["name"]
+        else:
+            self.player_name = player_name
+            
         self.state = GameState.PLAYING # 초기 상태
         self.is_attack_mode = False # 원거리 공격 모드
         self.current_level = 1 # 현재 던전 층수
