@@ -2,7 +2,7 @@
 
 # NOTE: 이 파일은 ECS 코어(.ecs)를 임포트해야 합니다.
 from .ecs import Component
-from typing import List
+from typing import List, Dict
 
 # --- 플레이어/몬스터 기본 정보 ---
 class PositionComponent(Component):
@@ -19,7 +19,7 @@ class RenderComponent(Component):
 
 class StatsComponent(Component):
     """전투 및 능력치 데이터 (GEMINI.md 호환)"""
-    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE"):
+    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE", gold: int = 0):
         self.max_hp = max_hp
         self.current_hp = current_hp
         self.attack = attack
@@ -34,6 +34,7 @@ class StatsComponent(Component):
         self.max_stamina = max_stamina
         self.current_stamina = current_stamina
         self.element = element
+        self.gold = gold
         
     @property
     def is_alive(self):
@@ -91,12 +92,33 @@ class MapComponent(Component):
         self.tiles = tiles # tiles[y][x]
 
 class MessageComponent(Component):
-    """게임 메시지 로그를 저장하는 컴포넌트"""
+    """게임 내 메시지 기록 (전역 데이터)"""
     def __init__(self, max_messages: int = 50):
-        self.messages: List[str] = []
+        self.messages = []
         self.max_messages = max_messages
-        
-    def add_message(self, message: str):
-        self.messages.append(message)
+
+    def add_message(self, text: str):
+        self.messages.append(text)
         if len(self.messages) > self.max_messages:
             self.messages.pop(0) # 가장 오래된 메시지 제거
+
+class LootComponent(Component):
+    """루팅 가능한 아이템 정보를 담는 컴포넌트"""
+    def __init__(self, items: List[Dict] = None, gold: int = 0):
+        self.items = items if items else []  # [{'item': Item, 'qty': 1}, ...]
+        self.gold = gold
+
+class CorpseComponent(Component):
+    """시체임을 나타내는 컴포넌트"""
+    def __init__(self, original_name: str):
+        self.original_name = original_name
+
+class ChestComponent(Component):
+    """보물상자 컴포넌트"""
+    def __init__(self, is_opened: bool = False):
+        self.is_opened = is_opened
+
+class ShopComponent(Component):
+    """상점 컴포넌트"""
+    def __init__(self, items: List[Dict] = None):
+        self.items = items if items else [] # 판매 목록

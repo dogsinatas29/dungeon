@@ -98,8 +98,7 @@ class DungeonMap:
         
         if self.rooms:
             self.exit_x, self.exit_y = self.rooms[-1].center
-            
-            # 맵은 이제 순수하게 타일 데이터만 관리하며, 엔티티 생성은 DungeonGenerationSystem에서 담당합니다.
+            self.map_data[self.exit_y][self.exit_x] = self.exit_type
 
         logging.debug("DungeonMap.generate_map: 맵 생성 완료")
 

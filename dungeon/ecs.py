@@ -174,13 +174,18 @@ def initialize_event_listeners(world: World):
     """모든 시스템을 순회하며 EventManager에 리스너 등록"""
     # 시스템들이 사용할 이벤트 타입 목록을 systems 모듈에서 가져옵니다.
     # 주의: 순환 참조를 막기 위해 함수 내에서 임포트합니다.
-    from .systems import MoveSuccessEvent, CollisionEvent, MessageEvent, DirectionalAttackEvent 
+    from .systems import (
+    InputSystem, MovementSystem, CombatSystem, MonsterAISystem, RenderSystem,
+    MessageEvent, CollisionEvent, MoveSuccessEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
+)
     
     # EventManager에 이벤트 타입이 등록되어 있어야 함 (빈 리스트라도)
     world.event_manager.listeners[MoveSuccessEvent] = []
     world.event_manager.listeners[CollisionEvent] = []
-    world.event_manager.listeners[MessageEvent] = [] # 메시지 이벤트 추가
+    world.event_manager.listeners[MessageEvent] = []
     world.event_manager.listeners[DirectionalAttackEvent] = []
+    world.event_manager.listeners[MapTransitionEvent] = []
+    world.event_manager.listeners[ShopOpenEvent] = []
 
     for system in world._systems:
         for event_type in world.event_manager.listeners.keys():

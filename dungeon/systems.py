@@ -2,8 +2,13 @@
 
 from typing import Set, Tuple, List, Any
 from .ecs import System, Entity, Event, EventManager # EventManager는 필요 없음
-from .components import PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, AIComponent
+from .components import (
+    PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, 
+    MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
+    RenderComponent, InventoryComponent, ChestComponent, ShopComponent
+)
 import readchar
+import random
 
 # --- Event 정의 (시스템 통신 표준) ---
 class MoveSuccessEvent(Event):
@@ -28,6 +33,16 @@ class MessageEvent(Event):
     """일반 메시지 로그에 표시될 텍스트"""
     def __init__(self, text: str):
         self.text = text
+
+class MapTransitionEvent(Event):
+    """플레이어가 계단 등을 통해 맵을 이동할 때 발생"""
+    def __init__(self, target_level: int):
+        self.target_level = target_level
+
+class ShopOpenEvent(Event):
+    """상인과 충돌 시 상점 UI를 열기 위해 발생"""
+    def __init__(self, shopkeeper_id: int):
+        self.shopkeeper_id = shopkeeper_id
 
 class DirectionalAttackEvent(Event):
     """플레이어가 특정 방향으로 원거리 공격을 수행할 때 발생"""
@@ -168,6 +183,15 @@ class MovementSystem(System):
                         stats.current_hp = 0
                         self.event_manager.push(MessageEvent("탈진하여 쓰러졌습니다! (Stamina 0)"))
 
+                # 4. 계단 확인 (플레이어만)
+                if entity.entity_id == self.world.get_player_entity().entity_id:
+                    from .constants import EXIT_NORMAL
+                    if map_component.tiles[new_y][new_x] == EXIT_NORMAL:
+                        self.event_manager.push(MessageEvent("다음 층으로 연결되는 계단입니다. [ENTER]를 눌러 이동하세요."))
+                        # 자동 이동보다는 키 입력을 받는 게 좋지만, 일단은 위치 도달 시 이벤트 발생 고려
+                        # 여기선 이벤트를 발생시키고 Engine에서 처리하게 함
+                        self.event_manager.push(MapTransitionEvent(target_level=getattr(self.world.engine, 'current_level', 1) + 1))
+
             # DesiredPositionComponent 제거 (처리 완료)
             entity.remove_component(DesiredPositionComponent)
 
@@ -192,6 +216,7 @@ class MovementSystem(System):
             and e.entity_id != moving_entity.entity_id
             and e.get_component(MapComponent) is None  # 맵 엔티티 제외
             and e.get_component(MessageComponent) is None # 메시지 엔티티 제외
+            and e.get_component(LootComponent) is None # 루팅 가능한 엔티티(시체, 상자)는 통과 가능
         ]
         
         if not entities_at_position:
@@ -307,6 +332,62 @@ class CombatSystem(System):
             for target in targets_at_pos:
                 self._apply_damage(attacker, target, dist)
 
+    def handle_move_success_event(self, event: MoveSuccessEvent):
+        """플레이어가 이동 성공 시 해당 위치에 루팅 가능한 아이템이 있는지 확인"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity or event.entity_id != player_entity.entity_id:
+            return
+
+        # 해당 위치의 엔티티들 검색 (LootComponent를 가진 것)
+        lootables = [
+            e for e in self.world.get_entities_with_components({PositionComponent, LootComponent})
+            if e.get_component(PositionComponent).x == event.new_x
+            and e.get_component(PositionComponent).y == event.new_y
+        ]
+
+        for loot_entity in lootables:
+            self._handle_loot(player_entity, loot_entity)
+
+    def _handle_loot(self, player: Entity, loot_entity: Entity):
+        """아이템 및 골드 루팅 처리"""
+        loot = loot_entity.get_component(LootComponent)
+        inv = player.get_component(InventoryComponent)
+        stats = player.get_component(StatsComponent)
+        
+        if not loot or not inv or not stats: return
+
+        loot_msg = []
+        
+        # 골드 루팅
+        if loot.gold > 0:
+            stats.gold += loot.gold
+            loot_msg.append(f"{loot.gold} Gold")
+
+        # 아이템 루팅
+        for item_data in loot.items:
+            item = item_data['item']
+            qty = item_data['qty']
+            
+            if item.name in inv.items:
+                inv.items[item.name]['qty'] += qty
+            else:
+                inv.items[item.name] = {'item': item, 'qty': qty}
+            loot_msg.append(f"{item.name} x{qty}")
+
+        if loot_msg:
+            msg = ", ".join(loot_msg)
+            corpse = loot_entity.get_component(CorpseComponent)
+            chest = loot_entity.get_component(ChestComponent)
+            
+            source = "시체"
+            if chest: source = "보물상자"
+            elif not corpse: source = "아이템"
+            
+            self.event_manager.push(MessageEvent(f"{source}에서 {msg}을(를) 획득했습니다!"))
+
+        # 루팅 후 엔티티 제거 (상자는 열린 상태로 둘 수도 있지만 일단 제거)
+        self.world.delete_entity(loot_entity.entity_id)
+
     def _apply_damage(self, attacker: Entity, target: Entity, distance: int):
         """실제 데미지 적용 로직 (상성 및 거리 보정 포함)"""
         a_stats = attacker.get_component(StatsComponent)
@@ -347,7 +428,25 @@ class CombatSystem(System):
         if t_stats.current_hp <= 0:
             t_stats.current_hp = 0
             self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
+            
             if target.has_component(MonsterComponent):
+                # 몬스터 사망 시 시체 생성
+                pos = target.get_component(PositionComponent)
+                if pos:
+                    corpse_entity = self.world.create_entity()
+                    self.world.add_component(corpse_entity.entity_id, PositionComponent(x=pos.x, y=pos.y))
+                    self.world.add_component(corpse_entity.entity_id, RenderComponent(char='%', color='red'))
+                    self.world.add_component(corpse_entity.entity_id, CorpseComponent(original_name=target_name))
+                    
+                    # 전리품 설정 (랜덤 골드 및 확률적 아이템)
+                    loot_items = []
+                    item_defs = self.world.engine.item_defs if hasattr(self.world.engine, 'item_defs') else None
+                    if item_defs and random.random() < 0.2: # 20% 확률로 아이템 드롭
+                        random_item_name = random.choice(list(item_defs.keys()))
+                        loot_items.append({'item': item_defs[random_item_name], 'qty': 1})
+                    
+                    self.world.add_component(corpse_entity.entity_id, LootComponent(items=loot_items, gold=random.randint(5, 20)))
+                
                 self.world.delete_entity(target.entity_id)
 
     def handle_collision_event(self, event: CollisionEvent):
@@ -359,6 +458,11 @@ class CombatSystem(System):
         target = self.world.get_entity(event.target_entity_id)
         
         if not attacker or not target:
+            return
+
+        # 만약 대상이 상점 컴포넌트를 가지고 있다면 상점 오픈 이벤트 발생
+        if target.has_component(ShopComponent) and attacker.entity_id == self.world.get_player_entity().entity_id:
+            self.event_manager.push(ShopOpenEvent(shopkeeper_id=target.entity_id))
             return
 
         self._apply_damage(attacker, target, distance=1)

@@ -9,18 +9,26 @@ from .map import DungeonMap
 
 # 필요한 모듈 임포트
 from .ecs import World, EventManager, initialize_event_listeners
-from .components import PositionComponent, RenderComponent, MapComponent, MonsterComponent, MessageComponent, StatsComponent, LevelComponent, InventoryComponent, AIComponent
-from .systems import InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, MessageEvent
+from .components import (
+    PositionComponent, RenderComponent, StatsComponent, InventoryComponent, 
+    LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
+    AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent
+)
+from .systems import InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
 from .renderer import Renderer
 from .data_manager import load_item_definitions
+from .constants import (
+    ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS
+)
 
 
 
 import enum
 
-class GameState(enum.Enum):
+class GameState:
     PLAYING = 0
     INVENTORY = 1
+    SHOP = 2
 
 class Engine:
     """게임 루프, 초기화, 시스템 관리를 담당하는 메인 클래스"""
@@ -31,6 +39,7 @@ class Engine:
         self.player_name = player_name
         self.state = GameState.PLAYING # 초기 상태
         self.is_attack_mode = False # 원거리 공격 모드
+        self.current_level = 1 # 현재 던전 층수
         self.selected_item_index = 0 # 인벤토리 선택 인덱스
         self.inventory_category_index = 0 # 0: 아이템, 1: 장비, 2: 스크롤, 3: 스킬
 
@@ -43,20 +52,24 @@ class Engine:
         # 시스템 등록 후, 이벤트 리스너를 한 번 더 초기화하여 시스템-이벤트 간 연결 완료
         initialize_event_listeners(self.world)
 
-    def _initialize_world(self, game_data=None):
+    def _initialize_world(self, game_data=None, preserve_player=None):
         """맵, 플레이어, 몬스터 등 초기 엔티티 생성"""
-        # TODO: game_data(저장된 데이터)가 있으면 그것을 로드하는 로직 추가 필요
-        # 현재는 하드코딩된 초기화만 유지
-        
         # 맵 생성 (DungeonMap 사용)
         width = 120
         height = 60
         rng = random.Random()
         
-        # DungeonMap 인스턴스 생성 (자동으로 generate_map 호출됨)
+        # 이전 층 데이터가 있으면 초기화
+        if preserve_player:
+            # 월드 전체 초기화 (EventManager와 System 리스너는 유지되어야 함)
+            # ecs.World에 clear_except_systems 같은 메서드가 없으므로 수동으로 엔티티 삭제
+            for e_id in list(self.world._entities.keys()):
+                self.world.delete_entity(e_id)
+            # ID 초기화 (선택적)
+            self.world._next_entity_id = 1
+
+        # DungeonMap 인스턴스 생성
         dungeon_map = DungeonMap(width, height, rng)
-        
-        # 맵 데이터 가져오기
         map_data = dungeon_map.map_data
         
         # 1. 플레이어 엔티티 생성 (ID=1)
@@ -64,11 +77,19 @@ class Engine:
         player_entity = self.world.create_entity() 
         self.world.add_component(player_entity.entity_id, PositionComponent(x=player_x, y=player_y))
         self.world.add_component(player_entity.entity_id, RenderComponent(char='@', color='yellow'))
-        self.world.add_component(player_entity.entity_id, StatsComponent(max_hp=100, current_hp=100, attack=10, defense=5, max_mp=50, current_mp=50, max_stamina=100, current_stamina=100))
-        self.world.add_component(player_entity.entity_id, LevelComponent(level=1, exp=0, exp_to_next=100, job="Novice"))
+        
+        if preserve_player:
+            p_stats, p_inv, p_level = preserve_player
+            self.world.add_component(player_entity.entity_id, p_stats)
+            self.world.add_component(player_entity.entity_id, p_inv)
+            self.world.add_component(player_entity.entity_id, p_level)
+        else:
+            self.world.add_component(player_entity.entity_id, StatsComponent(max_hp=100, current_hp=100, attack=10, defense=5, max_mp=50, current_mp=50, max_stamina=100, current_stamina=100))
+            self.world.add_component(player_entity.entity_id, LevelComponent(level=1, exp=0, exp_to_next=100, job="Novice"))
         
         # 샘플 아이템 추가 (UI 검증용)
-        item_defs = load_item_definitions()
+        self.item_defs = load_item_definitions()
+        item_defs = self.item_defs
         sample_items = {}
         if item_defs:
             # WEAPON, ARMOR, CONSUMABLE 등 다양한 타입 준비
@@ -108,26 +129,31 @@ class Engine:
         message_comp.add_message("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.")
         self.world.add_component(message_entity.entity_id, message_comp)
         
-        # 4. 몬스터 엔티티 생성 (각 방의 중앙에 배치, 시작 방 제외)
+        # 4. 몬스터 및 보물상자 엔티티 생성
+        all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
+        
         for i, room in enumerate(dungeon_map.rooms[1:]): # 첫 번째 방(플레이어 시작) 제외
+            # 방의 중앙에 몬스터 배치
             monster_x, monster_y = room.center
             monster_entity = self.world.create_entity()
             self.world.add_component(monster_entity.entity_id, PositionComponent(x=monster_x, y=monster_y))
             
+            # 몬스터 속성 결정 (랜덤)
+            monster_element = random.choice(all_elements)
+            color = ELEMENT_COLORS.get(monster_element, "white")
+            
             # AI 패턴 결정 (0: 정지, 1: 도망, 2: 추적)
             behavior = i % 3
-            color = "green"
             type_name = "Goblin"
             
             # 능력치 초기화 (기본값)
             max_hp, atk, df = 30, 5, 2
             
             if behavior == AIComponent.CHASE: 
-                color = "red"
                 type_name = "Aggressive Goblin"
                 atk = 8  # 추적형은 공격력이 높음
+                if monster_element == ELEMENT_FIRE: atk += 2 # 불 속성 공격성 추가
             elif behavior == AIComponent.FLEE: 
-                color = "blue"
                 type_name = "Cowardly Goblin"
                 df = 5   # 도망형은 방어력이 높음
             else:
@@ -137,7 +163,43 @@ class Engine:
             self.world.add_component(monster_entity.entity_id, RenderComponent(char='g', color=color))
             self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
             self.world.add_component(monster_entity.entity_id, AIComponent(behavior=behavior, detection_range=8))
-            self.world.add_component(monster_entity.entity_id, StatsComponent(max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df))
+            self.world.add_component(monster_entity.entity_id, StatsComponent(
+                max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=monster_element
+            ))
+
+            # 5. 방 구석에 보물상자 배치 (30% 확률)
+            if random.random() < 0.3:
+                # 방의 랜덤한 위치 (벽이 아닌 곳)
+                chest_x = random.randint(room.x1 + 1, room.x2 - 1)
+                chest_y = random.randint(room.y1 + 1, room.y2 - 1)
+                
+                # 플레이어나 몬스터와 겹치지 않는지 확인 (단순화 가능)
+                chest_entity = self.world.create_entity()
+                self.world.add_component(chest_entity.entity_id, PositionComponent(x=chest_x, y=chest_y))
+                self.world.add_component(chest_entity.entity_id, RenderComponent(char='*', color='yellow'))
+                self.world.add_component(chest_entity.entity_id, ChestComponent())
+                
+                # 랜덤 아이템 1~2개 포함
+                loot_items = []
+                if item_defs:
+                    random_keys = random.sample(list(item_defs.keys()), min(len(item_defs), 2))
+                    for k in random_keys:
+                        loot_items.append({'item': item_defs[k], 'qty': 1})
+                
+                self.world.add_component(chest_entity.entity_id, LootComponent(items=loot_items, gold=random.randint(10, 50)))
+
+            # 6. 첫 번째 방(시작 방) 근처에 상인 배치 (50% 확률)
+            if i == 0 and random.random() < 0.5:
+                shop_x, shop_y = room.x1 + 2, room.y1 + 2 # 구석 근처
+                shop_entity = self.world.create_entity()
+                self.world.add_component(shop_entity.entity_id, PositionComponent(x=shop_x, y=shop_y))
+                self.world.add_component(shop_entity.entity_id, RenderComponent(char='S', color='magenta'))
+                self.world.add_component(shop_entity.entity_id, ShopComponent(items=[
+                    {'item': item_defs.get('체력 물약'), 'price': 20},
+                    {'item': item_defs.get('마력 물약'), 'price': 20},
+                    {'item': item_defs.get('화염 스크롤'), 'price': 50}
+                ]))
+                self.world.add_component(shop_entity.entity_id, MonsterComponent(type_name="상인")) # 충돌 감지를 위해 MonsterComponent 활용 가능
 
     def _initialize_systems(self):
         """시스템 등록 (실행 순서가 중요함)"""
@@ -147,14 +209,22 @@ class Engine:
         self.combat_system = CombatSystem(self.world)
         self.render_system = RenderSystem(self.world)
         
-        # 시스템 순서 등록: 입력 -> AI -> 이동 -> 전투(이벤트 기반) -> 렌더링
-        self.world.add_system(self.input_system)
-        self.world.add_system(self.monster_ai_system)
-        self.world.add_system(self.movement_system)
-        self.world.add_system(self.combat_system)
-        self.world.add_system(self.render_system)
-        
-        # 이벤트 리스너 등록 (시스템과 이벤트 연결)
+        # 2. 시스템 순서 등록: 입력 -> AI -> 이동 -> 전투(이벤트 기반) -> 렌더링
+        systems = [
+            self.input_system,
+            self.monster_ai_system,
+            self.movement_system,
+            self.combat_system,
+            self.render_system
+        ]
+        for system in systems:
+            self.world.add_system(system)
+            
+        # 3. 추가적인 전역 이벤트 리스너 등록 (Engine 자체 핸들러 등)
+        self.world.event_manager.register(MapTransitionEvent, self)
+        self.world.event_manager.register(ShopOpenEvent, self)
+
+        # 4. 모든 시스템의 리스너 초기화 헬퍼 호출
         initialize_event_listeners(self.world)
 
     def _get_input(self) -> str:
@@ -208,7 +278,82 @@ class Engine:
             elif self.state == GameState.INVENTORY:
                 self._handle_inventory_input(action)
                 self._render()
+            elif self.state == GameState.SHOP:
+                self._handle_shop_input(action)
+                self._render()
                 
+    def handle_map_transition_event(self, event: MapTransitionEvent):
+        """맵 이동 이벤트 처리: 새로운 층 생성"""
+        self.current_level = event.target_level
+        self.world.event_manager.push(MessageEvent(f"깊은 곳으로 내려갑니다... (던전 {self.current_level}층)"))
+        
+        # 1. 플레이어 데이터 보존
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        
+        # 데이터 백업
+        stats = player_entity.get_component(StatsComponent)
+        inv = player_entity.get_component(InventoryComponent)
+        level_comp = player_entity.get_component(LevelComponent)
+        
+        # 2. 월드 초기화 (플레이어 제외 엔티티 삭제 및 시스템 재구성)
+        # 단순히 _initialize_world를 다시 호출하는 게 아니라, 맵과 몬스터만 갱신
+        self._initialize_world(preserve_player=(stats, inv, level_comp))
+
+    def handle_shop_open_event(self, event: ShopOpenEvent):
+        """플레이어가 상인과 충돌 시 상점 모드로 전환"""
+        self.state = GameState.SHOP
+        self.active_shop_id = event.shopkeeper_id
+        self.selected_shop_item_index = 0
+        self.world.event_manager.push(MessageEvent("상점에 오신 것을 환영합니다!"))
+
+    def _handle_shop_input(self, action: str):
+        """상점 상태에서의 입력 처리"""
+        if action == readchar.key.ESC or action == 'q':
+            self.state = GameState.PLAYING
+            return
+
+        shopkeeper = self.world.get_entity(self.active_shop_id)
+        if not shopkeeper:
+            self.state = GameState.PLAYING
+            return
+
+        shop_comp = shopkeeper.get_component(ShopComponent)
+        if not shop_comp: return
+
+        item_count = len(shop_comp.items)
+
+        if action == readchar.key.UP:
+             self.selected_shop_item_index = max(0, self.selected_shop_item_index - 1)
+        elif action == readchar.key.DOWN:
+             self.selected_shop_item_index = min(item_count - 1, self.selected_shop_item_index + 1)
+        elif action == readchar.key.ENTER or action == '\r' or action == '\n':
+             # 아이템 구매 로직
+             self._buy_item(shop_comp.items[self.selected_shop_item_index])
+
+    def _buy_item(self, shop_item: Dict):
+        """아이템 구매 로직"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+
+        stats = player_entity.get_component(StatsComponent)
+        inv = player_entity.get_component(InventoryComponent)
+        if not stats or not inv: return
+
+        item = shop_item['item']
+        price = shop_item['price']
+
+        if stats.gold >= price:
+            stats.gold -= price
+            # 인벤토리에 추가
+            if item.name in inv.items:
+                inv.items[item.name]['qty'] += 1
+            else:
+                inv.items[item.name] = {'item': item, 'qty': 1}
+            self.world.event_manager.push(MessageEvent(f"{item.name}을(를) {price} 골드에 구매했습니다!"))
+        else:
+            self.world.event_manager.push(MessageEvent("골드가 부족합니다!"))
+
     def _handle_inventory_input(self, action):
         """인벤토리 상태에서의 입력 처리"""
         if action == 'i' or action == 'I' or action == readchar.key.ESC:
@@ -745,6 +890,64 @@ class Engine:
         # 5. 하단 도움말
         help_text = "[←/→] 탭 전환  [↑/↓] 선택  [E/ENTER] 장착/등록/사용  [ESC/I] 닫기"
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
+
+    def _render_shop_popup(self):
+        """상점 UI 팝업 렌더링"""
+        MAP_WIDTH = 80
+        POPUP_WIDTH = 60
+        POPUP_HEIGHT = 20
+        start_x = (MAP_WIDTH - POPUP_WIDTH) // 2
+        start_y = (self.renderer.height - POPUP_HEIGHT) // 2
+        
+        # 1. 배경 및 테두리 (골드 색상 테두리)
+        for y in range(start_y, start_y + POPUP_HEIGHT):
+            for x in range(start_x, start_x + POPUP_WIDTH):
+                if y == start_y or y == start_y + POPUP_HEIGHT - 1:
+                    char = "="
+                elif x == start_x or x == start_x + POPUP_WIDTH - 1:
+                    char = "|"
+                else:
+                    char = " "
+                self.renderer.draw_char(x, y, char, "gold")
+        
+        # 제목
+        title = "[ 상 점 ]"
+        self.renderer.draw_text(start_x + (POPUP_WIDTH - len(title)) // 2, start_y + 1, title, "gold")
+        
+        # 2. 플레이어 골드 표시
+        player_entity = self.world.get_player_entity()
+        if player_entity:
+            stats = player_entity.get_component(StatsComponent)
+            if stats:
+                self.renderer.draw_text(start_x + 2, start_y + 3, f"소지 골드: {stats.gold} G", "yellow")
+        
+        self.renderer.draw_text(start_x + 2, start_y + 4, "-" * (POPUP_WIDTH - 4), "dark_grey")
+        
+        # 3. 상품 목록 표시
+        shopkeeper = self.world.get_entity(self.active_shop_id)
+        if shopkeeper:
+            shop_comp = shopkeeper.get_component(ShopComponent)
+            if shop_comp:
+                for i, entry in enumerate(shop_comp.items):
+                    item = entry['item']
+                    price = entry['price']
+                    
+                    item_y = start_y + 5 + i
+                    if item_y >= start_y + POPUP_HEIGHT - 2: break
+                    
+                    prefix = "> " if i == self.selected_shop_item_index else "  "
+                    color = "white" if i == self.selected_shop_item_index else "dark_grey"
+                    if i == self.selected_shop_item_index: color = "green"
+                    
+                    # 상품명 (왼쪽 정렬) 및 가격 (오른쪽 정렬)
+                    name_text = f"{prefix}{item.name}"
+                    self.renderer.draw_text(start_x + 2, item_y, name_text, color)
+                    price_text = f"{price:>5} G"
+                    self.renderer.draw_text(start_x + POPUP_WIDTH - 10, item_y, price_text, color)
+        
+        # 4. 하단 도움말
+        guide_text = "[↑/↓] 선택  [ENTER] 구매  [Q/ESC] 나가기"
+        self.renderer.draw_text(start_x + (POPUP_WIDTH - len(guide_text)) // 2, start_y + POPUP_HEIGHT - 2, guide_text, "dark_grey")
 
 if __name__ == '__main__':
     engine = Engine()
