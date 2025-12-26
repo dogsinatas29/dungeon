@@ -8,6 +8,8 @@ class SoundSystem(System):
     게임 내 이벤트에 반응하여 '소리'를 시각적으로(로그) 표시하고, 
     리눅스 표준인 aplay를 통해 실제 효과음을 비동기로 재생하는 시스템.
     """
+    def process(self):
+        pass # 사운드 재생은 이벤트 기반으로 작동함
     def __init__(self, world, ui=None):
         super().__init__(world)
         self.ui = ui

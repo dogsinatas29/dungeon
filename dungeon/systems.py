@@ -1463,6 +1463,8 @@ class TimeSystem(System):
 
 class LevelSystem(System):
     """경험치 획득 및 레벨업 로직을 처리하는 시스템"""
+    def process(self):
+        pass # 레벨업은 이벤트 기반으로 작동함
     def gain_exp(self, entity: Entity, amount: int):
         level_comp = entity.get_component(LevelComponent)
         if not level_comp: return
