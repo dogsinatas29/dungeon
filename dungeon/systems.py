@@ -187,8 +187,26 @@ class InputSystem(System):
             return True # 턴 소모
         
         # 퀵슬롯 (1~0)
-        if action_clean in "1234567890":
+        if action_clean and action_clean in "1234567890":
             return self.world.engine._trigger_quick_slot(action_clean)
+        
+        # 상호작용/줍기 (Enter)
+        if action in ['\r', '\n']:
+            # 제자리 대기 효과 부여 (턴 소모)
+            self.event_manager.push(MessageEvent("주변을 살펴봅니다."))
+            # [추가] 시체가 있는 경우 확인 (예시 구현)
+            from .components import CorpseComponent, PositionComponent
+            player_pos = player_entity.get_component(PositionComponent)
+            if player_pos:
+                corpses = self.world.get_entities_with_components({CorpseComponent, PositionComponent})
+                for c in corpses:
+                    c_pos = c.get_component(PositionComponent)
+                    if c_pos.x == player_pos.x and c_pos.y == player_pos.y:
+                        corpse_comp = c.get_component(CorpseComponent)
+                        self.event_manager.push(MessageEvent(f"{corpse_comp.original_name}의 시체를 살펴봅니다..."))
+                        # 여기서 시체 루팅 UI를 띄우거나 자동 루팅 등을 수행할 수 있음
+                        break
+            return True
         
         # 제자리 대기 (Wait)
         if action_lower in ['.', '5', 'x', 'z']: # 대기 키 확장

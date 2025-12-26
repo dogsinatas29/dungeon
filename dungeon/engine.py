@@ -905,7 +905,10 @@ class Engine:
             self.world.event_manager.push(MessageEvent("몸이 움직이지 않아 퀵슬롯을 사용할 수 없습니다!"))
             return
 
-        num = int(key)
+        try:
+            num = int(key)
+        except ValueError:
+            return False
         if 1 <= num <= 5: # 아이템 슬롯 (1~5)
             idx = num - 1
             item_name = inv.item_slots[idx]
