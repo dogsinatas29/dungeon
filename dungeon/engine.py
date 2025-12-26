@@ -338,8 +338,12 @@ class Engine:
                 self.world.add_component(monster_entity.entity_id, PositionComponent(x=cx, y=cy))
                 
                 if self.monster_defs:
-                    # 복도에는 주로 약한 몬스터나 슬라임 등 배치 (여기선 랜덤)
-                    m_def = random.choice(list(self.monster_defs.values()))
+                    # 복도에는 보스 제외, 약한 몬스터만
+                    non_boss_monsters = [m for m in self.monster_defs.values() if 'BOSS' not in m.flags]
+                    if non_boss_monsters:
+                        m_def = random.choice(non_boss_monsters)
+                    else:
+                        m_def = random.choice(list(self.monster_defs.values()))
                     type_name, max_hp, atk, df, char, m_delay, m_flags = m_def.name, m_def.hp, m_def.attack, m_def.defense, m_def.symbol, m_def.action_delay, m_def.flags.copy()
                 else:
                     type_name, max_hp, atk, df, char, m_delay, m_flags = "슬라임", 15, 3, 0, 's', 1.0, set()
