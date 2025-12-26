@@ -212,7 +212,14 @@ class Engine:
         # 4. 몬스터 및 보물상자 엔티티 생성
         all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
         
-        for i, room in enumerate(dungeon_map.rooms[1:]): # 첫 번째 방(플레이어 시작) 제외
+        # [중요] 시작 방 식별 (첫 번째 방이 항상 시작 방)
+        starting_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
+        
+        for i, room in enumerate(dungeon_map.rooms):
+            # [안전지대] 시작 방은 완전히 제외
+            if room == starting_room:
+                continue
+                
             # [안전지대] 시작 지점에서 너무 가까운 방은 스폰 제외 (중심 기준 20칸)
             room_center_x, room_center_y = room.center
             dist_to_start = ((room_center_x - dungeon_map.start_x)**2 + (room_center_y - dungeon_map.start_y)**2)**0.5
@@ -336,7 +343,10 @@ class Engine:
                 self.world.add_component(monster_entity.entity_id, stats)
 
         # 5. 방 구석에 보물상자 및 기타 오브젝트...
-        for room in dungeon_map.rooms[1:]:
+        for room in dungeon_map.rooms:
+            # [안전지대] 시작 방 제외
+            if room == starting_room:
+                continue
 
             # 5. 방 구석에 보물상자 배치 (30% 확률)
             if random.random() < 0.3:
