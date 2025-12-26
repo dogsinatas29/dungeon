@@ -6,7 +6,7 @@ from .components import (
     PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, 
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
-    EffectComponent, SkillEffectComponent, HitFlashComponent
+    EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent
 )
 import readchar
 import random
@@ -579,13 +579,36 @@ class CombatSystem(System):
             source = "시체"
             if chest: source = "보물상자"
             elif not corpse: source = "아이템"
+            elif corpse and corpse.original_name: source = f"{corpse.original_name}의 시체"
             
             self.event_manager.push(MessageEvent(f"{source}에서 {msg}을(를) 획득했습니다!"))
+            
+            # 루팅 후 처리 (내용물 비우기)
+            loot.items = []
+            loot.gold = 0
+            
+            # 시체인 경우 색상을 하얀색(루팅됨)으로 변경하고 엔티티 유지
+            if corpse:
+                render = loot_entity.get_component(RenderComponent)
+                if render:
+                    render.color = 'white'
+            
+            # 보물상자나 일반 아이템인 경우 삭제
+            else:
+                self.world.delete_entity(loot_entity.entity_id)
+        
+        # loot_msg가 없는 경우(이미 빈 시체 등)는 아무 처리 안함 (또는 "비어있습니다" 메시지?)
 
-        # 루팅 후 엔티티 제거 (상자는 열린 상태로 둘 수도 있지만 일단 제거)
-        self.world.delete_entity(loot_entity.entity_id)
+    def _get_element_from_flags(self, flags):
+        """플래그 집합에서 속성 찾기"""
+        from .constants import ELEMENT_FIRE, ELEMENT_WATER, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_NONE
+        if "ELEMENT_FIRE" in flags: return ELEMENT_FIRE
+        if "ELEMENT_WATER" in flags: return ELEMENT_WATER
+        if "ELEMENT_WOOD" in flags: return ELEMENT_WOOD
+        if "ELEMENT_EARTH" in flags: return ELEMENT_EARTH
+        return ELEMENT_NONE
 
-    def _apply_damage(self, attacker: Entity, target: Entity, distance: int):
+    def _apply_damage(self, attacker: Entity, target: Entity, distance: int, skill=None, damage_factor=1.0, allow_splash=True):
         """실제 데미지 적용 로직 (상성 및 거리 보정 포함)"""
         a_stats = attacker.get_component(StatsComponent)
         t_stats = target.get_component(StatsComponent)
@@ -593,28 +616,83 @@ class CombatSystem(System):
         if not a_stats or not t_stats:
             return
 
-        # 1. 속성 보정 계산
-        from .constants import ELEMENT_ADVANTAGE
+        # 1. 속성 결정
+        from .constants import ELEMENT_ADVANTAGE, ELEMENT_NONE
         
+        # 공격 속성: 스킬 속성 우선 -> 무기 속성 -> 본체 속성(기본)
+        attack_element = a_stats.element # 기본값: 본체 속성
+        base_damage = a_stats.attack
+        
+        if skill:
+            attack_element = getattr(skill, 'element', ELEMENT_NONE)
+            base_damage = getattr(skill, 'damage', 10)
+        else:
+            # 무기 속성 확인
+            inv = attacker.get_component(InventoryComponent)
+            if inv and inv.equipped.get('weapon'):
+                 weapon = inv.equipped['weapon']
+                 if hasattr(weapon, 'flags'):
+                     wpn_element = self._get_element_from_flags(weapon.flags)
+                     if wpn_element != ELEMENT_NONE:
+                         attack_element = wpn_element
+        
+        # 방어 속성: 방어구 속성 우선 -> 본체 속성(몬스터) -> 기본(NONE)
+        defense_element = t_stats.element 
+        t_inv = target.get_component(InventoryComponent)
+        if t_inv and t_inv.equipped.get('armor'):
+             armor = t_inv.equipped['armor']
+             if hasattr(armor, 'flags'):
+                 armor_element = self._get_element_from_flags(armor.flags)
+                 if armor_element != ELEMENT_NONE:
+                     defense_element = armor_element
+        
+        
+        # 2. 데미지 및 크리티컬 계산
+        base_damage = int(base_damage * damage_factor)
+        is_critical = False
+        crit_chance = 0.1 # 기본 크리 10%
         damage_multiplier = 1.0
         advantage_msg = ""
         
-        if ELEMENT_ADVANTAGE.get(a_stats.element) == t_stats.element:
-            damage_multiplier = 1.25
-            advantage_msg = " (효과가 굉장했다!)"
-        elif ELEMENT_ADVANTAGE.get(t_stats.element) == a_stats.element:
-            damage_multiplier = 0.75
-            advantage_msg = " (효과가 별로인 듯하다...)"
+        # 상성 체크
+        if ELEMENT_ADVANTAGE.get(attack_element) == defense_element:
+            # 상성 우위: 데미지 +1~5%, 크리티컬 +10%
+            bonus = random.uniform(0.01, 0.05)
+            damage_multiplier = 1.0 + bonus
+            crit_chance += 0.1
+            advantage_msg = f" (상성 우위! +{int(bonus*100)}%)"
+        elif ELEMENT_ADVANTAGE.get(defense_element) == attack_element:
+            # 상성 열위: 데미지 -1~5%, 크리티컬 -10%
+            malus = random.uniform(0.01, 0.05)
+            damage_multiplier = 1.0 - malus
+            crit_chance -= 0.1
+            advantage_msg = f" (상성 열위.. -{int(malus*100)}%)"
+
+        # 크리티컬 판정
+        if random.random() < crit_chance:
+            is_critical = True
+            damage_multiplier *= 1.5
+            advantage_msg += " (CRITICAL!)"
             
-        # 2. 거리 보정 (선택 사항: 멀어질수록 약해짐, 근접 공격 시 보너스 등)
-        # 예: 1칸 기본, 그 이상 멀어지면 10%씩 감쇄 (최소 50%)
-        if distance > 1:
+        # 2. 거리 보정 (스킬이 아닐 경우에만)
+        # 2. 거리 보정 (스킬이 아닐 경우에만)
+        if not skill and distance > 1:
             dist_multiplier = max(0.5, 1.0 - (distance - 1) * 0.1)
             damage_multiplier *= dist_multiplier
+            
 
         # 3. 데미지 계산
-        damage = max(1, int(a_stats.attack * damage_multiplier) - t_stats.defense)
-        t_stats.current_hp -= damage
+        final_damage = max(1, int(base_damage * damage_multiplier) - t_stats.defense)
+        t_stats.current_hp -= final_damage
+        
+        # 데미지 로그 출력
+        attacker_name = self._get_entity_name(attacker)
+        target_name = self._get_entity_name(target)
+        if skill:
+            msg = f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+        else:
+            msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+        self.event_manager.push(MessageEvent(msg))
         
         # 4. 피격 피드백 (Hit Flash) 추가
         if not target.has_component(HitFlashComponent):
@@ -629,18 +707,42 @@ class CombatSystem(System):
                    self.event_manager.push(MessageEvent(f"{target_name}이(가) 충격으로 기절했습니다!"))
             
             # 타격 시 스턴 플래그가 있는 스킬인 경우
-            skill_source = getattr(self, '_current_skill_on_hit', None)
-            if skill_source and "STUN" in skill_source.flags:
-                if not target.has_component(StunComponent):
-                   target.add_component(StunComponent(duration=2.0))
-            if skill_source and "KNOCKBACK" in skill_source.flags:
-                self._apply_knockback(attacker, target)
+            if skill:
+                if "STUN" in getattr(skill, 'flags', set()):
+                    if not target.has_component(StunComponent):
+                       target.add_component(StunComponent(duration=2.0))
+                if "KNOCKBACK" in getattr(skill, 'flags', set()):
+                    self._apply_knockback(attacker, target)
         
-        attacker_name = self._get_entity_name(attacker)
-        target_name = self._get_entity_name(target)
+        # 5.5 스플래쉬(SPLASH) 데미지 처리
+        # allow_splash=True 인 경우에만 발동 (무한 재귀 방지)
+        if allow_splash:
+            a_flags = getattr(a_stats, 'flags', set())
+            s_flags = getattr(skill, 'flags', set()) if skill else set()
+            
+            # 공격자 플래그 또는 스킬 플래그에 SPLASH가 있으면 발동
+            if "SPLASH" in a_flags or "SPLASH" in s_flags:
+                t_pos = target.get_component(PositionComponent)
+                if t_pos:
+                    # 주변 8칸
+                    for dx in [-1, 0, 1]:
+                        for dy in [-1, 0, 1]:
+                            if dx == 0 and dy == 0: continue
+                            
+                            # 타겟 탐색
+                            splash_targets = [
+                                e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                                if e.get_component(PositionComponent).x == t_pos.x + dx 
+                                and e.get_component(PositionComponent).y == t_pos.y + dy
+                                and e.entity_id != attacker.entity_id # 자해 방지
+                                and e.entity_id != target.entity_id   # 원본 타겟 중복 방지
+                            ]
+                            
+                            for s_target in splash_targets:
+                                # 스플래쉬 데미지는 50% (0.5), range=1, 스플래쉬 전파 X
+                                self._apply_damage(attacker, s_target, distance=1, skill=skill, damage_factor=0.5, allow_splash=False)
         
-        self.event_manager.push(MessageEvent(f'"{target_name}"은(는) {damage}의 데미지를 입었다.{advantage_msg}'))
-        
+
         # 3.5 주변 동료 분노 (Angry AI)
         # 플레이어가 몬스터를 공격한 경우에만 발동
         player_entity = self.world.get_player_entity()
@@ -673,11 +775,11 @@ class CombatSystem(System):
                     target.remove_component(MonsterComponent)
                     target.remove_component(StatsComponent)
                     
-                    # 2. 시각 효과 변경 (시체 토큰으로 변환)
+                    # 2. 시각 효과 변경 (시체 토큰으로 변환 - 루팅 전 파란색)
                     render = target.get_component(RenderComponent)
                     if render:
                         render.char = '%'
-                        render.color = 'dark_grey'
+                        render.color = 'blue'
                     
                     # 3. 시체 컴포넌트 추가
                     target.add_component(CorpseComponent(original_name=target_name))
@@ -735,23 +837,53 @@ class CombatSystem(System):
                 self.event_manager.push(MessageEvent(f"알 수 없는 스킬입니다: {event.skill_name}"))
                 return
 
-        # MP/STAMINA 소모 체크
-        if hasattr(skill, 'cost_type'):
-            if skill.cost_type == "MP":
-                if a_stats.current_mp < skill.cost_value:
-                    self.event_manager.push(MessageEvent("마력이 부족합니다!"))
-                    return
-                a_stats.current_mp -= skill.cost_value
-            elif skill.cost_type == "STAMINA":
-                if a_stats.current_stamina < skill.cost_value:
-                    self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
-                    return
-                a_stats.current_stamina -= skill.cost_value
-        else: # 기본 MP 소모
-            if a_stats.current_mp < skill.cost_value:
+        if not skill:
+            return
+
+        # 레벨 제한 확인
+        level_comp = attacker.get_component(LevelComponent)
+        req_level = getattr(skill, 'required_level', 1)
+        if level_comp and req_level > level_comp.level:
+            self.event_manager.push(MessageEvent(f"아직 이 기술을 사용할 수 없습니다. (필요: Lv.{req_level})"))
+            return
+
+        # 스킬 플래그 가져오기
+        s_flags = getattr(skill, 'flags', set())
+
+        # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
+        cost_val = skill.cost_value
+        resource_used = ""
+        
+        if "COST_HP" in s_flags:
+            if a_stats.current_hp <= cost_val:
+                self.event_manager.push(MessageEvent("체력이 부족합니다!"))
+                return
+            a_stats.current_hp -= cost_val
+            resource_used = f"HP -{cost_val}"
+        elif "COST_STM" in s_flags:
+            if a_stats.current_stamina < cost_val:
+                self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
+                return
+            a_stats.current_stamina -= cost_val
+            resource_used = f"STM -{cost_val}"
+        elif "COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"):
+            if a_stats.current_mp < cost_val:
                 self.event_manager.push(MessageEvent("마력이 부족합니다!"))
                 return
-            a_stats.current_mp -= skill.cost_value
+            a_stats.current_mp -= cost_val
+            resource_used = f"MP -{cost_val}"
+        elif hasattr(skill, 'cost_type') and skill.cost_type == "STAMINA":
+             if a_stats.current_stamina < cost_val:
+                self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
+                return
+             a_stats.current_stamina -= cost_val
+             resource_used = f"STM -{cost_val}"
+        else: # 기본 MP (예외 상황)
+             if a_stats.current_mp < cost_val:
+                self.event_manager.push(MessageEvent("마력이 부족합니다!"))
+                return
+             a_stats.current_mp -= cost_val
+             resource_used = f"MP -{cost_val}"
 
         # 스킬 레벨 가져오기
         inv = attacker.get_component(InventoryComponent)
@@ -784,7 +916,7 @@ class CombatSystem(System):
         effective_skill.range = scaled_range
         effective_skill.duration = scaled_duration
         
-        self.event_manager.push(MessageEvent(f"'{effective_skill.name}' 발동! (Lv.{skill_level}, MP -{skill.cost_value})"))
+        self.event_manager.push(MessageEvent(f"'{effective_skill.name}' 발동! (Lv.{skill_level}, {resource_used})"))
 
         # 스킬 타입별 처리 (플래그 기반)
         if "PROJECTILE" in effective_skill.flags or effective_skill.subtype == "PROJECTILE":
@@ -865,6 +997,10 @@ class CombatSystem(System):
 
             # 적 충돌 체크 (모든 발사 위치에서 체크)
             hit_target = False
+            
+            # 관통 플래그 확인
+            is_piercing = "PIERCING" in skill.flags or "PIERCING" in a_pos.entity.get_component(StatsComponent).flags
+            
             for px, py in valid_positions:
                 targets = [
                     e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
@@ -876,21 +1012,34 @@ class CombatSystem(System):
                 if targets:
                     on_hit = getattr(skill, 'on_hit_effect', "없음")
                     if on_hit == "EXPLOSION":
+                        # 폭발은 관통 불가
                         self._handle_explosion(attacker, px, py, skill)
+                        hit_target = True
+                        break # 폭발 후 소멸
                     else:
                         for target in targets:
-                            self._apply_skill_damage(attacker, target, skill, dx, dy)
-                    hit_target = True
-                    break
+                            # 관통이면 데미지 감소 (히트 수에 따라? 여기선 단순화하여 100%->80%->64% 등 구현은 복잡하므로 고정 20% 감쇄 로직 대신 factor 전달)
+                            # 현재 구조상 히트 카운트를 추적하기 어려우므로, 관통 무조건 100% 데미지 혹은 거리별 감쇄 등을 적용해야 함.
+                            # 여기서는 관통 시 데미지 유지하고 계속 진행하도록 함.
+                            self._apply_skill_damage(attacker, target, skill, dx, dy, damage_factor=1.0)
+                            hit_target = True
+                    
+                    if not is_piercing: # 관통이 아니면 첫 타격 후 소멸
+                        break
+            
+            # 관통이면 계속 진행 (단, hit_target이 True여도 break 안함)
+            # 만약 관통이 아니고 hit_target이면 투사체 소멸
+            if hit_target and not is_piercing:
+                # 이펙트 엔티티 삭제
+                for e_id in effect_ids:
+                    self.world.delete_entity(e_id)
+                if hasattr(self.world, 'engine'):
+                     self.world.engine._render()
+                return
 
-            # 이펙트 엔티티 삭제
+            # 이펙트 엔티티 삭제 (다음 프레임 이동을 위해 현재 잔상 삭제)
             for e_id in effect_ids:
                 self.world.delete_entity(e_id)
-
-            if hit_target:
-                if hasattr(self.world, 'engine'):
-                    self.world.engine._render()
-                return
 
         # 사거리 끝에서 종료 시 렌더링 (잔상 제거)
         if hasattr(self.world, 'engine'):
@@ -978,20 +1127,10 @@ class CombatSystem(System):
                 self.world.add_component(e_id, RenderComponent(char='*', color='green'))
                 self.world.add_component(e_id, EffectComponent(duration=0.2))
 
-    def _apply_skill_damage(self, attacker, target, skill, dx=0, dy=0):
+    def _apply_skill_damage(self, attacker, target, skill, dx=0, dy=0, damage_factor=1.0):
         """스킬 데미지 및 부가 효과 적용"""
-        a_stats = attacker.get_component(StatsComponent)
-        t_stats = target.get_component(StatsComponent)
-        if not a_stats or not t_stats: return
-
-        # 스킬 기본 데미지 + 스탯 비례
-        base_dmg = getattr(skill, 'damage', 10)
-        damage = max(1, base_dmg - t_stats.defense)
-        
-        t_stats.current_hp -= damage
-        attacker_name = self._get_entity_name(attacker)
-        target_name = self._get_entity_name(target)
-        self.event_manager.push(MessageEvent(f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {damage} 데미지!"))
+        # _apply_damage로 통합 (속성, 크리티컬, 거리 보정 등 일괄 적용)
+        self._apply_damage(attacker, target, distance=1, skill=skill, damage_factor=damage_factor)
 
         # 부가 효과 처리
         on_hit = getattr(skill, 'on_hit_effect', "없음")
@@ -1145,41 +1284,50 @@ class RegenerationSystem(System):
     """실시간 HP/MP/Stamina 회복 및 소모를 처리하는 시스템"""
     def __init__(self, world):
         super().__init__(world)
-        self.last_regen_time = time.time()
+        self.last_hp_regen_time = time.time()
+        self.last_mp_regen_time = time.time()
 
     def process(self):
         current_time = time.time()
-        dt = current_time - self.last_regen_time
-        if dt < 1.0: # 1초마다 회복 로직 실행
-            return
         
-        self.last_regen_time = current_time
-        
-        for entity in self.world.get_entities_with_components({StatsComponent}):
-            stats = entity.get_component(StatsComponent)
-            
-            # HP 자연 회복 (레벨당 1)
-            if stats.current_hp > 0 and stats.current_hp < stats.max_hp:
-                stats.current_hp = min(stats.max_hp, stats.current_hp + 1)
-            
-            # MP 자연 회복 (기본 2)
-            if stats.current_mp < stats.max_mp:
-                stats.current_mp = min(stats.max_mp, stats.current_mp + 2)
-                
-            # 스테미너 자연 회복 (가만히 있을 때)
-            if stats.current_stamina < stats.max_stamina:
-                stats.current_stamina = min(stats.max_stamina, stats.current_stamina + 0.1)
+        # 1. HP 자연 회복 (1초마다)
+        if current_time - self.last_hp_regen_time >= 1.0:
+            self.last_hp_regen_time = current_time
+            for entity in self.world.get_entities_with_components({StatsComponent}):
+                stats = entity.get_component(StatsComponent)
+                if stats.current_hp > 0 and stats.current_hp < stats.max_hp:
+                    stats.current_hp = min(stats.max_hp, stats.current_hp + 1)
+                    # 플레이어인 경우 메시지 출력
+                    if entity == self.world.get_player_entity():
+                         self.world.event_manager.push(MessageEvent("체력이 1 회복되었습니다."))
+
+        # 2. MP 자연 회복 (2초마다)
+        if current_time - self.last_mp_regen_time >= 2.0:
+            self.last_mp_regen_time = current_time
+            for entity in self.world.get_entities_with_components({StatsComponent}):
+                stats = entity.get_component(StatsComponent)
+                if stats.current_mp < stats.max_mp:
+                    stats.current_mp = min(stats.max_mp, stats.current_mp + 1)
+                    # 플레이어인 경우 메시지 출력
+                    if entity == self.world.get_player_entity():
+                         self.world.event_manager.push(MessageEvent("마력이 1 회복되었습니다."))
+
+        # 3. 스테미너 자연 회복: 제거됨 (아이템으로만 회복)
 
 class TimeSystem(System):
     """지속 시간(Duration)이 있는 컴포넌트들을 실시간으로 관리하는 시스템"""
     def __init__(self, world):
         super().__init__(world)
         self.last_tick = time.time()
+        self.regen_timer = 0.0 # 자동 회복 타이머
 
     def process(self):
         current_time = time.time()
         dt = current_time - self.last_tick
         self.last_tick = current_time
+
+        # 0. 자동 회복 (RegenerationSystem으로 이동됨 - 중복 제거)
+        # self.regen_timer += dt ... 로직 삭제
 
         # 1. 스턴(Stun) 시간 감액
         stun_entities = self.world.get_entities_with_components({StunComponent})

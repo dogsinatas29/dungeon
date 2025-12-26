@@ -19,15 +19,15 @@ class RenderComponent(Component):
 
 class StatsComponent(Component):
     """전투 및 능력치 데이터 (GEMINI.md 호환)"""
-    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE", gold: int = 0):
+    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE", gold: int = 0, base_attack: int = None, base_defense: int = None, **kwargs):
         self.max_hp = max_hp
         self.current_hp = current_hp
         self.attack = attack
         self.defense = defense
         
         # 기본 능력치 (장비 효과 제외)
-        self.base_attack = attack
-        self.base_defense = defense
+        self.base_attack = base_attack if base_attack is not None else attack
+        self.base_defense = base_defense if base_defense is not None else defense
         
         self.max_mp = max_mp
         self.current_mp = current_mp
@@ -45,6 +45,7 @@ class StatsComponent(Component):
         self.flags = {f.strip().upper() for f in element.split(',') if f.strip()} if isinstance(element, str) and ',' in element else set()
         if isinstance(element, str) and element != "NONE" and ',' not in element:
             self.flags.add(element.upper())
+        self.base_flags = self.flags.copy()
         
     @property
     def is_alive(self):

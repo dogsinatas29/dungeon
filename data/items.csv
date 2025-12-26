@@ -19,3 +19,5 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 휠 윈드 스킬북,SKILLBOOK,회오리를 일으켜 주변 적을 타격하고 밀어냅니다.,B,#32CD32,1,0,0,0,0,0,1,WHIRLWIND,
 아이스 볼트 스킬북,SKILLBOOK,적을 얼려 멈추게 하는 마법서.,B,#00BFFF,1,0,0,0,0,0,0,ICE_BOLT,
 방패 밀치기 스킬북,SKILLBOOK,전방의 적을 밀쳐내는 기술 서적.,B,#F5F5DC,1,0,0,0,0,0,0,SHIELD_BASH,
+화염의 검,WEAPON,타오르는 불꽃이 깃든 검.,/,#FF4500,1,12,0,0,0,1,1,None,ELEMENT_FIRE
+물방울 갑옷,ARMOR,물의 기운이 서린 갑옷.,[,#1E90FF,1,0,4,0,0,1,0,None,ELEMENT_WATER

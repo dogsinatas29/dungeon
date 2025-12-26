@@ -38,7 +38,7 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None):
         # 새 게임 시작 시 초기 게임 상태 데이터 생성 (ECS 컴포넌트 포함)
         initial_game_state = {
             "entities": {
-                player_instance.entity_id: {
+                "1": {
                     "PositionComponent": {'x': 0, 'y': 0, 'map_id': "1F"},
                     "MovableComponent": {},
                     "StatsComponent": {

@@ -62,6 +62,7 @@ class MonsterDefinition:
         self.crit_mult = float(CRIT_MULT)
         self.move_type = MOVE_TYPE
         self.action_delay = float(ACTION_DELAY)
+        self.element = "NONE"
         # 플래그 처리
         self.flags = {f.strip().upper() for f in flags.split(',') if f.strip()}
         # kwargs는 향후 필드 추가에 대비한 안전장치
@@ -96,11 +97,19 @@ def load_data_from_csv(file_name, definition_class, data_path="data"):
         with open(file_path, mode='r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
             for row in reader:
-                # DictReader의 row를 클래스 __init__ 인자에 언패킹하여 객체 생성
-                def_obj = definition_class(**row)
+                # 키 정제 (공백 및 # 제거)
+                clean_row = {}
+                for k, v in row.items():
+                    if k:
+                        clean_key = k.strip().lstrip('#').strip()
+                        clean_row[clean_key] = v
+                
+                # 정제된 딕셔너리로 객체 생성
+                def_obj = definition_class(**clean_row)
 
                 # 딕셔너리 키 설정 (아이템은 name, 몬스터는 ID 사용)
-                key = row.get('name') if definition_class is ItemDefinition else row.get('ID')
+                # clean_row에는 'name' 또는 'ID'가 깨끗한 상태로 존재해야 함
+                key = clean_row.get('name') if definition_class is ItemDefinition else clean_row.get('ID')
                 
                 if key:
                     DATA_DEFINITIONS[key] = def_obj

@@ -1,0 +1,56 @@
+{
+    "Sharp": {
+        "name_kr": "날카로운",
+        "attack_bonus": 3,
+        "defense_bonus": 0,
+        "hp_bonus": 0,
+        "mp_bonus": 0,
+        "flags": []
+    },
+    "Hard": {
+        "name_kr": "단단한",
+        "attack_bonus": 0,
+        "defense_bonus": 2,
+        "hp_bonus": 5,
+        "mp_bonus": 0,
+        "flags": []
+    },
+    "Piercing": {
+        "name_kr": "관통하는",
+        "attack_bonus": 1,
+        "defense_bonus": 0,
+        "hp_bonus": 0,
+        "mp_bonus": 0,
+        "flags": [
+            "PIERCING"
+        ]
+    },
+    "Burning": {
+        "name_kr": "불타는",
+        "attack_bonus": 2,
+        "defense_bonus": 0,
+        "hp_bonus": 0,
+        "mp_bonus": 10,
+        "element": "불",
+        "flags": []
+    },
+    "Frozen": {
+        "name_kr": "얼어붙은",
+        "attack_bonus": 1,
+        "defense_bonus": 1,
+        "hp_bonus": 0,
+        "mp_bonus": 10,
+        "element": "물",
+        "flags": []
+    },
+    "Explosive": {
+        "name_kr": "폭발하는",
+        "attack_bonus": 4,
+        "defense_bonus": 0,
+        "hp_bonus": 0,
+        "mp_bonus": 0,
+        "flags": [
+            "SPLASH"
+        ]
+    }
+}

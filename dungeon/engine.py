@@ -69,6 +69,10 @@ class Engine:
         self.item_defs = load_item_definitions()
         self.skill_defs = load_skill_definitions()
         self.monster_defs = load_monster_definitions()
+        
+        # 접두어 관리자 초기화
+        from .modifiers import ModifierManager
+        self.modifier_manager = ModifierManager()
 
         self._initialize_world(game_data)
         self._initialize_systems()
@@ -240,6 +244,32 @@ class Engine:
                 if monster_element != "NONE":
                     m_flags.add(monster_element.upper())
 
+                # [수정] 몬스터 접두어 적용 (랜덤 30% 확률)
+                if random.random() < 0.3:
+                    # 임시 정의 객체 생성 (기존 코드 구조상 불편함, 하지만 간단히 처리)
+                    from .data_manager import MonsterDefinition
+                    # 현재 값들로 임시 Definition 생성
+                    temp_def = MonsterDefinition(
+                         ID="TEMP", Name=type_name, Symbol=char, Color=color, 
+                         HP=max_hp, ATT=atk, DEF=df, LV=1, EXP_GIVEN=0, 
+                         CRIT_CHANCE='0.05', CRIT_MULT='1.5', MOVE_TYPE='CHASE', ACTION_DELAY=monster_delay, 
+                         flags=','.join(m_flags)
+                    )
+                    # 접두어 적용
+                    mod_def = self.modifier_manager.apply_monster_prefix(temp_def)
+                    # 값 업데이트
+                    type_name = mod_def.name
+                    max_hp = mod_def.hp 
+                    atk = mod_def.attack
+                    df = mod_def.defense
+                    if mod_def.element != "NONE": monster_element = mod_def.element
+                    if 'element' in self.modifier_manager.prefixes.get(mod_def.name.split()[0], {}): # 이름에서 역추적...은 좀 비효율적이지만
+                        pass # apply_monster_prefix에서 이미 flash에 추가함.
+                    m_flags.update(mod_def.flags)
+                    # 색상 업데이트 (간단히)
+                    if mod_def.color != "white": color = mod_def.color
+
+
                 behavior = random.randint(0, 2)
                 
                 self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=color))
@@ -265,7 +295,29 @@ class Engine:
                     type_name, max_hp, atk, df, char, m_delay, m_flags = "슬라임", 15, 3, 0, 's', 1.0, set()
 
                 m_el = random.choice(all_elements)
-                self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=ELEMENT_COLORS.get(m_el, "white")))
+                if monster_element != "NONE":
+                    m_flags.add(monster_element.upper()) # 여기서 m_flags 사용 시 263라인 참조. 
+
+                # [수정] 몬스터 접두어 적용 (랜덤 30%) - 복도
+                if random.random() < 0.3:
+                    from .data_manager import MonsterDefinition
+                    temp_def = MonsterDefinition(
+                         ID="TEMP", Name=type_name, Symbol=char, Color="white", # 색상은 아래서 재설정됨
+                         HP=max_hp, ATT=atk, DEF=df, LV=1, EXP_GIVEN=0, 
+                         CRIT_CHANCE='0.05', CRIT_MULT='1.5', MOVE_TYPE='CHASE', ACTION_DELAY=m_delay, 
+                         flags=','.join(m_flags)
+                    )
+                    mod_def = self.modifier_manager.apply_monster_prefix(temp_def)
+                    type_name = mod_def.name
+                    max_hp = mod_def.hp
+                    atk = mod_def.attack
+                    df = mod_def.defense
+                    m_flags.update(mod_def.flags)
+                    # 색상 (엘리먼트 기반)
+                    if mod_def.element == '불': color='red'
+                    elif mod_def.element == '물': color='blue'
+                
+                self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=color))
                 self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
                 self.world.add_component(monster_entity.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=5))
                 stats = StatsComponent(max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=m_el)
@@ -293,7 +345,11 @@ class Engine:
                 if self.item_defs:
                     random_keys = random.sample(list(self.item_defs.keys()), min(len(self.item_defs), 2))
                     for k in random_keys:
-                        loot_items.append({'item': self.item_defs[k], 'qty': 1})
+                        # 아이템 생성 시 접두어 적용 (랜덤 50%)
+                        item = self.item_defs[k]
+                        if random.random() < 0.5:
+                            item = self.modifier_manager.apply_item_prefix(item)
+                        loot_items.append({'item': item, 'qty': 1})
                 
                 self.world.add_component(chest_entity.entity_id, LootComponent(items=loot_items, gold=random.randint(10, 50)))
 
@@ -857,6 +913,12 @@ class Engine:
         if not stats or not inv: return
 
         # 효과 적용
+        # 레벨 제한 확인
+        level_comp = player_entity.get_component(LevelComponent)
+        if level_comp and item.required_level > level_comp.level:
+            self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 사용할 수 없습니다. (필요: Lv.{item.required_level})"))
+            return
+
         old_hp = stats.current_hp
         old_mp = stats.current_mp
         
@@ -947,7 +1009,13 @@ class Engine:
             self._recalculate_stats()
             return
 
-        # 2. 장착 로직
+        # 2. 장착 로직 (레벨 제한 확인 추가)
+        level_comp = player_entity.get_component(LevelComponent)
+        if level_comp and item.required_level > level_comp.level:
+            self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 장착할 수 없습니다. (필요: Lv.{item.required_level})"))
+            return
+
+        inv_comp = player_entity.get_component(InventoryComponent)
         if item.type == 'WEAPON':
             if item.hand_type == 2: # 양손 무기
                 inv.equipped["손1"] = item
@@ -998,6 +1066,8 @@ class Engine:
         stats.attack = stats.base_attack
         stats.defense = stats.base_defense
         stats.weapon_range = 1 # 기본 사거리 (Bump)
+        if hasattr(stats, 'base_flags'):
+            stats.flags = stats.base_flags.copy()
         
         # 보너스 합산
         for slot, item in inv.equipped.items():
@@ -1006,6 +1076,10 @@ class Engine:
             if isinstance(item, ItemDefinition):
                 stats.attack += item.attack
                 stats.defense += item.defense
+                
+                # [수정] 플래그 합산 로직 추가
+                if hasattr(item, 'flags'):
+                    stats.flags.update(item.flags)
                 
                 # 주무기(손1)의 사거리를 캐릭터 사거리로 설정
                 if slot == "손1":
