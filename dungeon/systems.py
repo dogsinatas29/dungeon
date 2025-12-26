@@ -611,8 +611,15 @@ class CombatSystem(System):
             # 보물상자나 일반 아이템인 경우 삭제
             else:
                 self.world.delete_entity(loot_entity.entity_id)
-        
-        # loot_msg가 없는 경우(이미 빈 시체 등)는 아무 처리 안함 (또는 "비어있습니다" 메시지?)
+        else:
+            # 보상이 없는 경우 (이미 루팅된 시체 등)
+            corpse = loot_entity.get_component(CorpseComponent)
+            chest = loot_entity.get_component(ChestComponent)
+            source = "시체"
+            if chest: source = "보물상자"
+            elif not corpse: source = "아이템"
+            
+            self.event_manager.push(MessageEvent(f"{source}에 아무것도 없습니다."))
 
     def _get_element_from_flags(self, flags):
         """플래그 집합에서 속성 찾기"""

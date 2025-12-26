@@ -1,15 +1,38 @@
 # Python cache
 __pycache__/
+*.py[cod]
+*$py.class
 
 # Gemini CLI files
 GEMINI.md
 .gemini/
 
-# User generated data
+# User generated data and logs
 game_data/
-bug.txt
-*.old
-추가사항.txt1
+*.log
+api_usage_log.json
+bug.md
+but.txt
+history.txt
+"작업방식.txt"
+
+# Debug/Verification scripts
+test_sandbox.py
+verify_*.py
+debug_*.py
+
+# Archives and Lock files
+*.zip
+*.rar
+package-lock.json
+
+# Legacy entry point
+main.py
+
 # Documentation and backup folders
 back/
 # docs/
+*.old
+bug.txt
+추가사항.txt1
+events/
