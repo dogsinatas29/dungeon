@@ -1,48 +1,104 @@
-
+import subprocess
+import os
 from .ecs import System
 from .events import Event, MessageEvent, SkillUseEvent
 
 class SoundEvent(Event):
-    def __init__(self, sound_type: str, message: str):
+    def __init__(self, sound_type: str, message: str = ""):
+        super().__init__()
         self.type = "SOUND"
-        self.sound_type = sound_type # e.g., 'ATTACK', 'HIT', 'LEVEL_UP'
+        self.sound_type = sound_type # e.g., 'ATTACK', 'HIT', 'MAGIC', 'CRITICAL', 'STEP', 'COIN'
         self.message = message
 
 class SoundSystem(System):
     """
-    게임 내 이벤트에 반응하여 '소리'를 시각적으로(로그/이펙트) 출력하는 시스템.
-    추후 실제 오디오 라이브러리(pygame 등)와 연동 가능.
+    게임 내 이벤트에 반응하여 '소리'를 시각적으로(로그) 표시하고, 
+    리눅스 표준인 aplay를 통해 실제 효과음을 비동기로 재생하는 시스템.
     """
     def __init__(self, world, ui=None):
         super().__init__(world)
-        self.ui = ui # UI에 직접 접근하여 특수 효과를 줄 수도 있음
+        self.ui = ui
+        # 사운드 파일 경로 매핑 (sounds/ 디렉토리 기준)
+        self.sound_map = {
+            "ATTACK": "attack.wav",
+            "HIT": "hit.wav",
+            "MAGIC": "magic.wav",
+            "CRITICAL": "critical.wav",
+            "BASH": "bash.wav",
+            "SWING": "swing.wav",
+            "LEVEL_UP": "levelup.wav",
+            "STEP": "step.wav",
+            "MISS": "miss.wav",
+            "BLOCK": "block.wav",
+            "MAGIC_FIRE": "fire.wav",
+            "MAGIC_ICE": "ice.wav",
+            "MAGIC_BOLT": "bolt.wav",
+            "HEAL": "heal.wav",
+            "EXPLOSION": "explosion.wav"
+        }
+        self.sound_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds")
 
     def process_event(self, event):
-        if hasattr(event, 'sound_type'): # 직접 발생시킨 SoundEvent
+        if event.type == "SOUND":
             self._play_sound(event.sound_type, event.message)
         
         elif event.type == "SKILL_USE":
-            # 스킬 사용 시 효과음
-            skill_name = event.skill.name
-            if "파이어볼" in skill_name:
-                self._play_sound("MAGIC", "휘이잉~ 쾅!")
-            elif "휠 윈드" in skill_name:
-                self._play_sound("SWING", "슈우우웅!")
-            elif "매직 미사일" in skill_name:
-                self._play_sound("MAGIC", "피이잉!")
-            elif "방패 밀치기" in skill_name:
-                self._play_sound("BASH", "텅!")
-            else:
-                self._play_sound("ATTACK", "쉭!")
+            # 1. 스킬의 플래그에서 소리 정보 탐색
+            skill = getattr(event, 'skill', None) or event.skill_name
+            
+            # 만약 skill이 이름(문자열)이라면 엔진에서 정의를 찾아옴
+            if isinstance(skill, str):
+                skill_defs = getattr(self.world.engine, 'skill_defs', {})
+                skill = skill_defs.get(skill)
 
-    def _play_sound(self, sound_type, message):
-        """
-        소리를 재생(여기서는 시각적 로그 출력)합니다.
-        """
-        # 로그에 [소리] 태그를 붙여서 출력하거나, 색상을 다르게 할 수 있음
-        sound_msg = f"[🔊] {message}"
+            sound_found = False
+            
+            if hasattr(skill, 'flags'):
+                for flag in skill.flags:
+                    if flag.startswith("SOUND_"):
+                        self._play_sound(flag)
+                        sound_found = True
+                        break
+            
+            if sound_found:
+                return
+
+            # 2. 플래그가 없으면 기존 하드코딩 방식 유지 (하위 호환)
+            skill_name = skill.name if hasattr(skill, 'name') else str(skill)
+            if "파이어볼" in skill_name:
+                self._play_sound("MAGIC")
+            elif "휠 윈드" in skill_name:
+                self._play_sound("SWING")
+            elif "방패 밀치기" in skill_name:
+                self._play_sound("BASH")
+            else:
+                self._play_sound("MAGIC")
+
+    def _play_sound(self, sound_type, message=""):
+        """시각적 피드백 출력 및 실제 파일 재생 시도"""
+        # 1. 시각적 피드백 (로그)
+        if message:
+            sound_msg = f"[🔊] {message}"
+            self.world.event_manager.push(MessageEvent(sound_msg))
+
+        # 2. 실제 오디오 재생 (aplay 사용, 비동기)
+        # 기본 맵에서 찾기
+        file_name = self.sound_map.get(sound_type)
         
-        # World의 EventManager를 통해 메시지 이벤트로 변환하여 출력
-        # (순환 참조 주의: MessageEvent를 다시 처리하지 않도록 SoundSystem은 MessageEvent를 무시해야 함)
-        if self.world:
-             self.world.event_manager.push(MessageEvent(sound_msg))
+        # 맵에 없으면 다이내믹 플래그 확인 (SOUND_ID_X -> skill_X.wav, SOUND_NAME -> name.wav)
+        if not file_name:
+            if sound_type.startswith("SOUND_ID_"):
+                id_val = sound_type.replace("SOUND_ID_", "")
+                file_name = f"skill_{id_val}.wav"
+            elif sound_type.startswith("SOUND_"):
+                # SOUND_MAGIC_FIRE -> magic_fire.wav
+                file_name = f"{sound_type.replace('SOUND_', '').lower()}.wav"
+
+        if file_name:
+            file_path = os.path.join(self.sound_dir, file_name)
+            if os.path.exists(file_path):
+                try:
+                    # subprocess.DEVNULL을 사용하여 터미널 출력을 방해하지 않음
+                    subprocess.Popen(["aplay", "-q", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass # aplay가 없거나 오류 시 무시

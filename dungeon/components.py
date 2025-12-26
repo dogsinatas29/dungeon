@@ -48,6 +48,10 @@ class StatsComponent(Component):
             self.flags.add(element.upper())
         self.base_flags = self.flags.copy()
         
+        # 특수 상태
+        self.sees_hidden = False
+        self.sees_hidden_expires_at = 0.0
+        
     @property
     def is_alive(self):
         return self.current_hp > 0
@@ -177,3 +181,22 @@ class HitFlashComponent(Component):
     """피격 시 시각적 피드백(번쩍임)을 위한 컴포넌트"""
     def __init__(self, duration: float = 0.15):
         self.duration = duration
+
+class HiddenComponent(Component):
+    """숨겨진 아이템임을 나타내는 컴포넌트 (횃불 등 특수 효과로만 보임)"""
+    def __init__(self, blink: bool = True):
+        self.blink = blink
+
+class MimicComponent(Component):
+    """보물상자로 의태한 몬스터임을 나타내는 컴포넌트"""
+    def __init__(self, is_disguised: bool = True):
+        self.is_disguised = is_disguised
+
+class TrapComponent(Component):
+    """맵에 배치된 함정 컴포넌트"""
+    def __init__(self, trap_type: str = "SPIKE", damage: int = 10, effect: str = None, is_triggered: bool = False, visible: bool = False):
+        self.trap_type = trap_type
+        self.damage = damage
+        self.effect = effect
+        self.is_triggered = is_triggered
+        self.visible = visible # 횃불 등으로 발견 가능

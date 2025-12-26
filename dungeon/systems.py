@@ -6,11 +6,13 @@ from .components import (
     PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, 
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
-    EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent
+    EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
+    HiddenComponent, MimicComponent, TrapComponent
 )
 import readchar
 import random
 import time
+from .sound_system import SoundEvent
 
 # --- Event 정의 (시스템 통신 표준) ---
 class MoveSuccessEvent(Event):
@@ -194,18 +196,32 @@ class InputSystem(System):
         if action in ['\r', '\n']:
             # 제자리 대기 효과 부여 (턴 소모)
             self.event_manager.push(MessageEvent("주변을 살펴봅니다."))
-            # [추가] 시체가 있는 경우 확인 (예시 구현)
-            from .components import CorpseComponent, PositionComponent
             player_pos = player_entity.get_component(PositionComponent)
             if player_pos:
+                # 1. 시체 확인
+                from .components import CorpseComponent
                 corpses = self.world.get_entities_with_components({CorpseComponent, PositionComponent})
+                found_corpse = False
                 for c in corpses:
                     c_pos = c.get_component(PositionComponent)
                     if c_pos.x == player_pos.x and c_pos.y == player_pos.y:
                         corpse_comp = c.get_component(CorpseComponent)
                         self.event_manager.push(MessageEvent(f"{corpse_comp.original_name}의 시체를 살펴봅니다..."))
-                        # 여기서 시체 루팅 UI를 띄우거나 자동 루팅 등을 수행할 수 있음
+                        found_corpse = True
                         break
+                
+                # 2. 계단 확인 (시체가 없거나 시체 확인 후에도 계단 확인 가능)
+                from .components import MapComponent
+                from .constants import EXIT_NORMAL
+                map_entities = self.world.get_entities_with_components({MapComponent})
+                if map_entities:
+                    map_comp = map_entities[0].get_component(MapComponent)
+                    if map_comp.tiles[player_pos.y][player_pos.x] == EXIT_NORMAL:
+                        target_level = getattr(self.world.engine, 'current_level', 1) + 1
+                        self.event_manager.push(MapTransitionEvent(target_level=target_level))
+                        return True # 맵 이동 시 턴 소모 (또는 즉시 이동 처리)
+                        
+                if found_corpse: return True
             return True
         
         # 제자리 대기 (Wait)
@@ -271,6 +287,11 @@ class MovementSystem(System):
                 position.x, position.y = new_x, new_y
                 self.event_manager.push(MoveSuccessEvent(entity.entity_id, old_x, old_y, new_x, new_y))
                 
+                # 플레이어 이동 소리
+                player = self.world.get_player_entity()
+                if player and entity.entity_id == player.entity_id:
+                    self.event_manager.push(SoundEvent("STEP"))
+                
                 # 스태미너 소모 (5이동당 1소모 = 1이동당 0.2소모)
                 stats = entity.get_component(StatsComponent)
                 if stats:
@@ -284,10 +305,19 @@ class MovementSystem(System):
                 if entity.entity_id == self.world.get_player_entity().entity_id:
                     from .constants import EXIT_NORMAL
                     if map_component.tiles[new_y][new_x] == EXIT_NORMAL:
-                        self.event_manager.push(MessageEvent("다음 층으로 연결되는 계단입니다. [ENTER]를 눌러 이동하세요."))
-                        # 자동 이동보다는 키 입력을 받는 게 좋지만, 일단은 위치 도달 시 이벤트 발생 고려
-                        # 여기선 이벤트를 발생시키고 Engine에서 처리하게 함
-                        self.event_manager.push(MapTransitionEvent(target_level=getattr(self.world.engine, 'current_level', 1) + 1))
+                        self.event_manager.push(MessageEvent("다음 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 내려가시겠습니까?"))
+
+            # 5. 숨겨진 아이템 발견 시 메시지
+            if not is_collision:
+                hidden_entities = self.world.get_entities_with_components({PositionComponent, HiddenComponent})
+                for h_ent in hidden_entities:
+                    h_pos = h_ent.get_component(PositionComponent)
+                    if h_pos.x == new_x and h_pos.y == new_y:
+                        player = self.world.get_player_entity()
+                        if player:
+                            p_stats = player.get_component(StatsComponent)
+                            if p_stats and p_stats.sees_hidden:
+                                 self.event_manager.push(MessageEvent("숨겨진 무언가를 발견했습니다!"))
 
             # DesiredPositionComponent 제거 (처리 완료)
             entity.remove_component(DesiredPositionComponent)
@@ -590,6 +620,7 @@ class CombatSystem(System):
         if loot.gold > 0:
             stats.gold += loot.gold
             loot_msg.append(f"{loot.gold} Gold")
+            self.event_manager.push(SoundEvent("COIN"))
 
         # 아이템 루팅
         for item_data in loot.items:
@@ -712,20 +743,40 @@ class CombatSystem(System):
             damage_multiplier *= dist_multiplier
             
 
-        # 3. 데미지 계산
-        final_damage = max(1, int(base_damage * damage_multiplier) - t_stats.defense)
-        t_stats.current_hp -= final_damage
-        
-        # 데미지 로그 출력
+        # 3. 명중/실패 판정 (10% 확률로 빗나감)
         attacker_name = self._get_entity_name(attacker)
         target_name = self._get_entity_name(target)
-        if skill:
-            msg = f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+        if random.random() < 0.1:
+            msg = f"'{attacker_name}'의 공격이 '{target_name}'에게 빗나갔습니다!"
+            self.event_manager.push(MessageEvent(msg))
+            self.event_manager.push(SoundEvent("MISS"))
+            return
+
+        # 4. 데미지 계산 및 방어(Block) 판정
+        raw_damage = int(base_damage * damage_multiplier)
+        if raw_damage <= t_stats.defense:
+            final_damage = 0
+            msg = f"'{target_name}'이(가) '{attacker_name}'의 공격을 막아냈습니다!"
+            self.event_manager.push(MessageEvent(msg))
+            self.event_manager.push(SoundEvent("BLOCK"))
         else:
-            msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
-        self.event_manager.push(MessageEvent(msg))
+            final_damage = raw_damage - t_stats.defense
+            if skill:
+                msg = f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+            else:
+                msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+            self.event_manager.push(MessageEvent(msg))
+
+        t_stats.current_hp -= final_damage
         
-        # 4. 피격 피드백 (Hit Flash) 추가
+        # 5. 효과음 발생 (Hit / Critical) - Block이 아닐 때만
+        if final_damage > 0:
+            if is_critical:
+                self.event_manager.push(SoundEvent("CRITICAL"))
+            else:
+                self.event_manager.push(SoundEvent("HIT"))
+
+        # 6. 피격 피드백 (Hit Flash) 추가
         if not target.has_component(HitFlashComponent):
             target.add_component(HitFlashComponent(duration=0.15))
 
@@ -798,24 +849,40 @@ class CombatSystem(System):
             self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
             
             if target.has_component(MonsterComponent):
+                m_comp = target.get_component(MonsterComponent)
+                m_type = m_comp.type_name
+                
                 # 몬스터 사망 시 시체로 변환 (영구적 죽음)
                 pos = target.get_component(PositionComponent)
                 if pos:
-                    # 1. 컴포넌트 정리 (동작/기여 로직 제거)
+                    # 1. 전리품 및 경험치 계산을 위해 몬스터 정의 가져오기
+                    m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
+                    m_def = m_defs.get(m_type)
+                    
+                    # 2. 경험치 보상 (플레이어에게)
+                    player_entity = self.world.get_player_entity()
+                    if player_entity and attacker.entity_id == player_entity.entity_id:
+                        if m_def:
+                            # LevelSystem을 통해 경험치 획득
+                            level_sys = self.world.get_system(LevelSystem)
+                            if level_sys:
+                                level_sys.gain_exp(player_entity, m_def.xp_value)
+                    
+                    # 3. 컴포넌트 정리
                     target.remove_component(AIComponent)
                     target.remove_component(MonsterComponent)
                     target.remove_component(StatsComponent)
                     
-                    # 2. 시각 효과 변경 (시체 토큰으로 변환 - 루팅 전 파란색)
+                    # 4. 시각 효과 변경
                     render = target.get_component(RenderComponent)
                     if render:
                         render.char = '%'
                         render.color = 'blue'
                     
-                    # 3. 시체 컴포넌트 추가
-                    target.add_component(CorpseComponent(original_name=target_name))
+                    # 5. 시체 컴포넌트 추가
+                    target.add_component(CorpseComponent(original_name=m_type))
                     
-                    # 4. 전리품 설정 (기존 로직 유지하되 엔티티는 그대로 둠)
+                    # 6. 전리품 설정
                     if not target.has_component(LootComponent):
                         loot_items = []
                         item_defs = self.world.engine.item_defs if hasattr(self.world.engine, 'item_defs') else None
@@ -842,6 +909,10 @@ class CombatSystem(System):
             self.event_manager.push(ShopOpenEvent(shopkeeper_id=target.entity_id))
             return
 
+        if not target.has_component(ShopComponent):
+            # 상인이 아니면 공격 소리 발생
+            self.event_manager.push(SoundEvent("ATTACK"))
+            
         self._apply_damage(attacker, target, distance=1)
 
     def handle_skill_use_event(self, event: SkillUseEvent):
@@ -1299,6 +1370,27 @@ class RenderSystem(System):
                  entity_id = event.target_entity_id
                  target_entity = self.world.get_entity(entity_id)
                  if target_entity:
+                     # 미믹 체크
+                     mimic = target_entity.get_component(MimicComponent)
+                     if mimic and mimic.is_disguised:
+                         mimic.is_disguised = False
+                         # 기습 크리티컬 발동
+                         self.event_manager.push(MessageEvent("보물상자가 갑자기 몬스터로 변했습니다! 기습 공격을 받았습니다!", "red"))
+                         combat_sys = self.world.get_system(CombatSystem)
+                         if combat_sys:
+                             # 기습 공격 (항상 크리티컬)
+                             player = self.world.get_player_entity()
+                             # _apply_damage를 직접 호출하기엔 구조상 불편할 수 있으니 
+                             # 여기서는 강제로 크리티컬이 발생하게 플래그를 주거나 직접 계산
+                             # 일단 간단히 기습 데미지 메시지와 함께 체력 감소
+                             combat_sys._apply_damage(target_entity, player, distance=1, damage_factor=1.5) # 1.5배 (크리티컬 느낌)
+                         
+                         # 보물상자 컴포넌트 제거 (더이상 상자가 아님)
+                         target_entity.remove_component(ChestComponent)
+                         target_entity.remove_component(LootComponent)
+                         # 렌더링 변경은 Engine._render에서 MimicComponent.is_disguised를 보고 처리할 예정
+                         return
+
                      monster_comp = target_entity.get_component(MonsterComponent)
                      if monster_comp:
                          if monster_comp.type_name == "상인":
@@ -1378,6 +1470,11 @@ class TimeSystem(System):
                     stats.vision_range = 5
                     stats.flags.remove("VISION_UP")
                     self.world.event_manager.push(MessageEvent("횃불이 모두 타버려 다시 어두워졌습니다."))
+            
+            if stats and stats.sees_hidden:
+                if current_time >= stats.sees_hidden_expires_at:
+                    stats.sees_hidden = False
+                    self.world.event_manager.push(MessageEvent("영험한 기운이 사라져 숨겨진 것들이 보이지 않게 되었습니다."))
         stun_entities = self.world.get_entities_with_components({StunComponent})
         for entity in list(stun_entities): # 리스트 복사로 안전하게 순회
             stun = entity.get_component(StunComponent)
@@ -1410,3 +1507,93 @@ class TimeSystem(System):
             flash.duration -= dt
             if flash.duration <= 0:
                 entity.remove_component(HitFlashComponent)
+
+class LevelSystem(System):
+    """경험치 획득 및 레벨업 로직을 처리하는 시스템"""
+    def gain_exp(self, entity: Entity, amount: int):
+        level_comp = entity.get_component(LevelComponent)
+        if not level_comp: return
+
+        # 만렙(99) 도달 시 경험치 보상 중단 또는 레벨업 중단
+        if level_comp.level >= 999:
+            return
+
+        level_comp.exp += amount
+        leveled_up = False
+        
+        while level_comp.exp >= level_comp.exp_to_next and level_comp.level < 99:
+            leveled_up = True
+            level_comp.exp -= level_comp.exp_to_next
+            self._level_up(entity)
+            
+        if leveled_up:
+            self.event_manager.push(MessageEvent(f"레벨업! 현재 레벨: {level_comp.level}"))
+            self.event_manager.push(SoundEvent("LEVEL_UP", "레벨 업!"))
+
+    def _level_up(self, entity: Entity):
+        level_comp = entity.get_component(LevelComponent)
+        stats_comp = entity.get_component(StatsComponent)
+        
+        level_comp.level += 1
+        # 다음 레벨까지 필요한 경험치 증가 (1.25배)
+        level_comp.exp_to_next = int(level_comp.exp_to_next * 1.25)
+        
+        if stats_comp:
+            # 기본 스탯 강화
+            stats_comp.max_hp += 10
+            stats_comp.current_hp = stats_comp.max_hp
+            stats_comp.max_mp += 5
+            stats_comp.current_mp = stats_comp.max_mp
+            stats_comp.attack += 2
+            stats_comp.defense += 1
+            
+            # 엔진 레벨 보정 스탯 재계산 호출 (장착 아이템 등 반영)
+            if hasattr(self.world.engine, '_recalculate_stats'):
+                self.world.engine._recalculate_stats()
+
+class TrapSystem(System):
+    """함정 발동 및 처리를 담당하는 시스템"""
+    def process(self):
+        player = self.world.get_player_entity()
+        if not player: return
+        
+        # 위치 컴포넌트가 있는 모든 엔티티 (플레이어, 몬스터)
+        entities = self.world.get_entities_with_components({PositionComponent, StatsComponent})
+        # 함정 엔티티
+        traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
+        
+        for entity in list(entities):
+            e_pos = entity.get_component(PositionComponent)
+            for trap_ent in traps:
+                t_pos = trap_ent.get_component(PositionComponent)
+                trap = trap_ent.get_component(TrapComponent)
+                
+                # 같은 위치이고 아직 발동되지 않은 함정
+                if not trap.is_triggered and e_pos.x == t_pos.x and e_pos.y == t_pos.y:
+                    self._trigger_trap(entity, trap_ent)
+
+    def _trigger_trap(self, victim, trap_ent):
+        """함정 발동 효과 처리"""
+        trap = trap_ent.get_component(TrapComponent)
+        self.event_manager.push(SoundEvent("BASH", f"철컥! 함정이 발동되었습니다! ({trap.trap_type})"))
+        trap = trap_ent.get_component(TrapComponent)
+        stats = victim.get_component(StatsComponent)
+        
+        trap.is_triggered = True
+        trap.visible = True # 발동되면 보임
+        
+        is_player = victim.entity_id == self.world.get_player_entity().entity_id
+        victim_name = "당신" if is_player else "몬스터"
+        self.event_manager.push(MessageEvent(f"{victim_name}이(가) {trap.trap_type} 함정을 밟았습니다!", "red"))
+        
+        # 데미지 적용
+        stats.current_hp -= trap.damage
+        if stats.current_hp < 0: stats.current_hp = 0
+        
+        # 상태 이상 적용
+        if trap.effect == "STUN":
+            victim.add_component(StunComponent(duration=2.0))
+            self.event_manager.push(MessageEvent(f"{victim_name}이(가) 기절했습니다!"))
+        
+        # 시각적 피드백
+        victim.add_component(HitFlashComponent())

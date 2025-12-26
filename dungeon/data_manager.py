@@ -86,13 +86,35 @@ class SkillDefinition:
         # 플래그 처리
         self.flags = {f.strip().upper() for f in flags.split(',') if f.strip()}
 
+class MapConfigDefinition:
+    """층별 맵 설정을 담는 컨테이너"""
+    def __init__(self, floor, width, height, monster_pool, item_pool, chest_count, mimic_prob, trap_prob, min_lvl, max_lvl, map_type, has_boss=0, boss_count=0, boss_ids="", **kwargs):
+        self.floor = int(floor)
+        self.width = int(width)
+        self.height = int(height)
+        self.monster_pool = [m.strip() for m in monster_pool.split(',') if m.strip()]
+        self.item_pool = [i.strip() for i in item_pool.split(',') if i.strip()]
+        self.chest_count = int(chest_count)
+        self.mimic_prob = float(mimic_prob)
+        self.trap_prob = float(trap_prob)
+        self.min_lvl = int(min_lvl)
+        self.max_lvl = int(max_lvl)
+        self.map_type = map_type
+        self.has_boss = int(has_boss) > 0
+        self.boss_count = int(boss_count)
+        self.boss_ids = [b.strip() for b in boss_ids.split(',') if b.strip()]
+
 # -----------------------------------------------------------------------
 # [추가] load_data_from_csv 헬퍼 함수
 # -----------------------------------------------------------------------
-def load_data_from_csv(file_name, definition_class, data_path="data"):
+def load_data_from_csv(file_name, definition_class, data_path="data", key_field=None):
     DATA_DEFINITIONS = {}
     file_path = os.path.join(data_path, file_name)
     
+    if not os.path.exists(file_path):
+        print(f"WARNING: Data file not found at {file_path}")
+        return {}
+
     try:
         with open(file_path, mode='r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
@@ -107,9 +129,17 @@ def load_data_from_csv(file_name, definition_class, data_path="data"):
                 # 정제된 딕셔너리로 객체 생성
                 def_obj = definition_class(**clean_row)
 
-                # 딕셔너리 키 설정 (아이템은 name, 몬스터는 ID 사용)
-                # clean_row에는 'name' 또는 'ID'가 깨끗한 상태로 존재해야 함
-                key = clean_row.get('name') if definition_class is ItemDefinition else clean_row.get('ID')
+                # 키 설정
+                if key_field:
+                    key = clean_row.get(key_field)
+                else:
+                    # 기본 휴리스틱 (하위 호환성)
+                    if definition_class is ItemDefinition:
+                        key = clean_row.get('name')
+                    elif definition_class is SkillDefinition:
+                        key = clean_row.get('이름') or clean_row.get('name')
+                    else:
+                        key = clean_row.get('ID')
                 
                 if key:
                     DATA_DEFINITIONS[key] = def_obj
@@ -141,46 +171,16 @@ def get_item_definition(item_id):
     return defs.get(item_id)
 
 def load_monster_definitions(data_path="data"):
-    """monster_data.txt 파일에서 몬스터 정의 로드"""
-    return load_data_from_csv('monster_data.txt', MonsterDefinition, data_path)
+    """monsters.csv 파일에서 몬스터 정의 로드"""
+    return load_data_from_csv('monsters.csv', MonsterDefinition, data_path, key_field='ID')
 
 def load_skill_definitions(data_path="data"):
-    """skills.txt 파일에서 스킬 정의 로드"""
-    file_path = os.path.join(data_path, 'skills.txt')
-    skills = {}
-    try:
-        if not os.path.exists(file_path):
-            return {}
-        with open(file_path, 'r', encoding='utf-8') as f:
-            # 주석(#) 라인 제외하되, 첫 번째 라인(헤더)의 '#'는 제거하여 DictReader에서 사용
-            raw_lines = f.readlines()
-            processed_lines = []
-            header_found = False
-            
-            for line in raw_lines:
-                clean_line = line.strip()
-                if not clean_line: continue
-                
-                if clean_line.startswith('#'):
-                    if not header_found:
-                        # 첫 번째 주석 라인을 헤더로 간주하고 '#' 제거
-                        processed_lines.append(clean_line.lstrip('#').strip())
-                        header_found = True
-                    continue # 다른 주석 라인은 무시
-                
-                processed_lines.append(line)
-                if not header_found: header_found = True # 주석 없는 첫 라인이 헤더일 경우
-                
-            reader = csv.DictReader(processed_lines)
-            for row in reader:
-                # 키에서 공백 제거 (DictReader 필드명에 공백이 섞일 수 있음)
-                clean_row = {k.strip(): v for k, v in row.items() if k}
-                skill = SkillDefinition(**clean_row)
-                skills[skill.name] = skill
-        return skills
-    except Exception as e:
-        print(f"Error loading skill definitions: {e}")
-        return {}
+    """skills.csv 파일에서 스킬 정의 로드"""
+    return load_data_from_csv('skills.csv', SkillDefinition, data_path, key_field='이름')
+
+def load_map_definitions(data_path="data"):
+    """maps.csv 파일에서 층별 맵 설정 로드"""
+    return load_data_from_csv('maps.csv', MapConfigDefinition, data_path, key_field='floor')
 
 def save_game_data(data, name):
     """플레이어 이름을 기반으로 게임 데이터 저장"""

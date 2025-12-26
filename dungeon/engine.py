@@ -16,13 +16,14 @@ from .components import (
     PositionComponent, RenderComponent, StatsComponent, InventoryComponent, 
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent,
-    StunComponent, SkillEffectComponent, HitFlashComponent
+    StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent
 )
 from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
-    TimeSystem, RegenerationSystem,
+    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem,
     MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
 )
+from .sound_system import SoundSystem
 from .renderer import Renderer
 from .data_manager import load_item_definitions
 from .constants import (
@@ -65,10 +66,11 @@ class Engine:
         self.renderer = Renderer() 
 
         # 데이터 정의 로드 (항상 사용 가능하도록 __init__에서 처리)
-        from .data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions
+        from .data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions, load_map_definitions
         self.item_defs = load_item_definitions()
         self.skill_defs = load_skill_definitions()
         self.monster_defs = load_monster_definitions()
+        self.map_defs = load_map_definitions()
         
         # 접두어 관리자 초기화
         from .modifiers import ModifierManager
@@ -79,22 +81,23 @@ class Engine:
 
     def _initialize_world(self, game_data=None, preserve_player=None):
         """맵, 플레이어, 몬스터 등 초기 엔티티 생성"""
-        # 맵 생성 (DungeonMap 사용)
-        width = 120
-        height = 60
-        rng = random.Random()
+        # 0. 맵 설정 가져오기 (floor는 1부터 시작하므로 문자열 변환 시 1, 2, ... 확인)
+        map_config = self.map_defs.get(str(self.current_level))
+        if not map_config:
+            # 설정이 없으면 기본값 (또는 가장 가까운 층의 설정)
+            map_config = next(iter(self.map_defs.values())) if self.map_defs else None
         
-        # 이전 층 데이터가 있으면 초기화
-        if preserve_player:
-            # 월드 전체 초기화 (EventManager와 System 리스너는 유지되어야 함)
-            # ecs.World에 clear_except_systems 같은 메서드가 없으므로 수동으로 엔티티 삭제
-            for e_id in list(self.world._entities.keys()):
-                self.world.delete_entity(e_id)
-            # ID 초기화 (선택적)
-            self.world._next_entity_id = 1
-
+        if map_config:
+            width = map_config.width
+            height = map_config.height
+            map_type = map_config.map_type
+        else:
+            width = 120
+            height = 60
+            map_type = "BOSS" if self.current_level % 5 == 0 else "NORMAL"
+        
         # DungeonMap 인스턴스 생성
-        dungeon_map = DungeonMap(width, height, rng)
+        dungeon_map = DungeonMap(width, height, random, map_type=map_type)
         self.dungeon_map = dungeon_map
         map_data = dungeon_map.map_data
         
@@ -181,6 +184,13 @@ class Engine:
                 skill_slots=["기본 공격", "파이어볼 Lv1", None, None, None],
                 skills=["기본 공격", "파이어볼 Lv1", "파이어볼 Lv2", "파이어볼 Lv3", "힐"]
             ))
+            
+            # [추가] 신규 방어구 지급 (테스트용)
+            inv = player_entity.get_component(InventoryComponent)
+            test_gear = ["가죽 투구", "철제 갑옷", "기사의 건틀릿", "신속의 장화"]
+            for gear_name in test_gear:
+                if gear_name in self.item_defs:
+                    inv.items[gear_name] = {'item': self.item_defs[gear_name], 'qty': 1}
         
         # 테스트용 스킬북 아이템 추가
         inv = player_entity.get_component(InventoryComponent)
@@ -205,247 +215,248 @@ class Engine:
         # 3. 메시지 로그 엔티티 생성 (ID=3)
         message_entity = self.world.create_entity()
         message_comp = MessageComponent()
-        message_comp.add_message(f"{self.player_name}님, 던전에 오신 것을 환영합니다!")
-        message_comp.add_message("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.")
+        message_comp.add_message(f"던전 {self.current_level}층에 입장했습니다.")
+        if map_type == "BOSS":
+            message_comp.add_message("[경고] 강력한 보스의 기운이 느껴집니다!", "red")
+        else:
+            message_comp.add_message("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.")
         self.world.add_component(message_entity.entity_id, message_comp)
         
-        # 4. 몬스터 및 보물상자 엔티티 생성
-        all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
-        
-        # [중요] 시작 방 식별 (첫 번째 방이 항상 시작 방)
-        starting_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
-        
-        for i, room in enumerate(dungeon_map.rooms):
-            # [안전지대] 시작 방은 완전히 제외
-            if room == starting_room:
-                continue
-                
-            # [안전지대] 시작 지점에서 너무 가까운 방은 스폰 제외 (중심 기준 20칸)
-            room_center_x, room_center_y = room.center
-            dist_to_start = ((room_center_x - dungeon_map.start_x)**2 + (room_center_y - dungeon_map.start_y)**2)**0.5
-            if dist_to_start < 20:
-                continue
+        # 4. 엔티티 배치 (몬스터/보스/오브젝트)
+        has_boss = map_config.has_boss if map_config else (map_type == "BOSS")
+        if has_boss:
+            # 보스 설정 가져오기
+            boss_ids = map_config.boss_ids if map_config else []
+            boss_count = map_config.boss_count if map_config and map_config.boss_count > 0 else (len(boss_ids) if boss_ids else 1)
+            attacker_pool = map_config.monster_pool if map_config else []
             
-            # 1. 방당 개체수 상향 (3~7마리)
-            num_monsters = random.randint(3, 7)
-            for _ in range(num_monsters):
-                # 방 안의 랜덤 위치
+            # 보스 스폰 및 즉각 알림
+            for i in range(boss_count):
+                # 보스 ID 결정 (리스트 순환하거나 없으면 랜덤)
+                b_id = boss_ids[i % len(boss_ids)] if boss_ids else None
+                
+                # 출구 주변에 분산 배치
+                spawn_x = dungeon_map.exit_x - 3 - (i % 3)
+                spawn_y = dungeon_map.exit_y + (i // 3) - (boss_count // 6)
+                
+                boss_ent = self._spawn_boss(spawn_x, spawn_y, attacker_pool, boss_name=b_id)
+                if boss_ent:
+                    m_comp = boss_ent.get_component(MonsterComponent)
+                    name = m_comp.type_name if m_comp else "강력한 적"
+                    message_comp.add_message(f"[경고] {name}이(가) 나타났습니다!", "red")
+
+            # 주변 호위병 몇 기
+            for _ in range(3):
+                rx = dungeon_map.exit_x - random.randint(3, 6)
+                ry = dungeon_map.exit_y + random.randint(-3, 3)
+                self._spawn_monster_at(rx, ry, pool=attacker_pool)
+        
+        # 일반 몬스터 및 오브젝트 스폰
+        if map_type != "BOSS" or not has_boss:
+            self._spawn_monsters(dungeon_map, map_config)
+            
+        self._spawn_objects(dungeon_map, map_config)
+
+    def _spawn_monster_at(self, x, y, monster_def=None, pool=None):
+        """지정된 위치에 몬스터 한 마리를 생성합니다."""
+        if not monster_def and self.monster_defs:
+            if pool:
+                # 풀에서 유효한 몬스터 선택
+                candidates = [self.monster_defs[name] for name in pool if name in self.monster_defs]
+                if candidates:
+                    monster_def = random.choice(candidates)
+            
+            if not monster_def:
+                # 보스 제외한 랜덤 몬스터 선택
+                normal_monsters = [m for m in self.monster_defs.values() if 'BOSS' not in m.flags]
+                monster_def = random.choice(normal_monsters if normal_monsters else list(self.monster_defs.values()))
+        
+        if not monster_def: return None
+
+        monster = self.world.create_entity()
+        self.world.add_component(monster.entity_id, PositionComponent(x=x, y=y))
+        
+        # 상성 및 플래그 설정
+        from .constants import ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS
+        all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
+        monster_el = random.choice(all_elements)
+        color = ELEMENT_COLORS.get(monster_el, "white")
+        m_flags = monster_def.flags.copy()
+        if monster_el != "NONE": m_flags.add(monster_el.upper())
+
+        # 접두어 적용 (30%)
+        m_name, m_hp, m_atk, m_def = monster_def.name, monster_def.hp, monster_def.attack, monster_def.defense
+        if random.random() < 0.3:
+            mod_def = self.modifier_manager.apply_monster_prefix(monster_def)
+            m_name, m_hp, m_atk, m_def = mod_def.name, mod_def.hp, mod_def.attack, mod_def.defense
+            m_flags.update(mod_def.flags)
+            if mod_def.color != "white": color = mod_def.color
+
+        self.world.add_component(monster.entity_id, RenderComponent(char=monster_def.symbol, color=color))
+        self.world.add_component(monster.entity_id, MonsterComponent(type_name=m_name))
+        self.world.add_component(monster.entity_id, AIComponent(behavior=random.randint(1, 2), detection_range=8))
+        
+        stats = StatsComponent(max_hp=m_hp, current_hp=m_hp, attack=m_atk, defense=m_def, element=monster_el)
+        stats.flags.update(m_flags)
+        stats.action_delay = monster_def.action_delay
+        self.world.add_component(monster.entity_id, stats)
+        return monster
+
+    def _spawn_monsters(self, dungeon_map, map_config=None):
+        """일반 층의 몬스터들을 스폰합니다."""
+        pool = map_config.monster_pool if map_config else None
+        
+        starting_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
+        for room in dungeon_map.rooms:
+            if room == starting_room: continue
+            
+            # 방 크기에 비례하여 몬스터 수 결정 (2~5마리)
+            num = random.randint(2, 5)
+            for _ in range(num):
                 mx = random.randint(room.x1 + 1, room.x2 - 1)
                 my = random.randint(room.y1 + 1, room.y2 - 1)
-                
-                # 중앙 방에 이미 생성된 몬스터나 장애물과 겹침 방지 (단순화)
-                monster_entity = self.world.create_entity()
-                self.world.add_component(monster_entity.entity_id, PositionComponent(x=mx, y=my))
-                
-                # 데이터 기반 몬스터 스폰 (보스 제외)
-                if self.monster_defs:
-                    # BOSS 플래그가 없는 일반 몬스터만 선택
-                    non_boss_monsters = [m for m in self.monster_defs.values() if 'BOSS' not in m.flags]
-                    if non_boss_monsters:
-                        m_def = random.choice(non_boss_monsters)
-                    else:
-                        m_def = random.choice(list(self.monster_defs.values()))
-                    type_name = m_def.name
-                    max_hp, atk, df = m_def.hp, m_def.attack, m_def.defense
-                    char = m_def.symbol
-                    monster_delay = m_def.action_delay
-                    m_flags = m_def.flags.copy()
-                else:
-                    type_name = "고블린"
-                    max_hp, atk, df = 20, 5, 2
-                    char = 'g'
-                    monster_delay = 1.0
-                    m_flags = set()
+                self._spawn_monster_at(mx, my, pool=pool)
 
-                monster_element = random.choice(all_elements)
-                color = ELEMENT_COLORS.get(monster_element, "white")
-                if monster_element != "NONE":
-                    m_flags.add(monster_element.upper())
+        # 복도 스폰 (5% 확률)
+        for cx, cy in dungeon_map.corridors:
+            if random.random() < 0.05:
+                # 시작 지점 근처(반경 15칸)는 스폰 제외
+                if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 225:
+                    continue
+                self._spawn_monster_at(cx, cy, pool=pool)
 
-                # [수정] 몬스터 접두어 적용 (랜덤 30% 확률)
-                if random.random() < 0.3:
-                    # 임시 정의 객체 생성 (기존 코드 구조상 불편함, 하지만 간단히 처리)
-                    from .data_manager import MonsterDefinition
-                    # 현재 값들로 임시 Definition 생성
-                    temp_def = MonsterDefinition(
-                         ID="TEMP", Name=type_name, Symbol=char, Color=color, 
-                         HP=max_hp, ATT=atk, DEF=df, LV=1, EXP_GIVEN=0, 
-                         CRIT_CHANCE='0.05', CRIT_MULT='1.5', MOVE_TYPE='CHASE', ACTION_DELAY=monster_delay, 
-                         flags=','.join(m_flags)
-                    )
-                    # 접두어 적용
-                    mod_def = self.modifier_manager.apply_monster_prefix(temp_def)
-                    # 값 업데이트
-                    type_name = mod_def.name
-                    max_hp = mod_def.hp 
-                    atk = mod_def.attack
-                    df = mod_def.defense
-                    if mod_def.element != "NONE": monster_element = mod_def.element
-                    if 'element' in self.modifier_manager.prefixes.get(mod_def.name.split()[0], {}): # 이름에서 역추적...은 좀 비효율적이지만
-                        pass # apply_monster_prefix에서 이미 flash에 추가함.
-                    m_flags.update(mod_def.flags)
-                    # 색상 업데이트 (간단히)
-                    if mod_def.color != "white": color = mod_def.color
-
-
-                behavior = random.randint(0, 2)
-                
-                self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=color))
-                self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
-                self.world.add_component(monster_entity.entity_id, AIComponent(behavior=behavior, detection_range=8))
-                
-                stats = StatsComponent(max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=monster_element)
-                stats.flags.update(m_flags)
-                stats.action_delay = monster_delay
-                self.world.add_component(monster_entity.entity_id, stats)
-
-        # [보스 스폰] 마지막 방(계단이 있는 방)에만 보스 생성
-        if dungeon_map.rooms and self.monster_defs:
-            final_room = dungeon_map.rooms[-1]
-            boss_monsters = [m for m in self.monster_defs.values() if 'BOSS' in m.flags]
+    def _spawn_boss(self, x, y, pool=None, boss_name=None):
+        """지정된 위치에 보스를 스폰합니다."""
+        if not self.monster_defs: return
+        
+        boss_defs = []
+        if boss_name and boss_name in self.monster_defs:
+            boss_defs = [self.monster_defs[boss_name]]
+        elif pool:
+            boss_defs = [self.monster_defs[name] for name in pool if name in self.monster_defs and 'BOSS' in self.monster_defs[name].flags]
+        
+        if not boss_defs:
+            boss_defs = [m for m in self.monster_defs.values() if 'BOSS' in m.flags]
             
-            if boss_monsters:
-                # 보스 1마리 생성
-                boss_def = random.choice(boss_monsters)
-                bx = random.randint(final_room.x1 + 1, final_room.x2 - 1)
-                by = random.randint(final_room.y1 + 1, final_room.y2 - 1)
-                
-                boss_entity = self.world.create_entity()
-                self.world.add_component(boss_entity.entity_id, PositionComponent(x=bx, y=by))
-                self.world.add_component(boss_entity.entity_id, RenderComponent(char=boss_def.symbol, color=boss_def.color))
-                self.world.add_component(boss_entity.entity_id, MonsterComponent(type_name=boss_def.name))
-                self.world.add_component(boss_entity.entity_id, AIComponent(behavior=1, detection_range=15))  # AGGRESSIVE, 넓은 탐지
-                
-                boss_stats = StatsComponent(
-                    max_hp=boss_def.hp, current_hp=boss_def.hp,
-                    attack=boss_def.attack, defense=boss_def.defense,
-                    element=boss_def.element if hasattr(boss_def, 'element') else "NONE"
-                )
-                boss_stats.flags.update(boss_def.flags)
-                boss_stats.action_delay = boss_def.action_delay
-                self.world.add_component(boss_entity.entity_id, boss_stats)
-                
-                self.world.event_manager.push(MessageEvent(f"[경고] {boss_def.name}이(가) 계단을 지키고 있습니다!"))
+        if not boss_defs: return
+        
+        boss_def = random.choice(boss_defs)
+        boss = self.world.create_entity()
+        self.world.add_component(boss.entity_id, PositionComponent(x=x, y=y))
+        self.world.add_component(boss.entity_id, RenderComponent(char=boss_def.symbol, color=boss_def.color))
+        self.world.add_component(boss.entity_id, MonsterComponent(type_name=boss_def.name))
+        self.world.add_component(boss.entity_id, AIComponent(behavior=1, detection_range=15)) # AGGRESSIVE
+        
+        stats = StatsComponent(max_hp=boss_def.hp, current_hp=boss_def.hp, attack=boss_def.attack, defense=boss_def.defense)
+        stats.flags.update(boss_def.flags)
+        stats.action_delay = boss_def.action_delay
+        self.world.add_component(boss.entity_id, stats)
+        return boss
+
+    def _spawn_objects(self, dungeon_map, map_config=None):
+        """상자, 상인 등 오브젝트를 스폰합니다."""
+        starting_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
+        
+        # 상인 (시작 방 고정)
+        if starting_room:
+            sx, sy = starting_room.x1 + 1, starting_room.y1 + 1
+            shop = self.world.create_entity()
+            self.world.add_component(shop.entity_id, PositionComponent(x=sx, y=sy))
+            self.world.add_component(shop.entity_id, RenderComponent(char='S', color='magenta'))
+            shop_items = [
+                {'item': self.item_defs.get('체력 물약'), 'price': 20},
+                {'item': self.item_defs.get('마력 물약'), 'price': 20},
+                {'item': self.item_defs.get('화염 스크롤'), 'price': 50},
+                {'item': self.item_defs.get('가죽 갑옷'), 'price': 100},
+                {'item': self.item_defs.get('낡은 검'), 'price': 80},
+            ]
+            shop_items = [si for si in shop_items if si['item'] is not None]
+            self.world.add_component(shop.entity_id, ShopComponent(items=shop_items))
+            self.world.add_component(shop.entity_id, MonsterComponent(type_name="상인"))
+
+        # 보물 상자 (CSV 설정 기반)
+        chest_count = map_config.chest_count if map_config else 2
+        mimic_prob = map_config.mimic_prob if map_config else 0.1
+        item_pool = map_config.item_pool if map_config else []
+        
+        other_rooms = dungeon_map.rooms[1:] if len(dungeon_map.rooms) > 1 else dungeon_map.rooms
+        
+        for _ in range(chest_count):
+            room = random.choice(other_rooms)
+            cx = random.randint(room.x1 + 1, room.x2 - 1)
+            cy = random.randint(room.y1 + 1, room.y2 - 1)
+            
+            # 미믹 여부 결정
+            if random.random() < mimic_prob:
+                self._spawn_mimic(cx, cy)
+            else:
+                self._spawn_chest(cx, cy, item_pool)
+
+        # 함정 (CSV 설정 기반)
+        trap_prob = map_config.trap_prob if map_config else 0.05
+        for room in other_rooms:
+            if random.random() < trap_prob:
+                tx = random.randint(room.x1 + 1, room.x2 - 1)
+                ty = random.randint(room.y1 + 1, room.y2 - 1)
+                self._spawn_trap(tx, ty)
+
+    def _spawn_trap(self, x, y):
+        """함정 엔티티 생성"""
+        trap = self.world.create_entity()
+        self.world.add_component(trap.entity_id, PositionComponent(x=x, y=y))
+        
+        trap_types = [
+            {"type": "가시", "damage": 10, "effect": None},
+            {"type": "마비", "damage": 5, "effect": "STUN"},
+        ]
+        t_data = random.choice(trap_types)
+        self.world.add_component(trap.entity_id, TrapComponent(trap_type=t_data["type"], damage=t_data["damage"], effect=t_data["effect"]))
+
+    def _spawn_mimic(self, x, y):
+        """보물상자로 위장한 미믹 스폰"""
+        monster_def = self.monster_defs.get("MIMIC")
+        if not monster_def:
+            # 미믹 정의가 없으면 고블린을 베이스로 이름만 변경
+            monster_def = self.monster_defs.get("GOBLIN") or next(iter(self.monster_defs.values()))
+        
+        monster = self.world.create_entity()
+        self.world.add_component(monster.entity_id, PositionComponent(x=x, y=y))
+        # 초기 렌더링 (disguised=True 일 때는 상자 기호 '['로 렌더링됨)
+        self.world.add_component(monster.entity_id, RenderComponent(char=monster_def.symbol, color=monster_def.color))
+        self.world.add_component(monster.entity_id, MonsterComponent(type_name="보물상자?"))
+        self.world.add_component(monster.entity_id, AIComponent(behavior=AIComponent.STATIONARY, detection_range=2))
+        self.world.add_component(monster.entity_id, MimicComponent(is_disguised=True))
+        self.world.add_component(monster.entity_id, ChestComponent()) # 충돌 발생 시 체크용
+        
+        stats = StatsComponent(max_hp=monster_def.hp*2, current_hp=monster_def.hp*2, attack=monster_def.attack, defense=monster_def.defense)
+        stats.action_delay = 0.5
+        self.world.add_component(monster.entity_id, stats)
+
+    def _spawn_chest(self, x, y, item_pool=None):
+        """일반 보물상자 스폰"""
+        chest = self.world.create_entity()
+        self.world.add_component(chest.entity_id, PositionComponent(x=x, y=y))
+        self.world.add_component(chest.entity_id, RenderComponent(char='[', color='brown'))
+        self.world.add_component(chest.entity_id, ChestComponent())
+        
+        loot_items = []
+        if item_pool:
+            candidates = [self.item_defs[name] for name in item_pool if name in self.item_defs]
+            if candidates:
+                loot_items.append({'item': random.choice(candidates), 'qty': 1})
+        
+        if not loot_items and self.item_defs:
+            loot_items.append({'item': random.choice(list(self.item_defs.values())), 'qty': 1})
+            
+        self.world.add_component(chest.entity_id, LootComponent(items=loot_items, gold=random.randint(10, 50)))
+        
+        # 20% 확률로 숨겨진 상자 설정
+        if random.random() < 0.2:
+            self.world.add_component(chest.entity_id, HiddenComponent(blink=True))
 
     def _spawn_minion(self, x, y, m_id):
         """보스 등이 소환하는 미니언 생성"""
-        if m_id not in self.monster_defs: return
-        m_def = self.monster_defs[m_id]
-        
-        minion = self.world.create_entity()
-        self.world.add_component(minion.entity_id, PositionComponent(x=x, y=y))
-        self.world.add_component(minion.entity_id, RenderComponent(char=m_def.symbol, color=m_def.color))
-        self.world.add_component(minion.entity_id, MonsterComponent(type_name=f"분노한 {m_def.name}"))
-        self.world.add_component(minion.entity_id, AIComponent(behavior=1, detection_range=20)) # Angry AI
-        
-        stats = StatsComponent(max_hp=m_def.hp, current_hp=m_def.hp, attack=m_def.attack, defense=m_def.defense)
-        stats.flags.update(m_def.flags)
-        stats.action_delay = m_def.action_delay
-        self.world.add_component(minion.entity_id, stats)
-
-        # 2. 복도 스폰 추가 (10% 확률)
-        for cx, cy in dungeon_map.corridors:
-            # [안전지대] 시작 지점 근처(반경 15칸)는 스폰 제외
-            if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 225:
-                continue
-
-            if random.random() < 0.1:
-                monster_entity = self.world.create_entity()
-                self.world.add_component(monster_entity.entity_id, PositionComponent(x=cx, y=cy))
-                
-                if self.monster_defs:
-                    # 복도에는 보스 제외, 약한 몬스터만
-                    non_boss_monsters = [m for m in self.monster_defs.values() if 'BOSS' not in m.flags]
-                    if non_boss_monsters:
-                        m_def = random.choice(non_boss_monsters)
-                    else:
-                        m_def = random.choice(list(self.monster_defs.values()))
-                    type_name, max_hp, atk, df, char, m_delay, m_flags = m_def.name, m_def.hp, m_def.attack, m_def.defense, m_def.symbol, m_def.action_delay, m_def.flags.copy()
-                else:
-                    type_name, max_hp, atk, df, char, m_delay, m_flags = "슬라임", 15, 3, 0, 's', 1.0, set()
-
-                m_el = random.choice(all_elements)
-                if monster_element != "NONE":
-                    m_flags.add(monster_element.upper()) # 여기서 m_flags 사용 시 263라인 참조. 
-
-                # [수정] 몬스터 접두어 적용 (랜덤 30%) - 복도
-                if random.random() < 0.3:
-                    from .data_manager import MonsterDefinition
-                    temp_def = MonsterDefinition(
-                         ID="TEMP", Name=type_name, Symbol=char, Color="white", # 색상은 아래서 재설정됨
-                         HP=max_hp, ATT=atk, DEF=df, LV=1, EXP_GIVEN=0, 
-                         CRIT_CHANCE='0.05', CRIT_MULT='1.5', MOVE_TYPE='CHASE', ACTION_DELAY=m_delay, 
-                         flags=','.join(m_flags)
-                    )
-                    mod_def = self.modifier_manager.apply_monster_prefix(temp_def)
-                    type_name = mod_def.name
-                    max_hp = mod_def.hp
-                    atk = mod_def.attack
-                    df = mod_def.defense
-                    m_flags.update(mod_def.flags)
-                    # 색상 (엘리먼트 기반)
-                    if mod_def.element == '불': color='red'
-                    elif mod_def.element == '물': color='blue'
-                
-                self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=color))
-                self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
-                self.world.add_component(monster_entity.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=5))
-                stats = StatsComponent(max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=m_el)
-                stats.flags.update(m_flags)
-                stats.action_delay = m_delay
-                self.world.add_component(monster_entity.entity_id, stats)
-
-        # 5. 방 구석에 보물상자 및 기타 오브젝트...
-        for room in dungeon_map.rooms:
-            # [안전지대] 시작 방 제외
-            if room == starting_room:
-                continue
-
-            # 5. 방 구석에 보물상자 배치 (30% 확률)
-            if random.random() < 0.3:
-                # 방의 랜덤한 위치 (벽이 아닌 곳)
-                chest_x = random.randint(room.x1 + 1, room.x2 - 1)
-                chest_y = random.randint(room.y1 + 1, room.y2 - 1)
-                
-                # 플레이어나 몬스터와 겹치지 않는지 확인 (단순화 가능)
-                chest_entity = self.world.create_entity()
-                self.world.add_component(chest_entity.entity_id, PositionComponent(x=chest_x, y=chest_y))
-                self.world.add_component(chest_entity.entity_id, RenderComponent(char='*', color='yellow'))
-                self.world.add_component(chest_entity.entity_id, ChestComponent())
-                
-                # 랜덤 아이템 1~2개 포함
-                loot_items = []
-                if self.item_defs:
-                    random_keys = random.sample(list(self.item_defs.keys()), min(len(self.item_defs), 2))
-                    for k in random_keys:
-                        # 아이템 생성 시 접두어 적용 (랜덤 50%)
-                        item = self.item_defs[k]
-                        if random.random() < 0.5:
-                            item = self.modifier_manager.apply_item_prefix(item)
-                        loot_items.append({'item': item, 'qty': 1})
-                
-                self.world.add_component(chest_entity.entity_id, LootComponent(items=loot_items, gold=random.randint(10, 50)))
-
-            # 6. 첫 번째 방(시작 방) 근처에 상인 배치 (100% 확률로 보장)
-            if i == 0:
-                shop_x, shop_y = room.x1 + 2, room.y1 + 2 # 구석 근처
-                shop_entity = self.world.create_entity()
-                self.world.add_component(shop_entity.entity_id, PositionComponent(x=shop_x, y=shop_y))
-                self.world.add_component(shop_entity.entity_id, RenderComponent(char='S', color='magenta'))
-                
-                # 상점 품목 다양화
-                shop_items = [
-                    {'item': self.item_defs.get('체력 물약'), 'price': 20},
-                    {'item': self.item_defs.get('마력 물약'), 'price': 20},
-                    {'item': self.item_defs.get('화염 스크롤'), 'price': 50},
-                    {'item': self.item_defs.get('가죽 갑옷'), 'price': 100},
-                    {'item': self.item_defs.get('낡은 검'), 'price': 80},
-                ]
-                # 유효한 아이템만 필터링 (정의되지 않은 것 제외)
-                shop_items = [si for si in shop_items if si['item'] is not None]
-                
-                self.world.add_component(shop_entity.entity_id, ShopComponent(items=shop_items))
-                self.world.add_component(shop_entity.entity_id, MonsterComponent(type_name="상인"))
+        return self._spawn_monster_at(x, y, self.monster_defs.get(m_id))
 
     def _initialize_systems(self):
         """시스템 등록 (실행 순서가 중요함)"""
@@ -455,16 +466,22 @@ class Engine:
         self.movement_system = MovementSystem(self.world)
         self.combat_system = CombatSystem(self.world)
         self.regeneration_system = RegenerationSystem(self.world)
+        self.level_system = LevelSystem(self.world)
+        self.trap_system = TrapSystem(self.world)
+        self.sound_system = SoundSystem(self.world)
         self.render_system = RenderSystem(self.world)
         
-        # 2. 시스템 순서 등록: 시간 -> 입력 -> AI -> 이동 -> 전투 -> 회복 -> 렌더링
+        # 2. 시스템 순서 등록: 시간 -> 입력 -> AI -> 이동 -> 전투 -> 레벨 -> 회복 -> 렌더링
         systems = [
             self.time_system,
             self.input_system,
             self.monster_ai_system,
             self.movement_system,
             self.combat_system,
+            self.level_system,
+            self.trap_system,
             self.regeneration_system,
+            self.sound_system,
             self.render_system
         ]
         for system in systems:
@@ -1032,7 +1049,56 @@ class Engine:
                     stats.flags.add("VISION_UP")
                     # 만료 시간을 StatsComponent에 저장 (초 단위)
                     stats.vision_expires_at = time.time() + 30.0
-                msg += " 어둠이 걷히며 주변이 환해집니다!"
+                
+                # [추가] 숨겨진 아이템 감지 효과
+                stats.sees_hidden = True
+                stats.sees_hidden_expires_at = time.time() + 30.0
+                
+                msg += " 어둠이 걷히며 숨겨진 기운들이 느껴집니다!"
+                
+            # [TELEPORT] 순간 이동 (스크롤 용)
+            if "TELEPORT" in item.flags:
+                valid_tiles = []
+                for y in range(self.dungeon_map.height):
+                    for x in range(self.dungeon_map.width):
+                        if self.dungeon_map.map_data[y][x] == '.': # FLOOR
+                            valid_tiles.append((x, y))
+                if valid_tiles:
+                    tx, ty = random.choice(valid_tiles)
+                    pos = player_entity.get_component(PositionComponent)
+                    if pos:
+                        pos.x, pos.y = tx, ty
+                        msg = f"{item.name}의 힘으로 공간을 뛰어넘었습니다!"
+                
+            # [FIRE_EXPLOSION] 화염 폭발 (반경 2, 스플래쉬 로직 활용)
+            if "FIRE_EXPLOSION" in item.flags:
+                pos = player_entity.get_component(PositionComponent)
+                if pos:
+                    combat_sys = self.world.get_system(CombatSystem)
+                    if combat_sys:
+                        temp_skill = type('obj', (object,), {
+                            'name': '화염 스크롤 폭발', 'damage': 30, 'range': 1, 'element': '불', 'flags': {'EXPLOSION'}
+                        })
+                        if hasattr(combat_sys, '_handle_explosion'):
+                            combat_sys._handle_explosion(player_entity, pos.x, pos.y, temp_skill)
+                        msg = f"{item.name}이(가) 폭발하며 주변을 불태웁니다!"
+
+            # [MAGIC_MAPPING] 지도 제작
+            if "MAGIC_MAPPING" in item.flags:
+                if self.dungeon_map:
+                    for y in range(self.dungeon_map.height):
+                        for x in range(self.dungeon_map.width):
+                            if self.dungeon_map.map_data[y][x] != ' ':
+                                self.dungeon_map.visited.add((x, y))
+                    msg = f"{item.name}을 사용하자 던전의 전역 지도가 밝아집니다."
+                
+            # [RECALL] 귀환 (계단 이동)
+            if "RECALL" in item.flags:
+                if self.dungeon_map:
+                    pos = player_entity.get_component(PositionComponent)
+                    if pos:
+                        pos.x, pos.y = self.dungeon_map.exit_x, self.dungeon_map.exit_y
+                        msg = f"{item.name}의 마법으로 다음 층으로 가는 계단 앞에 소환되었습니다!"
                 
             hp_recovered = stats.current_hp - old_hp
             if hp_recovered > 0:
@@ -1274,12 +1340,44 @@ class Engine:
                 if self.dungeon_map and self.dungeon_map.fog_enabled and (pos.x, pos.y) not in self.dungeon_map.visited:
                     continue
 
-                # 피격 피드백(Hit Flash) 처리
+                # 숨겨진 아이템(HiddenComponent) 처리
+                hidden = entity.get_component(HiddenComponent)
+                player_stats = player_entity.get_component(StatsComponent) if player_entity else None
+                if hidden:
+                    if not player_stats or not player_stats.sees_hidden:
+                        continue # 횃불 효과 없으면 안보임
+                    # 깜빡임 효과 (0.5초 주기로 ON/OFF)
+                    if hidden.blink and int(time.time() * 4) % 2 == 0:
+                        continue
+
+                char = render.char
                 color = render.color
+
+                # 피격 피드백(Hit Flash) 처리
                 if entity.has_component(HitFlashComponent):
                     color = "white_bg"
                 
-                self.renderer.draw_char(screen_x, screen_y, render.char, color)
+                # 미믹(MimicComponent) 의태 처리
+                mimic = entity.get_component(MimicComponent)
+                if mimic and mimic.is_disguised:
+                    char = '[' # 상자 기호
+                    color = "brown"
+                
+                # 함정(TrapComponent) 렌더링
+                trap = entity.get_component(TrapComponent)
+                if trap:
+                    if not trap.visible and not trap.is_triggered:
+                        # 숨겨진 함정은 횃불 효과가 있을 때만 흐릿하게 보임
+                        if player_stats and player_stats.sees_hidden:
+                             char = '^'
+                             color = "dark_grey"
+                        else:
+                             continue
+                    else:
+                        char = '^'
+                        color = "red" if trap.is_triggered else "yellow"
+
+                self.renderer.draw_char(screen_x, screen_y, char, color)
         
         # 2-1. 오라/특수 효과 렌더링 (휘몰아치는 연출)
         aura_entities = self.world.get_entities_with_components([PositionComponent, SkillEffectComponent])

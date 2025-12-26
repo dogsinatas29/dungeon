@@ -32,11 +32,12 @@ class Rect:
                 self.y1 <= other.y2 + 1 and self.y2 >= other.y1 - 1)
 
 class DungeonMap:
-    def __init__(self, width: int, height: int, rng, dungeon_level_tuple: Tuple[int, int] = (1, 0)):
+    def __init__(self, width: int, height: int, rng, dungeon_level_tuple: Tuple[int, int] = (1, 0), map_type: str = "NORMAL"):
         self.width = width
         self.height = height
         self.rng = rng
         self.dungeon_level_tuple = dungeon_level_tuple
+        self.map_type = map_type
         
         self.map_data: List[List[str]] = [] 
         self.rooms: List[Rect] = [] 
@@ -49,14 +50,43 @@ class DungeonMap:
         self.visited: set[Tuple[int, int]] = set() 
         self.fog_enabled = True # 전장의 안개 기본 활성화
         
-        self.generate_map() 
+        self.generate_map(self.map_type) 
         
-    def generate_map(self):
-        """방과 복도를 이용한 던전 맵을 생성합니다."""
-        logging.debug("DungeonMap.generate_map: 맵 생성 시작")
+    def generate_map(self, map_type: str = "NORMAL"):
+        """지정된 타입에 따라 맵을 생성합니다."""
+        logging.debug(f"DungeonMap.generate_map: 맵 생성 시작 (Type: {map_type})")
         self.map_data = [[WALL for _ in range(self.width)] for _ in range(self.height)]
         self.rooms = []
         self.corridors = []
+
+        if map_type == "BOSS":
+            self.generate_boss_map()
+        else:
+            self._generate_normal_map()
+
+    def generate_boss_map(self):
+        """중앙에 큰 방이 하나 있는 보스 전용 맵을 생성합니다."""
+        # 중앙에 넓은 방 생성
+        room_w = 20
+        room_h = 15
+        x = (self.width - room_w) // 2
+        y = (self.height - room_h) // 2
+        
+        boss_room = Rect(x, y, room_w, room_h)
+        self.rooms.append(boss_room)
+        
+        for yr in range(boss_room.y1, boss_room.y2):
+            for xr in range(boss_room.x1, boss_room.x2):
+                if 0 <= xr < self.width and 0 <= yr < self.height:
+                    self.map_data[yr][xr] = FLOOR
+        
+        # 시작 지점과 탈출구 설정 (입구 쪽과 보스 쪽)
+        self.start_x, self.start_y = boss_room.x1 + 2, boss_room.center[1]
+        self.exit_x, self.exit_y = boss_room.x2 - 3, boss_room.center[1]
+        self.map_data[self.exit_y][self.exit_x] = self.exit_type
+
+    def _generate_normal_map(self):
+        """방과 복도를 이용한 일반 던전 맵을 생성합니다."""
 
         max_rooms = 10
         min_room_size = 6
