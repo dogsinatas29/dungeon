@@ -17,7 +17,8 @@
 ## 🎯 최종 목표
 터미널 기반의 로그라이크 게임 엔진을 ECS 패턴을 기반으로 완성하여, 규칙과 데이터를 실행 로직과 분리하여 관리합니다.
 
-![Dungeon Crawler UI](dungeon_ui.png)
+### 📷 게임 스크린샷 (Game Screenshot)
+![Game Screenshot](screen_shot.png)
 
 ### 🎥 스킬 테스트 시연 (Skill Test Demo)
 [🎥 스킬 테스트 시연 영상 보기 (skill_test.mp4)](skill_test.mp4)

@@ -27,6 +27,7 @@ debug_*.py
 *.mp4
 !skill_test.mp4
 *.png
+!screen_shot.png
 package-lock.json
 
 # Legacy entry point
