@@ -20,6 +20,7 @@
 ![Dungeon Crawler UI](dungeon_ui.png)
 
 ### 🎥 스킬 테스트 시연 (Skill Test Demo)
+[🎥 스킬 테스트 시연 영상 보기 (skill_test.mp4)](skill_test.mp4)
 <video src="skill_test.mp4" controls width="100%"></video>
 
 ## 🎮 Roguelike Game Engine Architecture (ECS)

@@ -25,6 +25,7 @@ debug_*.py
 *.zip
 *.rar
 *.mp4
+!skill_test.mp4
 *.png
 package-lock.json
 
