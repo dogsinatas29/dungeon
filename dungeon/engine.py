@@ -237,9 +237,14 @@ class Engine:
                 monster_entity = self.world.create_entity()
                 self.world.add_component(monster_entity.entity_id, PositionComponent(x=mx, y=my))
                 
-                # 데이터 기반 몬스터 스폰
+                # 데이터 기반 몬스터 스폰 (보스 제외)
                 if self.monster_defs:
-                    m_def = random.choice(list(self.monster_defs.values()))
+                    # BOSS 플래그가 없는 일반 몬스터만 선택
+                    non_boss_monsters = [m for m in self.monster_defs.values() if 'BOSS' not in m.flags]
+                    if non_boss_monsters:
+                        m_def = random.choice(non_boss_monsters)
+                    else:
+                        m_def = random.choice(list(self.monster_defs.values()))
                     type_name = m_def.name
                     max_hp, atk, df = m_def.hp, m_def.attack, m_def.defense
                     char = m_def.symbol
@@ -293,6 +298,34 @@ class Engine:
                 stats.flags.update(m_flags)
                 stats.action_delay = monster_delay
                 self.world.add_component(monster_entity.entity_id, stats)
+
+        # [보스 스폰] 마지막 방(계단이 있는 방)에만 보스 생성
+        if dungeon_map.rooms and self.monster_defs:
+            final_room = dungeon_map.rooms[-1]
+            boss_monsters = [m for m in self.monster_defs.values() if 'BOSS' in m.flags]
+            
+            if boss_monsters:
+                # 보스 1마리 생성
+                boss_def = random.choice(boss_monsters)
+                bx = random.randint(final_room.x1 + 1, final_room.x2 - 1)
+                by = random.randint(final_room.y1 + 1, final_room.y2 - 1)
+                
+                boss_entity = self.world.create_entity()
+                self.world.add_component(boss_entity.entity_id, PositionComponent(x=bx, y=by))
+                self.world.add_component(boss_entity.entity_id, RenderComponent(char=boss_def.symbol, color=boss_def.color))
+                self.world.add_component(boss_entity.entity_id, MonsterComponent(type_name=boss_def.name))
+                self.world.add_component(boss_entity.entity_id, AIComponent(behavior=1, detection_range=15))  # AGGRESSIVE, 넓은 탐지
+                
+                boss_stats = StatsComponent(
+                    max_hp=boss_def.hp, current_hp=boss_def.hp,
+                    attack=boss_def.attack, defense=boss_def.defense,
+                    element=boss_def.element if hasattr(boss_def, 'element') else "NONE"
+                )
+                boss_stats.flags.update(boss_def.flags)
+                boss_stats.action_delay = boss_def.action_delay
+                self.world.add_component(boss_entity.entity_id, boss_stats)
+                
+                self.world.event_manager.push(MessageEvent(f"[경고] {boss_def.name}이(가) 계단을 지키고 있습니다!"))
 
         # 2. 복도 스폰 추가 (10% 확률)
         for cx, cy in dungeon_map.corridors:
