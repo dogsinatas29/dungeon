@@ -213,6 +213,12 @@ class Engine:
         all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
         
         for i, room in enumerate(dungeon_map.rooms[1:]): # 첫 번째 방(플레이어 시작) 제외
+            # [안전지대] 시작 지점에서 너무 가까운 방은 스폰 제외 (중심 기준 20칸)
+            room_center_x, room_center_y = room.center
+            dist_to_start = ((room_center_x - dungeon_map.start_x)**2 + (room_center_y - dungeon_map.start_y)**2)**0.5
+            if dist_to_start < 20:
+                continue
+            
             # 1. 방당 개체수 상향 (3~7마리)
             num_monsters = random.randint(3, 7)
             for _ in range(num_monsters):
@@ -283,8 +289,8 @@ class Engine:
 
         # 2. 복도 스폰 추가 (10% 확률)
         for cx, cy in dungeon_map.corridors:
-            # [안전지대] 시작 지점 근처(반경 8칸)는 스폰 제외
-            if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 64:
+            # [안전지대] 시작 지점 근처(반경 15칸)는 스폰 제외
+            if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 225:
                 continue
 
             if random.random() < 0.1:
