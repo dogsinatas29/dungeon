@@ -14,16 +14,18 @@ api_usage_log.json
 bug.md
 but.txt
 history.txt
-"작업방식.txt"
+작업방식.txt
 
 # Debug/Verification scripts
 test_sandbox.py
 verify_*.py
 debug_*.py
 
-# Archives and Lock files
+# Archives, Lock files, and Media
 *.zip
 *.rar
+*.mp4
+*.png
 package-lock.json
 
 # Legacy entry point
@@ -31,7 +33,7 @@ main.py
 
 # Documentation and backup folders
 back/
-# docs/
+docs/
 *.old
 bug.txt
 추가사항.txt1
