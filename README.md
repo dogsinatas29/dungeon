@@ -38,8 +38,10 @@
 -   **`data/spawn_data.txt`**: 몬스터와 아이템의 스폰 위치, 확률, 드롭 아이템을 결정하는 메타 데이터.
 
 #### 3. Features & Utilities (기능 및 유틸리티)
--   **`map.py`**: 던전 맵 생성 및 관리 로직. 충돌 감지, 시야 계산 등을 담당. (기존 `dungeon_map.py`에서 변경됨)
--   **`ui.py`**: 입력(Input) 처리 및 출력(Output), 터미널 렌더링을 담당하는 UI 인터페이스. (기존 `renderer.py`에서 변경됨)
+-   **`map.py`**: 던전 맵 생성 및 관리 로직. 충돌 감지, 시야 계산 등을 담당.
+-   **`ui.py`**: 터미널 렌더링 및 UI 인터페이스 관리.
+-   **`sound_system.py`**: `aplay`를 사용한 비동기 실제 효과음 재생 및 사운드 플래그 처리.
+-   **`sfx_extractor.py`**: (Utility) 영상 파일에서 효과음을 자동으로 추출하여 조각내는 도구.
 -   **`data/UI_layout.json`**: UI 레이아웃과 관련된 설정(좌표, 크기 등)을 저장하는 데이터 파일.
 
 ## 개발 가이드라인
@@ -101,6 +103,12 @@
     - **PIERCING**: 투사체가 적을 관통하여 일직선상 다수 타격.
 - **버그 수정**: 데이터 로딩 오류(CSV 파싱) 및 `Start.py` 크러쉬 해결.
 
+### 2025년 12월 27일 토요일 (실제 오디오 시스템 및 자동화)
+- **상용 수준 리얼 오디오 시스템**: `aplay` 연동을 통해 터미널 환경에서도 비동기 배경음 및 효과음 재생 구현.
+- **다이내믹 드라이버**: 스킬 데이터(`SOUND_MAGIC_FIRE` 등) 및 상황(Hit, Miss, Block)에 따른 지능형 사운드 트리거.
+- **SFX Extractor Bridge**: GEMINI/Veo 등으로 생성한 영상에서 사운드를 자동 추출 및 배치하는 기술 파이프라인 구축.
+- **보스 시스템 고도화**: `maps.csv` 기반의 층별 보스 스폰 및 멀티 보스 웨이브 구현.
+
 ## 어빌리티 플래그 설명 (Ability Flags)
 
 ### 1. 스킬 플래그 (Skill Flags)
@@ -139,12 +147,20 @@
 | **RANGED** | 원거리 무기 | 일반 근접 공격 대신 사거리를 가진 공격을 수행할 수 있게 합니다. |
 | **SPLASH** | 스플래쉬 | 공격 시 대상 주변 8칸에도 50%의 피해를 입힙니다. |
 
+### 4. 사운드 플래그 (Sound Flags)
+| 플래그 | 설명 | 매핑 파일 (권장) |
+| :--- | :--- | :--- |
+| **SOUND_MAGIC_FIRE** | 화석/화염 마법 | `fire.wav` |
+| **SOUND_HEAL** | 회복 스킬 | `heal.wav` |
+| **SOUND_SWING**| 무기 휘두르기 | `swing.wav` |
+| **SOUND_ID_XXX** | 고유 사운드 ID | `skill_XXX.wav` |
+
 
 ## 일반적인 명령어
 
 -   **게임 실행**:
     ```bash
-    python3 main.py
+    python3 /home/dogsinatas/python_project/dungeon/dungeon/Start.py
     ```
 -   **저장 데이터 삭제**:
     ```bash
