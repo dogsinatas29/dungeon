@@ -171,8 +171,11 @@ def get_item_definition(item_id):
     return defs.get(item_id)
 
 def load_monster_definitions(data_path="data"):
-    """monsters.csv 파일에서 몬스터 정의 로드"""
-    return load_data_from_csv('monsters.csv', MonsterDefinition, data_path, key_field='ID')
+    """monsters.csv 및 Boss.csv 파일에서 몬스터 정의 로드"""
+    defs = load_data_from_csv('monsters.csv', MonsterDefinition, data_path, key_field='ID')
+    bosses = load_data_from_csv('Boss.csv', MonsterDefinition, data_path, key_field='ID')
+    defs.update(bosses)
+    return defs
 
 def load_skill_definitions(data_path="data"):
     """skills.csv 파일에서 스킬 정의 로드"""
