@@ -1,14 +1,7 @@
 import subprocess
 import os
 from .ecs import System
-from .events import Event, MessageEvent, SkillUseEvent
-
-class SoundEvent(Event):
-    def __init__(self, sound_type: str, message: str = ""):
-        super().__init__()
-        self.type = "SOUND"
-        self.sound_type = sound_type # e.g., 'ATTACK', 'HIT', 'MAGIC', 'CRITICAL', 'STEP', 'COIN'
-        self.message = message
+from .events import Event, MessageEvent, SkillUseEvent, SoundEvent
 
 class SoundSystem(System):
     """

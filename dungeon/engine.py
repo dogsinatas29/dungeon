@@ -20,9 +20,9 @@ from .components import (
 )
 from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
-    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem,
-    MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
+    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem
 )
+from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
 from .sound_system import SoundSystem
 from .renderer import Renderer
 from .data_manager import load_item_definitions
@@ -986,7 +986,7 @@ class Engine:
                     return False # 방향 선택 모드 자체는 턴 소모 안함
                 else:
                     # 즉시 발동형 (SELF 등)
-                    from .systems import SkillUseEvent
+                    from .events import SkillUseEvent
                     self.world.event_manager.push(SkillUseEvent(attacker_id=player_entity.entity_id, skill_name=skill_name, dx=0, dy=0))
                     return True # 턴 소모
             else:
