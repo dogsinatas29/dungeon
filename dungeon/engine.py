@@ -327,6 +327,22 @@ class Engine:
                 
                 self.world.event_manager.push(MessageEvent(f"[경고] {boss_def.name}이(가) 계단을 지키고 있습니다!"))
 
+    def _spawn_minion(self, x, y, m_id):
+        """보스 등이 소환하는 미니언 생성"""
+        if m_id not in self.monster_defs: return
+        m_def = self.monster_defs[m_id]
+        
+        minion = self.world.create_entity()
+        self.world.add_component(minion.entity_id, PositionComponent(x=x, y=y))
+        self.world.add_component(minion.entity_id, RenderComponent(char=m_def.symbol, color=m_def.color))
+        self.world.add_component(minion.entity_id, MonsterComponent(type_name=f"분노한 {m_def.name}"))
+        self.world.add_component(minion.entity_id, AIComponent(behavior=1, detection_range=20)) # Angry AI
+        
+        stats = StatsComponent(max_hp=m_def.hp, current_hp=m_def.hp, attack=m_def.attack, defense=m_def.defense)
+        stats.flags.update(m_def.flags)
+        stats.action_delay = m_def.action_delay
+        self.world.add_component(minion.entity_id, stats)
+
         # 2. 복도 스폰 추가 (10% 확률)
         for cx, cy in dungeon_map.corridors:
             # [안전지대] 시작 지점 근처(반경 15칸)는 스폰 제외
@@ -1007,6 +1023,16 @@ class Engine:
                 stats.current_hp = min(stats.max_hp, stats.current_hp + item.hp_effect)
             if item.mp_effect != 0:
                 stats.current_mp = min(stats.max_mp, stats.current_mp + item.mp_effect)
+            
+            # [VISION_UP] 횃불 효과
+            if "VISION_UP" in item.flags:
+                stats.vision_range = 15 # 시야 반경 대폭 증가
+                # 30초 후 만료를 위해 타이머 대신 TimeSystem 연동 (여기서는 단순히 플래그만 추가하고 TimeSystem에서 처리)
+                if "VISION_UP" not in stats.flags:
+                    stats.flags.add("VISION_UP")
+                    # 만료 시간을 StatsComponent에 저장 (초 단위)
+                    stats.vision_expires_at = time.time() + 30.0
+                msg += " 어둠이 걷히며 주변이 환해집니다!"
                 
             hp_recovered = stats.current_hp - old_hp
             if hp_recovered > 0:

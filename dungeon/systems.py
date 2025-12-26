@@ -413,6 +413,19 @@ class MonsterAISystem(System):
                 # 행동 수행 시간 기록
                 stats.last_action_time = current_time
 
+            # [BOSS 전용] 보스 소환 및 특수 패턴 (체력 50% 이하 시 1회 소환)
+            if "BOSS" in stats.flags and stats.current_hp < stats.max_hp * 0.5:
+                if not hasattr(ai, 'has_summoned') or not ai.has_summoned:
+                    ai.has_summoned = True
+                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}가 지원군을 부릅니다!"))
+                    # 주변에 미니언 소환 (2-3마리)
+                    for _ in range(random.randint(2, 3)):
+                        mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
+                        # 단순화: 엔진의 몬스터 생성 로직 일부 재사용 또는 소환 비호출
+                        # 여기서는 엔진에 소환 요청을 보내는 이벤트를 만들거나 직접 엔진 메서드 호출
+                        if hasattr(self.world.engine, '_spawn_minion'):
+                            self.world.engine._spawn_minion(mx, my, "GOBLIN")
+
 
 class CombatSystem(System):
     """엔티티 간 충돌 시 전투(데미지 계산)를 처리합니다."""
@@ -1348,6 +1361,23 @@ class TimeSystem(System):
         # self.regen_timer += dt ... 로직 삭제
 
         # 1. 스턴(Stun) 시간 감액
+        stun_entities = self.world.get_entities_with_components({StunComponent})
+        for entity in stun_entities:
+            stun = entity.get_component(StunComponent)
+            stun.duration -= dt
+            if stun.duration <= 0:
+                entity.remove_component(StunComponent)
+                self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 스턴이 해제되었습니다."))
+
+        # 2. 횃불(VISION_UP) 시간 감액
+        player_entity = self.world.get_player_entity()
+        if player_entity:
+            stats = player_entity.get_component(StatsComponent)
+            if stats and "VISION_UP" in stats.flags:
+                if current_time >= stats.vision_expires_at:
+                    stats.vision_range = 5
+                    stats.flags.remove("VISION_UP")
+                    self.world.event_manager.push(MessageEvent("횃불이 모두 타버려 다시 어두워졌습니다."))
         stun_entities = self.world.get_entities_with_components({StunComponent})
         for entity in list(stun_entities): # 리스트 복사로 안전하게 순회
             stun = entity.get_component(StunComponent)
