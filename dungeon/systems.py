@@ -615,11 +615,14 @@ class CombatSystem(System):
             # 보상이 없는 경우 (이미 루팅된 시체 등)
             corpse = loot_entity.get_component(CorpseComponent)
             chest = loot_entity.get_component(ChestComponent)
+            
             source = "시체"
             if chest: source = "보물상자"
             elif not corpse: source = "아이템"
+            elif corpse and corpse.original_name: source = f"{corpse.original_name}의 시체"
             
-            self.event_manager.push(MessageEvent(f"{source}에 아무것도 없습니다."))
+            # 사용자의 요청에 따른 메시지 형식: "[대상]을(를) 살펴봅니다... 아무것도 발견하지 못했습니다."
+            self.event_manager.push(MessageEvent(f"{source}를 살펴봅니다... 아무것도 발견하지 못했습니다."))
 
     def _get_element_from_flags(self, flags):
         """플래그 집합에서 속성 찾기"""
