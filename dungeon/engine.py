@@ -16,7 +16,7 @@ from .components import (
     PositionComponent, RenderComponent, StatsComponent, InventoryComponent, 
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent,
-    StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent
+    StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent, TrapComponent
 )
 from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
