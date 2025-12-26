@@ -1,10 +1,13 @@
-# dungeon/engine.py - 게임의 실행 흐름을 관리하는 메인 모듈
-
-import os
-import time
 import random
-import readchar # readchar 임포트 추가
-from typing import List, Dict, Tuple, Any
+import time
+import os
+import sys
+import select
+import json
+import termios
+import tty
+import readchar
+from typing import Dict, List, Set, Type, Optional, Any
 from .map import DungeonMap
 
 # 필요한 모듈 임포트
@@ -12,9 +15,14 @@ from .ecs import World, EventManager, initialize_event_listeners
 from .components import (
     PositionComponent, RenderComponent, StatsComponent, InventoryComponent, 
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
-    AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent
+    AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent,
+    StunComponent, SkillEffectComponent, HitFlashComponent
 )
-from .systems import InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
+from .systems import (
+    InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
+    TimeSystem, RegenerationSystem,
+    MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
+)
 from .renderer import Renderer
 from .data_manager import load_item_definitions
 from .constants import (
@@ -36,6 +44,7 @@ class Engine:
         self.is_running = False
         self.world = World(self) # World 초기화 시 Engine 자신을 참조
         self.turn_number = 0
+        self.dungeon_map = None # 현재 층의 맵 인스턴스
         
         # game_data가 있고 player_name이 None이면, 저장된 데이터에서 이름 로드
         if game_data and player_name is None:
@@ -44,19 +53,25 @@ class Engine:
             self.player_name = player_name
             
         self.state = GameState.PLAYING # 초기 상태
-        self.is_attack_mode = False # 원거리 공격 모드
+        self.is_attack_mode = False # 원거리 공격/스킬 모드
+        self.active_skill_name = None # 현재 시전 준비 중인 스킬
         self.current_level = 1 # 현재 던전 층수
         self.selected_item_index = 0 # 인벤토리 선택 인덱스
         self.inventory_category_index = 0 # 0: 아이템, 1: 장비, 2: 스크롤, 3: 스킬
+        self.shop_category_index = 0 # 0: 사기, 1: 팔기
+        self.selected_shop_item_index = 0 # 상점 선택 인덱스
 
         # 렌더러 초기화
         self.renderer = Renderer() 
 
+        # 데이터 정의 로드 (항상 사용 가능하도록 __init__에서 처리)
+        from .data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions
+        self.item_defs = load_item_definitions()
+        self.skill_defs = load_skill_definitions()
+        self.monster_defs = load_monster_definitions()
+
         self._initialize_world(game_data)
         self._initialize_systems()
-        
-        # 시스템 등록 후, 이벤트 리스너를 한 번 더 초기화하여 시스템-이벤트 간 연결 완료
-        initialize_event_listeners(self.world)
 
     def _initialize_world(self, game_data=None, preserve_player=None):
         """맵, 플레이어, 몬스터 등 초기 엔티티 생성"""
@@ -76,6 +91,7 @@ class Engine:
 
         # DungeonMap 인스턴스 생성
         dungeon_map = DungeonMap(width, height, rng)
+        self.dungeon_map = dungeon_map
         map_data = dungeon_map.map_data
         
         # 1. 플레이어 엔티티 생성 (ID=1)
@@ -89,35 +105,89 @@ class Engine:
             self.world.add_component(player_entity.entity_id, p_stats)
             self.world.add_component(player_entity.entity_id, p_inv)
             self.world.add_component(player_entity.entity_id, p_level)
+        elif game_data and "entities" in game_data:
+            # 저장된 데이터에서 엔티티 복원 (플레이어 ID=1 가정)
+            player_data = game_data["entities"].get("1")
+            if player_data:
+                # StatsComponent 복원
+                stats_data = player_data.get("StatsComponent", {})
+                stats = StatsComponent(**stats_data)
+                self.world.add_component(player_entity.entity_id, stats)
+                
+                # LevelComponent 복원
+                level_data = player_data.get("LevelComponent", {})
+                level = LevelComponent(**level_data)
+                self.world.add_component(player_entity.entity_id, level)
+
+                # InventoryComponent 복원
+                inv_data = player_data.get("InventoryComponent", {})
+                # 아이템 딕셔너리 복구 (JSON 리스트를 다시 ItemDefinition 객체로)
+                restored_items = {}
+                for name, data in inv_data.get("items", {}).items():
+                    item_info = data.get("item", {})
+                    if item_info:
+                        from .data_manager import ItemDefinition
+                        item_obj = ItemDefinition(**item_info)
+                        restored_items[name] = {"item": item_obj, "qty": data.get("qty", 1)}
+                
+                # 장착 상태 복구
+                restored_equipped = {}
+                for slot, eq_data in inv_data.get("equipped", {}).items():
+                    if isinstance(eq_data, dict) and "name" in eq_data:
+                        from .data_manager import ItemDefinition
+                        restored_equipped[slot] = ItemDefinition(**eq_data)
+                    else:
+                        restored_equipped[slot] = eq_data
+
+                inv = InventoryComponent(
+                    items=restored_items,
+                    equipped=restored_equipped,
+                    item_slots=inv_data.get("item_slots"),
+                    skill_slots=inv_data.get("skill_slots"),
+                    skills=inv_data.get("skills")
+                )
+                self.world.add_component(player_entity.entity_id, inv)
+            else:
+                # 플레이어 데이터 없으면 기본값
+                self.world.add_component(player_entity.entity_id, StatsComponent(max_hp=100, current_hp=100, attack=10, defense=5, max_mp=50, current_mp=50, max_stamina=100, current_stamina=100))
+                self.world.add_component(player_entity.entity_id, LevelComponent(level=1, exp=0, exp_to_next=100, job="Novice"))
         else:
             self.world.add_component(player_entity.entity_id, StatsComponent(max_hp=100, current_hp=100, attack=10, defense=5, max_mp=50, current_mp=50, max_stamina=100, current_stamina=100))
             self.world.add_component(player_entity.entity_id, LevelComponent(level=1, exp=0, exp_to_next=100, job="Novice"))
         
-        # 샘플 아이템 추가 (UI 검증용)
-        self.item_defs = load_item_definitions()
-        item_defs = self.item_defs
-        sample_items = {}
-        if item_defs:
-            # WEAPON, ARMOR, CONSUMABLE 등 다양한 타입 준비
-            for name, item in item_defs.items():
-                sample_items[name] = {'item': item, 'qty': 1}
+        # 기본 스택 및 스킬 설정
+        if not preserve_player and (not game_data or "entities" not in game_data):
+            # 샘플 아이템 추가 (새 게임 시에만)
+            sample_items = {}
+            if self.item_defs:
+                for name, item in self.item_defs.items():
+                    sample_items[name] = {'item': item, 'qty': 1}
+            
+            equipped = {slot: None for slot in ["머리", "몸통", "장갑", "신발", "손1", "손2", "액세서리1", "액세서리2"]}
+            if "가죽 갑옷" in sample_items:
+                equipped["몸통"] = sample_items["가죽 갑옷"]["item"]
+            if "낡은 검" in sample_items:
+                equipped["손1"] = sample_items["낡은 검"]["item"]
+            
+            # 스킬 슬롯 일부 비워두기 (Lv1만 등록, 나머지는 사용자가 직접)
+            self.world.add_component(player_entity.entity_id, InventoryComponent(
+                items=sample_items, 
+                equipped=equipped,
+                item_slots=["체력 물약", "마력 물약", "화염 스크롤", "순간 이동 스크롤", "마커"],
+                skill_slots=["기본 공격", "파이어볼 Lv1", None, None, None],
+                skills=["기본 공격", "파이어볼 Lv1", "파이어볼 Lv2", "파이어볼 Lv3", "힐"]
+            ))
         
-        # 장착 아이템 설정 (객체 참조로 변경)
-        equipped = {slot: None for slot in ["머리", "몸통", "장갑", "신발", "손1", "손2", "액세서리1", "액세서리2"]}
-        if "가죽 갑옷" in sample_items:
-            equipped["몸통"] = sample_items["가죽 갑옷"]["item"]
-        if "낡은 검" in sample_items:
-            equipped["손1"] = sample_items["낡은 검"]["item"]
-        if "힘의 반지" in sample_items:
-            equipped["액세서리1"] = sample_items["힘의 반지"]["item"]
-
-        self.world.add_component(player_entity.entity_id, InventoryComponent(
-            items=sample_items, 
-            equipped=equipped,
-            item_slots=["체력 물약", "마력 물약", "화염 스크롤", "순간 이동 스크롤", "마커"],
-            skill_slots=["기본 공격", "파이어볼", "힐", None, None],
-            skills=["기본 공격", "파이어볼", "힐"]
-        ))
+        # 테스트용 스킬북 아이템 추가
+        inv = player_entity.get_component(InventoryComponent)
+        skill_books = ["파이어볼 스킬북 Lv1", "파이어볼 스킬북 Lv2", "파이어볼 스킬북 Lv3", "휠 윈드 스킬북"]
+        for book_name in skill_books:
+            if book_name in self.item_defs:
+                inv.items[book_name] = {'item': self.item_defs[book_name], 'qty': 1}
+        
+        # 휠 윈드를 배운 상태로 시작 (테스트를 위해)
+        if "휠 윈드" not in inv.skills:
+            inv.skills.append("휠 윈드")
         
         # 초기 스탯 계산 (장비 보너스 적용)
         self._recalculate_stats()
@@ -139,39 +209,72 @@ class Engine:
         all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
         
         for i, room in enumerate(dungeon_map.rooms[1:]): # 첫 번째 방(플레이어 시작) 제외
-            # 방의 중앙에 몬스터 배치
-            monster_x, monster_y = room.center
-            monster_entity = self.world.create_entity()
-            self.world.add_component(monster_entity.entity_id, PositionComponent(x=monster_x, y=monster_y))
-            
-            # 몬스터 속성 결정 (랜덤)
-            monster_element = random.choice(all_elements)
-            color = ELEMENT_COLORS.get(monster_element, "white")
-            
-            # AI 패턴 결정 (0: 정지, 1: 도망, 2: 추적)
-            behavior = i % 3
-            type_name = "Goblin"
-            
-            # 능력치 초기화 (기본값)
-            max_hp, atk, df = 30, 5, 2
-            
-            if behavior == AIComponent.CHASE: 
-                type_name = "Aggressive Goblin"
-                atk = 8  # 추적형은 공격력이 높음
-                if monster_element == ELEMENT_FIRE: atk += 2 # 불 속성 공격성 추가
-            elif behavior == AIComponent.FLEE: 
-                type_name = "Cowardly Goblin"
-                df = 5   # 도망형은 방어력이 높음
-            else:
-                type_name = "Lazy Goblin"
-                max_hp = 50 # 정지형은 맷집이 좋음
-            
-            self.world.add_component(monster_entity.entity_id, RenderComponent(char='g', color=color))
-            self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
-            self.world.add_component(monster_entity.entity_id, AIComponent(behavior=behavior, detection_range=8))
-            self.world.add_component(monster_entity.entity_id, StatsComponent(
-                max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=monster_element
-            ))
+            # 1. 방당 개체수 상향 (3~7마리)
+            num_monsters = random.randint(3, 7)
+            for _ in range(num_monsters):
+                # 방 안의 랜덤 위치
+                mx = random.randint(room.x1 + 1, room.x2 - 1)
+                my = random.randint(room.y1 + 1, room.y2 - 1)
+                
+                # 중앙 방에 이미 생성된 몬스터나 장애물과 겹침 방지 (단순화)
+                monster_entity = self.world.create_entity()
+                self.world.add_component(monster_entity.entity_id, PositionComponent(x=mx, y=my))
+                
+                # 데이터 기반 몬스터 스폰
+                if self.monster_defs:
+                    m_def = random.choice(list(self.monster_defs.values()))
+                    type_name = m_def.name
+                    max_hp, atk, df = m_def.hp, m_def.attack, m_def.defense
+                    char = m_def.symbol
+                    monster_delay = m_def.action_delay
+                    m_flags = m_def.flags.copy()
+                else:
+                    type_name = "고블린"
+                    max_hp, atk, df = 20, 5, 2
+                    char = 'g'
+                    monster_delay = 1.0
+                    m_flags = set()
+
+                monster_element = random.choice(all_elements)
+                color = ELEMENT_COLORS.get(monster_element, "white")
+                if monster_element != "NONE":
+                    m_flags.add(monster_element.upper())
+
+                behavior = random.randint(0, 2)
+                
+                self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=color))
+                self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
+                self.world.add_component(monster_entity.entity_id, AIComponent(behavior=behavior, detection_range=8))
+                
+                stats = StatsComponent(max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=monster_element)
+                stats.flags.update(m_flags)
+                stats.action_delay = monster_delay
+                self.world.add_component(monster_entity.entity_id, stats)
+
+        # 2. 복도 스폰 추가 (10% 확률)
+        for cx, cy in dungeon_map.corridors:
+            if random.random() < 0.1:
+                monster_entity = self.world.create_entity()
+                self.world.add_component(monster_entity.entity_id, PositionComponent(x=cx, y=cy))
+                
+                if self.monster_defs:
+                    # 복도에는 주로 약한 몬스터나 슬라임 등 배치 (여기선 랜덤)
+                    m_def = random.choice(list(self.monster_defs.values()))
+                    type_name, max_hp, atk, df, char, m_delay, m_flags = m_def.name, m_def.hp, m_def.attack, m_def.defense, m_def.symbol, m_def.action_delay, m_def.flags.copy()
+                else:
+                    type_name, max_hp, atk, df, char, m_delay, m_flags = "슬라임", 15, 3, 0, 's', 1.0, set()
+
+                m_el = random.choice(all_elements)
+                self.world.add_component(monster_entity.entity_id, RenderComponent(char=char, color=ELEMENT_COLORS.get(m_el, "white")))
+                self.world.add_component(monster_entity.entity_id, MonsterComponent(type_name=type_name))
+                self.world.add_component(monster_entity.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=5))
+                stats = StatsComponent(max_hp=max_hp, current_hp=max_hp, attack=atk, defense=df, element=m_el)
+                stats.flags.update(m_flags)
+                stats.action_delay = m_delay
+                self.world.add_component(monster_entity.entity_id, stats)
+
+        # 5. 방 구석에 보물상자 및 기타 오브젝트...
+        for room in dungeon_map.rooms[1:]:
 
             # 5. 방 구석에 보물상자 배치 (30% 확률)
             if random.random() < 0.3:
@@ -187,106 +290,267 @@ class Engine:
                 
                 # 랜덤 아이템 1~2개 포함
                 loot_items = []
-                if item_defs:
-                    random_keys = random.sample(list(item_defs.keys()), min(len(item_defs), 2))
+                if self.item_defs:
+                    random_keys = random.sample(list(self.item_defs.keys()), min(len(self.item_defs), 2))
                     for k in random_keys:
-                        loot_items.append({'item': item_defs[k], 'qty': 1})
+                        loot_items.append({'item': self.item_defs[k], 'qty': 1})
                 
                 self.world.add_component(chest_entity.entity_id, LootComponent(items=loot_items, gold=random.randint(10, 50)))
 
-            # 6. 첫 번째 방(시작 방) 근처에 상인 배치 (50% 확률)
-            if i == 0 and random.random() < 0.5:
+            # 6. 첫 번째 방(시작 방) 근처에 상인 배치 (100% 확률로 보장)
+            if i == 0:
                 shop_x, shop_y = room.x1 + 2, room.y1 + 2 # 구석 근처
                 shop_entity = self.world.create_entity()
                 self.world.add_component(shop_entity.entity_id, PositionComponent(x=shop_x, y=shop_y))
                 self.world.add_component(shop_entity.entity_id, RenderComponent(char='S', color='magenta'))
-                self.world.add_component(shop_entity.entity_id, ShopComponent(items=[
-                    {'item': item_defs.get('체력 물약'), 'price': 20},
-                    {'item': item_defs.get('마력 물약'), 'price': 20},
-                    {'item': item_defs.get('화염 스크롤'), 'price': 50}
-                ]))
-                self.world.add_component(shop_entity.entity_id, MonsterComponent(type_name="상인")) # 충돌 감지를 위해 MonsterComponent 활용 가능
+                
+                # 상점 품목 다양화
+                shop_items = [
+                    {'item': self.item_defs.get('체력 물약'), 'price': 20},
+                    {'item': self.item_defs.get('마력 물약'), 'price': 20},
+                    {'item': self.item_defs.get('화염 스크롤'), 'price': 50},
+                    {'item': self.item_defs.get('가죽 갑옷'), 'price': 100},
+                    {'item': self.item_defs.get('낡은 검'), 'price': 80},
+                ]
+                # 유효한 아이템만 필터링 (정의되지 않은 것 제외)
+                shop_items = [si for si in shop_items if si['item'] is not None]
+                
+                self.world.add_component(shop_entity.entity_id, ShopComponent(items=shop_items))
+                self.world.add_component(shop_entity.entity_id, MonsterComponent(type_name="상인"))
 
     def _initialize_systems(self):
         """시스템 등록 (실행 순서가 중요함)"""
+        self.time_system = TimeSystem(self.world)
         self.input_system = InputSystem(self.world)
         self.monster_ai_system = MonsterAISystem(self.world)
         self.movement_system = MovementSystem(self.world)
         self.combat_system = CombatSystem(self.world)
+        self.regeneration_system = RegenerationSystem(self.world)
         self.render_system = RenderSystem(self.world)
         
-        # 2. 시스템 순서 등록: 입력 -> AI -> 이동 -> 전투(이벤트 기반) -> 렌더링
+        # 2. 시스템 순서 등록: 시간 -> 입력 -> AI -> 이동 -> 전투 -> 회복 -> 렌더링
         systems = [
+            self.time_system,
             self.input_system,
             self.monster_ai_system,
             self.movement_system,
             self.combat_system,
+            self.regeneration_system,
             self.render_system
         ]
         for system in systems:
             self.world.add_system(system)
             
-        # 3. 추가적인 전역 이벤트 리스너 등록 (Engine 자체 핸들러 등)
-        self.world.event_manager.register(MapTransitionEvent, self)
-        self.world.event_manager.register(ShopOpenEvent, self)
-
         # 4. 모든 시스템의 리스너 초기화 헬퍼 호출
         initialize_event_listeners(self.world)
 
-    def _get_input(self) -> str:
-        """사용자 입력을 받아 반환 (readchar 사용)"""
-        # input() 대신 readchar.readkey()를 사용하여 Enter 없이 즉시 입력 처리
-        return readchar.readkey()
+        # 5. 추가적인 전역 이벤트 리스너 등록 (Engine 자체 핸들러 등)
+        # initialize_event_listeners가 리스트를 초기화하므로 그 이후에 수동 등록해야 함
+        self.world.event_manager.register(MapTransitionEvent, self)
+        self.world.event_manager.register(ShopOpenEvent, self)
 
-    # dungeon/engine.py 내 Engine.run 메서드 수정 (주요 부분만)
+    def _get_input(self) -> Optional[str]:
+        """사용자 입력을 받음 (os.read를 사용한 저수준 정밀 파싱)"""
+        fd = sys.stdin.fileno()
+        # 데이터가 있는지 확인
+        dr, dw, de = select.select([fd], [], [], 0.005)
+        if not dr:
+            return None
 
-    def run(self):
-        """메인 게임 루프"""
-        self.is_running = True
-        
-        # 첫 렌더링
-        self._render()
-        
-        while self.is_running:
-            # 1. 사용자 입력 처리
-            action = self._get_input()
+        # 첫 번째 바이트 읽기
+        try:
+            char_bytes = os.read(fd, 1)
+            if not char_bytes:
+                return None
+            char = char_bytes.decode('utf-8', errors='ignore')
             
-            if self.state == GameState.PLAYING:
-                if action == 'i' or action == 'I':
-                    self.state = GameState.INVENTORY
-                    self._render()
-                    continue
-                
-                # 단축키 처리 (1~5번 아이템, 6~0번 스킬)
-                if action in "1234567890":
-                    self._trigger_quick_slot(action)
-                    self._render()
-                    continue
+            # 이스케이프 시퀀스 시작 감지
+            if char == '\x1b':
+                seq = char
+                # 후속 데이터가 있는지 확인 (연쇄적으로 빠르게 읽음)
+                while True:
+                    dr, dw, de = select.select([fd], [], [], 0.005)
+                    if dr:
+                        next_bytes = os.read(fd, 1)
+                        if not next_bytes: break
+                        next_char = next_bytes.decode('utf-8', errors='ignore')
+                        seq += next_char
+                        # 방향키 등 일반적인 이스케이프 시퀀스 종료 문자
+                        if next_char in 'ABCDHFE~RT':
+                            break
+                        if len(seq) > 10: break
+                    else:
+                        break
+                return seq
+            return char
+        except:
+            return None
 
-                self.turn_number += 1
+    def run(self) -> str:
+        """메인 게임 루프. 종료 시 결과를 문자열로 반환합니다."""
+        self.is_running = True
+        game_result = "QUIT"
+        
+        # 터미널 설정 저장 및 cbreak 모드 전환
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        
+        try:
+            tty.setcbreak(fd)
+            # 커서 숨기기
+            sys.stdout.write("\033[?25l")
+            sys.stdout.flush()
+            
+            # 첫 렌더링
+            self._render()
+            
+            last_frame_time = time.time()
+            target_fps = 20
+            frame_duration = 1.0 / target_fps
+            
+            while self.is_running:
+                current_time = time.time()
+                elapsed_since_frame = current_time - last_frame_time
                 
-                # InputSystem에서 턴 소모 여부 결정
-                turn_spent = self.input_system.handle_input(action)
+                # 1. 사용자 입력 처리 (비차단)
+                action = self._get_input()
                 
-                if turn_spent:
-                    # 2. 게임 상태 업데이트 (모든 시스템 순차 실행)
-                    # InputSystem은 handle_input에서 이미 처리했으므로 제외하고 실행
-                    for system in self.world._systems:
-                        if system is not self.input_system and system is not None:
-                            system.process()
+                if action:
+                    # [DEBUG] 로그에 입력된 키를 남김 (피드백용)
+                    self.world.event_manager.push(MessageEvent(f"Debug Key: {repr(action)}"))
                     
-                    # 3. 이벤트 처리 (충돌 메시지 등 처리)
+                    # Ctrl+C 처리 (\x03)
+                    if action == '\x03':
+                        raise KeyboardInterrupt
+
+                    action_lower = action.lower()
+
+                    if self.state == GameState.PLAYING:
+                        if action_lower == 'i':
+                            self.state = GameState.INVENTORY
+                            self.selected_item_index = 0
+                            self._render()
+                            continue
+                        
+                        # InputSystem은 이제 쿨다운을 자체적으로 관리하며, 
+                        # 입력이 들어왔을 때만 해당 입력을 큐에 넣거나 즉시 처리함.
+                        self.input_system.handle_input(action)
+                        
+                        # 입력 직후 즉시 렌더링
+                        self._render()
+                        last_frame_time = current_time
+                    
+                    elif self.state == GameState.INVENTORY:
+                        if action_lower == 'i':
+                            self.state = GameState.PLAYING
+                        else:
+                            self._handle_inventory_input(action)
+                        self._render()
+                        last_frame_time = current_time
+                    elif self.state == GameState.SHOP:
+                        if action_lower == 'q':
+                            self.state = GameState.PLAYING
+                        else:
+                            self._handle_shop_input(action)
+                        self._render()
+                        last_frame_time = current_time
+                
+                # 2. 실시간 로직 처리 (입력 여부와 관계없이 매 프레임 실행)
+                if self.state == GameState.PLAYING:
+                    self.turn_number += 1 # 이제 turn_number는 전역 틱(Tick) 카운터로 작동
+                    
+                    # [중요] 시스템 실행 전 이벤트 처리
                     self.world.event_manager.process_events()
                     
-                    # 4. 상태 변경 후 화면 다시 그리기
-                    self._render()
+                    # 모든 시스템 순차 실행 (InputSystem은 이미 위에서 입력을 받았으므로 process에서 처리 가능)
+                    for system in self.world._systems:
+                        if system is not None:
+                            system.process()
+                    
+                    # [중요] 시스템 실행 후 이벤트 처리
+                    self.world.event_manager.process_events()
+
+                    # 플레이어 사망 체크
+                    player_entity = self.world.get_player_entity()
+                    if player_entity:
+                        stats = player_entity.get_component(StatsComponent)
+                        if stats and stats.current_hp <= 0:
+                            game_result = "DEATH"
+                            self.is_running = False
+
+                # 3. 주기적 렌더링 (Idle Animation 및 실시간 변화 반영)
+                if elapsed_since_frame >= frame_duration:
+                    if self.state == GameState.PLAYING:
+                        self._render()
+                    last_frame_time = current_time
+                
+                time.sleep(0.002)
+
+        except KeyboardInterrupt:
+            game_result = "QUIT"
+        finally:
+            # 터미널 설정 및 커서 복구
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            sys.stdout.write("\033[?25h")
+            sys.stdout.write("\033[0m\n")
+            sys.stdout.flush()
+        
+        if game_result != "DEATH":
+            self._save_game()
             
-            elif self.state == GameState.INVENTORY:
-                self._handle_inventory_input(action)
-                self._render()
-            elif self.state == GameState.SHOP:
-                self._handle_shop_input(action)
-                self._render()
+        return game_result
+
+
+    def _get_entity_name(self, entity):
+        """엔티티의 이름을 컴포넌트나 ID 기반으로 반환"""
+        if entity.entity_id == 1:
+            return self.player_name
+        
+        monster_comp = entity.get_component(MonsterComponent)
+        if monster_comp:
+            return monster_comp.type_name
+            
+        shop_comp = entity.get_component(ShopComponent)
+        if shop_comp:
+            return "상인"
+            
+        return f"엔티티#{entity.entity_id}"
+
+    def _save_game(self):
+        """현재 게임 상태를 저장합니다."""
+        from .data_manager import save_game_data
+        
+        # Engine 상태를 JSON으로 변환 가능한 딕셔너리로 추출 (간소화된 예시)
+        # 실제로는 모든 엔티티와 컴포넌트를 저장해야 함
+        # 여기서는 Start.py에서 사용하는 형식을 유지하려고 노력함
+        
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+
+        # ECS 상태 저장 로직 (ecs.World.to_dict()가 있다면 좋겠지만 일단 수동 구성)
+        entities_data = {}
+        for e_id, entity in self.world._entities.items():
+            comp_data = {}
+            for comp_type, comp in entity._components.items():
+                if hasattr(comp, 'to_dict'):
+                    comp_data[comp_type.__name__] = comp.to_dict()
+                else:
+                    # to_dict가 없는 경우 기본 속성들만 저장 (간이 구현)
+                    # 실제 프로젝트의 컴포넌트 구조에 맞춰야 함
+                    comp_data[comp_type.__name__] = {k: v for k, v in vars(comp).items() if not k.startswith('_')}
+            entities_data[str(e_id)] = comp_data
+
+        game_state_data = {
+            "entities": entities_data,
+            "player_specific_data": {
+                "name": self.player_name,
+                # 필요한 다른 플레이어 데이터...
+            },
+            "current_level": self.current_level,
+            "turn_number": self.turn_number
+        }
+        
+        save_game_data(game_state_data, self.player_name)
                 
     def handle_map_transition_event(self, event: MapTransitionEvent):
         """맵 이동 이벤트 처리: 새로운 층 생성"""
@@ -311,31 +575,89 @@ class Engine:
         self.state = GameState.SHOP
         self.active_shop_id = event.shopkeeper_id
         self.selected_shop_item_index = 0
+        self.shop_category_index = 0 # 기본 '사기' 탭
         self.world.event_manager.push(MessageEvent("상점에 오신 것을 환영합니다!"))
 
     def _handle_shop_input(self, action: str):
-        """상점 상태에서의 입력 처리"""
-        if action == readchar.key.ESC or action == 'q':
-            self.state = GameState.PLAYING
-            return
-
+        """상점 상태에서의 입력 처리 (사기/팔기 탭 지원)"""
         shopkeeper = self.world.get_entity(self.active_shop_id)
-        if not shopkeeper:
+        player_entity = self.world.get_player_entity()
+        if not shopkeeper or not player_entity:
             self.state = GameState.PLAYING
             return
 
         shop_comp = shopkeeper.get_component(ShopComponent)
-        if not shop_comp: return
+        inv_comp = player_entity.get_component(InventoryComponent)
+        if not shop_comp or not inv_comp: return
 
-        item_count = len(shop_comp.items)
+        # 1. 탭 전환 (좌우 키)
+        if action in [readchar.key.LEFT, '\x1b[D']:
+            self.shop_category_index = (self.shop_category_index - 1) % 2
+            self.selected_shop_item_index = 0
+            return
+        elif action in [readchar.key.RIGHT, '\x1b[C']:
+            self.shop_category_index = (self.shop_category_index + 1) % 2
+            self.selected_shop_item_index = 0
+            return
 
-        if action == readchar.key.UP:
+        # 2. 아이템 목록 필터링
+        items_to_display = []
+        if self.shop_category_index == 0: # 사기
+            items_to_display = shop_comp.items
+        else: # 팔기 (인벤토리 아이템 중 장착되지 않은 것)
+            # 모든 소지품 중 장착되지 않은 아이템만 추출
+            for name, data in inv_comp.items.items():
+                is_equipped = any(eq == data['item'] for eq in inv_comp.equipped.values())
+                if not is_equipped:
+                    # 판매가는 원가의 약 25~50% (여기선 단순 10G 또는 고정가)
+                    sell_price = 10 # 기본 판매가
+                    items_to_display.append({'item': data['item'], 'price': sell_price, 'qty': data['qty']})
+
+        item_count = len(items_to_display)
+
+        # 3. 위아래 이동 및 실행
+        if action in [readchar.key.UP, '\x1b[A']:
              self.selected_shop_item_index = max(0, self.selected_shop_item_index - 1)
-        elif action == readchar.key.DOWN:
-             self.selected_shop_item_index = min(item_count - 1, self.selected_shop_item_index + 1)
+        elif action in [readchar.key.DOWN, '\x1b[B']:
+             if item_count > 0:
+                 self.selected_shop_item_index = min(item_count - 1, self.selected_shop_item_index + 1)
         elif action == readchar.key.ENTER or action == '\r' or action == '\n':
-             # 아이템 구매 로직
-             self._buy_item(shop_comp.items[self.selected_shop_item_index])
+             if items_to_display and 0 <= self.selected_shop_item_index < len(items_to_display):
+                 target = items_to_display[self.selected_shop_item_index]
+                 if self.shop_category_index == 0:
+                     self._buy_item(target)
+                 else:
+                     self._sell_item(target)
+
+    def _sell_item(self, target_data: Dict):
+        """아이템 판매 로직"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+
+        stats = player_entity.get_component(StatsComponent)
+        inv = player_entity.get_component(InventoryComponent)
+        if not stats or not inv: return
+
+        item = target_data['item']
+        price = target_data['price']
+
+        # 인벤토리에서 아이템 찾기
+        if item.name in inv.items:
+            inv.items[item.name]['qty'] -= 1
+            stats.gold += price
+            self.world.event_manager.push(MessageEvent(f"{item.name}을(를) {price} 골드에 판매했습니다."))
+            
+            if inv.items[item.name]['qty'] <= 0:
+                del inv.items[item.name]
+                # 퀵슬롯에서도 제거
+                for i in range(len(inv.item_slots)):
+                    if inv.item_slots[i] == item.name:
+                        inv.item_slots[i] = None
+            
+            # 인덱스 범위 보정
+            self.selected_shop_item_index = max(0, self.selected_shop_item_index - 1)
+        else:
+            self.world.event_manager.push(MessageEvent("판매할 아이템이 없습니다."))
 
     def _buy_item(self, shop_item: Dict):
         """아이템 구매 로직"""
@@ -362,10 +684,6 @@ class Engine:
 
     def _handle_inventory_input(self, action):
         """인벤토리 상태에서의 입력 처리"""
-        if action == 'i' or action == 'I' or action == readchar.key.ESC:
-            self.state = GameState.PLAYING
-            return
-        
         player_entity = self.world.get_player_entity()
         if not player_entity: return
 
@@ -373,29 +691,38 @@ class Engine:
         inv = player_entity.get_component(InventoryComponent)
         if not inv: return
 
+        # 스턴 상태 확인
+        stun = player_entity.get_component(StunComponent)
+        if stun:
+            # 인벤토리 보기는 가능 (action 'i' 등은 상위에서 처리됨)
+            # 여기서는 아이템 사용/버리기 등 주요 액션이 일어나는 시점에 체크
+            if action not in [readchar.key.UP, readchar.key.DOWN, readchar.key.LEFT, readchar.key.RIGHT, '\x1b[A', '\x1b[B', '\x1b[D', '\x1b[C', 'i', 'I']:
+                self.world.event_manager.push(MessageEvent("몸이 움직이지 않아 아이템을 조작할 수 없습니다!"))
+                return
+
         # 1. 현재 카테고리에 해당하는 아이템 필터링
         filtered_items = []
-        if self.inventory_category_index == 0: # 아이템 (소모품)
-            filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type == 'CONSUMABLE']
+        if self.inventory_category_index == 0: # 아이템 (소모품/스킬북)
+            filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
         elif self.inventory_category_index == 1: # 장비
             filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type in ['WEAPON', 'ARMOR']]
         elif self.inventory_category_index == 2: # 스크롤
             filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type == 'SCROLL']
         elif self.inventory_category_index == 3: # 스킬
-            filtered_items = [(s, {'item_name': s}) for s in inv.skills]
+            filtered_items = [(s, {'item': type('obj', (object,), {'name': s})(), 'qty': 1}) for s in inv.skills]
 
         item_count = len(filtered_items)
 
         # 2. 내비게이션 처리
-        if action == readchar.key.UP:
+        if action in [readchar.key.UP, '\x1b[A']:
              self.selected_item_index = max(0, self.selected_item_index - 1)
-        elif action == readchar.key.DOWN:
+        elif action in [readchar.key.DOWN, '\x1b[B']:
              if item_count > 0:
                  self.selected_item_index = min(item_count - 1, self.selected_item_index + 1)
-        elif action == readchar.key.LEFT:
+        elif action in [readchar.key.LEFT, '\x1b[D']:
              self.inventory_category_index = (self.inventory_category_index - 1) % 4
              self.selected_item_index = 0
-        elif action == readchar.key.RIGHT:
+        elif action in [readchar.key.RIGHT, '\x1b[C']:
              self.inventory_category_index = (self.inventory_category_index + 1) % 4
              self.selected_item_index = 0
         elif action == readchar.key.ENTER or action == '\r' or action == '\n' or action == 'e' or action == 'E':
@@ -415,7 +742,12 @@ class Engine:
                      else:
                          self._use_item(item_id, item_data) 
                  elif self.inventory_category_index == 3: # 스킬
-                     self._assign_quick_slot(item_id, "SKILL")
+                     if action == 'e' or action == 'E' or action == readchar.key.ENTER or action == '\r' or action == '\n':
+                         # E키 또는 ENTER 입력 시 퀵슬롯 등록/해제 (Toggle)
+                         self._assign_quick_slot(item_id, "SKILL")
+                     elif action == 'x' or action == 'X':
+                         # X키 입력 시 스킬 잊기
+                         self._forget_skill(item_id)
 
     def _assign_quick_slot(self, name, category):
         """이름을 기반으로 아이템/스킬을 적절한 퀵슬롯에 등록하거나 해제 (Toggle)"""
@@ -453,6 +785,12 @@ class Engine:
         inv = player_entity.get_component(InventoryComponent)
         if not inv: return
 
+        # 스턴 상태 확인
+        stun = player_entity.get_component(StunComponent)
+        if stun:
+            self.world.event_manager.push(MessageEvent("몸이 움직이지 않아 퀵슬롯을 사용할 수 없습니다!"))
+            return
+
         num = int(key)
         if 1 <= num <= 5: # 아이템 슬롯 (1~5)
             idx = num - 1
@@ -469,21 +807,43 @@ class Engine:
                 
                 if found_data:
                     self._use_item(found_id, found_data)
+                    return True # 턴 소모
                 else:
                     self.world.event_manager.push(MessageEvent(f"{item_name}을(를) 인벤토리에서 찾을 수 없습니다."))
+                    return False
             else:
                 self.world.event_manager.push(MessageEvent(f"{num}번 퀵슬롯이 비어있습니다."))
+                return False
         
         else: # 스킬 슬롯 (6,7,8,9,0)
             # 0번은 10번 슬롯 (index 4)
             idx = 4 if num == 0 else num - 6
             skill_name = inv.skill_slots[idx]
             if skill_name:
-                self.world.event_manager.push(MessageEvent(f"{skill_name} 스킬을 사용합니다! (시스템 준비 중)"))
-                # TODO: 스킬 시스템 연동 (MP 소모, 효과 등)
+                skill = self.skill_defs.get(skill_name)
+                if not skill:
+                    # 만약 DB에 없다면 (샌드박스 등의 하드코딩된 이름일 경우)
+                    # 샌드박스용 더미 객체 생성 혹은 로그 출력
+                    self.world.event_manager.push(MessageEvent(f"{skill_name} 스킬 데이터가 없습니다."))
+                    return
+
+                # 스킬 타입에 따른 처리
+                if skill.subtype in ["PROJECTILE", "AREA"] and skill.range > 0:
+                    # 방향 선택 모드 진입
+                    self.is_attack_mode = True
+                    self.active_skill_name = skill_name
+                    self.world.event_manager.push(MessageEvent(f"[{skill_name}] 방향을 선택하세요..."))
+                    return False # 방향 선택 모드 자체는 턴 소모 안함
+                else:
+                    # 즉시 발동형 (SELF 등)
+                    from .systems import SkillUseEvent
+                    self.world.event_manager.push(SkillUseEvent(attacker_id=player_entity.entity_id, skill_name=skill_name, dx=0, dy=0))
+                    return True # 턴 소모
             else:
                 slot_num = 10 if num == 0 else num
                 self.world.event_manager.push(MessageEvent(f"{slot_num}번 스킬 슬롯이 비어있습니다."))
+                return False
+        return False
 
     def _use_item(self, item_id, item_data):
         """소모품 아이템 사용"""
@@ -500,17 +860,34 @@ class Engine:
         old_hp = stats.current_hp
         old_mp = stats.current_mp
         
-        if item.hp_effect != 0:
-            stats.current_hp = min(stats.max_hp, stats.current_hp + item.hp_effect)
-        if item.mp_effect != 0:
-            stats.current_mp = min(stats.max_mp, stats.current_mp + item.mp_effect)
-            
-        hp_recovered = stats.current_hp - old_hp
-        
-        # 메시지 추가
         msg = f"{item.name}을(를) 사용했습니다."
-        if hp_recovered > 0:
-            msg += f" (HP {hp_recovered} 회복)"
+
+        if item.type == "SKILLBOOK":
+            skill_to_learn = item.name.replace(" 스킬북", "").strip()
+            # 레벨 정보 제거 (예: 파이어볼 Lv1 -> 파이어볼)
+            import re
+            skill_base_name = re.sub(r' Lv\d+', '', skill_to_learn)
+            
+            if skill_base_name in inv.skills:
+                # 이미 배운 스킬이면 레벨업
+                old_level = inv.skill_levels.get(skill_base_name, 1)
+                new_level = old_level + 1
+                inv.skill_levels[skill_base_name] = new_level
+                msg = f"'{skill_base_name}' 스킬의 숙련도가 높아졌습니다! (Lv.{old_level} -> Lv.{new_level})"
+            else:
+                # 새로 배우는 스킬
+                inv.skills.append(skill_base_name)
+                inv.skill_levels[skill_base_name] = 1
+                msg = f"{item.name}을(를) 읽고 '{skill_base_name}' 스킬을 터득했습니다!"
+        else:
+            if item.hp_effect != 0:
+                stats.current_hp = min(stats.max_hp, stats.current_hp + item.hp_effect)
+            if item.mp_effect != 0:
+                stats.current_mp = min(stats.max_mp, stats.current_mp + item.mp_effect)
+                
+            hp_recovered = stats.current_hp - old_hp
+            if hp_recovered > 0:
+                msg += f" (HP {hp_recovered} 회복)"
             
         self.world.event_manager.push(MessageEvent(msg))
         
@@ -523,6 +900,24 @@ class Engine:
                 if inv.item_slots[i] == item.name:
                     inv.item_slots[i] = None
             
+            # 인덱스 보정
+            self.selected_item_index = max(0, self.selected_item_index - 1)
+
+    def _forget_skill(self, skill_name):
+        """배운 스킬을 잊어버림"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        inv = player_entity.get_component(InventoryComponent)
+        if not inv: return
+
+        if skill_name in inv.skills:
+            inv.skills.remove(skill_name)
+            # 퀵슬롯에서도 제거
+            for i in range(len(inv.skill_slots)):
+                if inv.skill_slots[i] == skill_name:
+                    inv.skill_slots[i] = None
+            
+            self.world.event_manager.push(MessageEvent(f"'{skill_name}' 스킬을 잊었습니다."))
             # 인덱스 보정
             self.selected_item_index = max(0, self.selected_item_index - 1)
 
@@ -602,6 +997,7 @@ class Engine:
         # 기본 능력치로 초기화
         stats.attack = stats.base_attack
         stats.defense = stats.base_defense
+        stats.weapon_range = 1 # 기본 사거리 (Bump)
         
         # 보너스 합산
         for slot, item in inv.equipped.items():
@@ -610,6 +1006,10 @@ class Engine:
             if isinstance(item, ItemDefinition):
                 stats.attack += item.attack
                 stats.defense += item.defense
+                
+                # 주무기(손1)의 사거리를 캐릭터 사거리로 설정
+                if slot == "손1":
+                    stats.weapon_range = item.attack_range
 
     def _render(self):
         """World 상태를 기반으로 Renderer를 사용하여 화면을 그립니다."""
@@ -635,6 +1035,13 @@ class Engine:
         else:
             camera_x, camera_y = 0, 0
 
+        # 0. 전장의 안개 업데이트 (시야 반경 8)
+        player_entity = self.world.get_player_entity()
+        if player_entity and self.dungeon_map:
+            p_pos = player_entity.get_component(PositionComponent)
+            if p_pos:
+                self.dungeon_map.reveal_tiles(p_pos.x, p_pos.y, radius=8)
+
         # 1. 맵 렌더링 (Left Top - Viewport 적용)
         map_comp_list = self.world.get_entities_with_components([MapComponent])
         map_height = 0
@@ -650,12 +1057,18 @@ class Engine:
                     world_x = camera_x + screen_x
                     if world_x >= map_comp.width: break
                     
-                    char = map_comp.tiles[world_y][world_x]
+                    # DungeonMap 기능을 사용하여 타일 문자 결정 (안개 처리됨)
+                    char = self.dungeon_map.get_tile_for_display(world_x, world_y)
                     
+                    # 안개 지역(미방문)인 경우 공백 처리
+                    if self.dungeon_map.fog_enabled and (world_x, world_y) not in self.dungeon_map.visited:
+                        self.renderer.draw_char(screen_x, screen_y, " ", "white")
+                        continue
+
                     # 맵 시인성 개선: 바닥(.)과 인접하지 않은 벽(#)은 공백으로 처리
                     if char == "#":
                         is_visible_wall = False
-                        # 8방향 탐색
+                        # 8방향 탐색 (안개 너머 벽까지 계산되지 않도록 방문한 타일만 고려)
                         for dy in [-1, 0, 1]:
                             for dx in [-1, 0, 1]:
                                 if dx == 0 and dy == 0: continue
@@ -671,6 +1084,7 @@ class Engine:
                     else:
                         render_char = char
                         color = "dark_grey" if char == "." else "brown"
+                        if char == ">" or char == "<": color = "cyan"
                     
                     self.renderer.draw_char(screen_x, screen_y, render_char, color)
 
@@ -692,7 +1106,43 @@ class Engine:
             screen_y = pos.y - camera_y
             
             if 0 <= screen_x < MAP_VIEW_WIDTH and 0 <= screen_y < MAP_VIEW_HEIGHT:
-                self.renderer.draw_char(screen_x, screen_y, render.char, render.color)
+                # 전장의 안개: 가 본 적 없는 위치의 엔티티는 숨김
+                if self.dungeon_map and self.dungeon_map.fog_enabled and (pos.x, pos.y) not in self.dungeon_map.visited:
+                    continue
+
+                # 피격 피드백(Hit Flash) 처리
+                color = render.color
+                if entity.has_component(HitFlashComponent):
+                    color = "white_bg"
+                
+                self.renderer.draw_char(screen_x, screen_y, render.char, color)
+        
+        # 2-1. 오라/특수 효과 렌더링 (휘몰아치는 연출)
+        aura_entities = self.world.get_entities_with_components([PositionComponent, SkillEffectComponent])
+        for entity in aura_entities:
+            pos = entity.get_component(PositionComponent)
+            effect = entity.get_component(SkillEffectComponent)
+            
+            # 카메라 가시 영역 체크
+            screen_x = pos.x - camera_x
+            screen_y = pos.y - camera_y
+            
+            # 깜빡임 및 회전 문자 결정 (실시간 시간 기반)
+            anim_tick = int(time.time() * 10) # 초당 10프레임 수준의 애니메이션
+            
+            chars = ["/", "-", "\\", "|"]
+            current_char = chars[anim_tick % len(chars)]
+            color = "cyan" if anim_tick % 2 == 0 else "blue"
+            
+            # 주변 8방향 렌더링
+            for dy in range(-effect.radius, effect.radius + 1):
+                for dx in range(-effect.radius, effect.radius + 1):
+                    if dx == 0 and dy == 0: continue
+                    sx, sy = screen_x + dx, screen_y + dy
+                    if 0 <= sx < MAP_VIEW_WIDTH and 0 <= sy < MAP_VIEW_HEIGHT:
+                        # 맵 타일이 벽이 아닌 경우에만 렌더링 (옵션)
+                        # 여기서는 단순하게 그 위에 덧그림
+                        self.renderer.draw_char(sx, sy, current_char, color)
 
         # 3. 캐릭터 스탯 렌더링 (Left Bottom - below Map)
         status_start_y = map_height + 1
@@ -728,7 +1178,8 @@ class Engine:
                 # Stats
                 atk_str = f"ATK : {stats.attack}"
                 def_str = f"DEF : {stats.defense}"
-                self.renderer.draw_text(2, current_y, f"{atk_str:<10} {def_str:<10}", "white")
+                rng_str = f"RNG : {stats.weapon_range} (LINE)"
+                self.renderer.draw_text(2, current_y, f"{atk_str:<10} {def_str:<10} {rng_str}", "white")
 
 
         # 4. 오른쪽 사이드바 (Right Sidebar)
@@ -758,7 +1209,7 @@ class Engine:
                 self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y + 1 + i, f"> {truncated_msg}", msg_color)
 
         # 4-2. 장비 (Equipment)
-        eq_start_y = 10
+        eq_start_y = 12 # 로그(10줄)와 겹치지 않도록 시작점 조정
         self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, eq_start_y, "[ EQUIP ]", "gold")
         eq_y = eq_start_y + 1
         if player_entity:
@@ -766,7 +1217,7 @@ class Engine:
             if inv_comp:
                 slots = ["머리", "몸통", "장갑", "신발", "손1", "손2", "액세서리1", "액세서리2"]
                 for i, slot in enumerate(slots):
-                    if eq_y >= 19: break # 사이드바 높이 제한 (스크롤/스킬 영역 확보)
+                    if eq_y >= 21: break # 사이드바 높이 제한 (스크롤/스킬 영역 확보)
                     item = inv_comp.equipped.get(slot)
                     
                     # 아이템이 ItemDefinition 객체이면 이름을 가져오고, 아니면 그대로 사용 (---- 혹은 양손점유)
@@ -785,7 +1236,7 @@ class Engine:
                     eq_y += 1
 
         # 4-3. 퀵슬롯 (Item Slots 1-5)
-        qs_start_y = 19
+        qs_start_y = 21
         self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_start_y, "[ QUICK SLOTS ]", "gold")
         qs_y = qs_start_y + 1
         if player_entity:
@@ -812,11 +1263,13 @@ class Engine:
         if self.is_attack_mode:
             self.renderer.draw_text(0, guide_y, " [ATTACK] Arrows: Select Dir | [Space] Cancel ", "red")
         else:
-            self.renderer.draw_text(0, guide_y, " [MOVE] Arrows | [I] Inventory | [Space] Attack Mode | [Q] Quit", "green")
+            self.renderer.draw_text(0, guide_y, " [MOVE] Arrows | [.] Wait | [I] Inventory | [Space] Attack Mode | [Q] Quit", "green")
         
-        # 6. 인벤토리 팝업 렌더링 (INVENTORY 상태일 때만)
+        # 6. 인벤토리/상점 팝업 렌더링
         if self.state == GameState.INVENTORY:
             self._render_inventory_popup()
+        elif self.state == GameState.SHOP:
+            self._render_shop_popup()
 
         self.renderer.render()
 
@@ -851,6 +1304,14 @@ class Engine:
             text = f"[{cat}]" if i == self.inventory_category_index else f" {cat} "
             self.renderer.draw_text(tab_x, start_y + 1, text, color)
             tab_x += len(text) + 2
+            
+        # 2.1 플레이어 골드 표시 (인벤토리 상단 우측)
+        player_entity = self.world.get_player_entity()
+        if player_entity:
+            stats = player_entity.get_component(StatsComponent)
+            if stats:
+                gold_text = f" {stats.gold} G "
+                self.renderer.draw_text(start_x + POPUP_WIDTH - len(gold_text) - 2, start_y + 1, gold_text, "yellow")
         
         # 3. 구분선
         self.renderer.draw_text(start_x + 1, start_y + 2, "-" * (POPUP_WIDTH - 2), "dark_grey")
@@ -865,7 +1326,7 @@ class Engine:
                  # 카테고리별 필터링
                  filtered_items = []
                  if self.inventory_category_index == 0: # 아이템
-                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type == 'CONSUMABLE']
+                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
                  elif self.inventory_category_index == 1: # 장비
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['WEAPON', 'ARMOR']]
                  elif self.inventory_category_index == 2: # 스크롤
@@ -894,7 +1355,10 @@ class Engine:
                          current_y += 1
 
         # 5. 하단 도움말
-        help_text = "[←/→] 탭 전환  [↑/↓] 선택  [E/ENTER] 장착/등록/사용  [ESC/I] 닫기"
+        if self.inventory_category_index == 3:
+            help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
+        else:
+            help_text = "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기"
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
     def _render_shop_popup(self):
@@ -916,43 +1380,65 @@ class Engine:
                     char = " "
                 self.renderer.draw_char(x, y, char, "gold")
         
-        # 제목
-        title = "[ 상 점 ]"
-        self.renderer.draw_text(start_x + (POPUP_WIDTH - len(title)) // 2, start_y + 1, title, "gold")
+        # 2. 탭 구성 (사기 / 팔기)
+        categories = ["사기 (BUY)", "팔기 (SELL)"]
+        tab_x = start_x + 4
+        for i, cat in enumerate(categories):
+            color = "yellow" if i == self.shop_category_index else "dark_grey"
+            text = f"[{cat}]" if i == self.shop_category_index else f" {cat} "
+            self.renderer.draw_text(tab_x, start_y + 1, text, color)
+            tab_x += len(text) + 8
         
-        # 2. 플레이어 골드 표시
+        # 3. 플레이어 골드 표시
         player_entity = self.world.get_player_entity()
         if player_entity:
             stats = player_entity.get_component(StatsComponent)
             if stats:
-                self.renderer.draw_text(start_x + 2, start_y + 3, f"소지 골드: {stats.gold} G", "yellow")
+                gold_text = f" 소지 골드: {stats.gold} G "
+                self.renderer.draw_text(start_x + POPUP_WIDTH - len(gold_text) - 2, start_y + 3, gold_text, "yellow")
         
         self.renderer.draw_text(start_x + 2, start_y + 4, "-" * (POPUP_WIDTH - 4), "dark_grey")
         
-        # 3. 상품 목록 표시
-        shopkeeper = self.world.get_entity(self.active_shop_id)
-        if shopkeeper:
-            shop_comp = shopkeeper.get_component(ShopComponent)
-            if shop_comp:
-                for i, entry in enumerate(shop_comp.items):
-                    item = entry['item']
-                    price = entry['price']
-                    
-                    item_y = start_y + 5 + i
-                    if item_y >= start_y + POPUP_HEIGHT - 2: break
-                    
-                    prefix = "> " if i == self.selected_shop_item_index else "  "
-                    color = "white" if i == self.selected_shop_item_index else "dark_grey"
-                    if i == self.selected_shop_item_index: color = "green"
-                    
-                    # 상품명 (왼쪽 정렬) 및 가격 (오른쪽 정렬)
-                    name_text = f"{prefix}{item.name}"
-                    self.renderer.draw_text(start_x + 2, item_y, name_text, color)
-                    price_text = f"{price:>5} G"
-                    self.renderer.draw_text(start_x + POPUP_WIDTH - 10, item_y, price_text, color)
+        # 4. 물품 목록 표시
+        items_to_display = []
+        if self.shop_category_index == 0: # 사기
+            shopkeeper = self.world.get_entity(self.active_shop_id)
+            if shopkeeper:
+                shop_comp = shopkeeper.get_component(ShopComponent)
+                if shop_comp: items_to_display = shop_comp.items
+        else: # 팔기
+            if player_entity:
+                inv_comp = player_entity.get_component(InventoryComponent)
+                if inv_comp:
+                    for name, data in inv_comp.items.items():
+                        is_equipped = any(eq == data['item'] for eq in inv_comp.equipped.values())
+                        if not is_equipped:
+                            items_to_display.append({'item': data['item'], 'price': 10, 'qty': data['qty']})
+
+        if not items_to_display:
+            self.renderer.draw_text(start_x + 2, start_y + 6, "  (거래 가능한 물품이 없습니다)", "dark_grey")
+        else:
+            for i, entry in enumerate(items_to_display):
+                item = entry['item']
+                price = entry['price']
+                qty = entry.get('qty', 1)
+                
+                item_y = start_y + 5 + i
+                if item_y >= start_y + POPUP_HEIGHT - 2: break
+                
+                prefix = "> " if i == self.selected_shop_item_index else "  "
+                color = "green" if i == self.selected_shop_item_index else "white"
+                
+                # 수량 표시 (팔기 탭에서 유용)
+                qty_str = f" x{qty}" if self.shop_category_index == 1 else ""
+                name_text = f"{prefix}{item.name}{qty_str}"
+                self.renderer.draw_text(start_x + 2, item_y, name_text, color)
+                
+                price_text = f"{price:>5} G"
+                self.renderer.draw_text(start_x + POPUP_WIDTH - 12, item_y, price_text, color)
         
-        # 4. 하단 도움말
-        guide_text = "[↑/↓] 선택  [ENTER] 구매  [Q/ESC] 나가기"
+        # 5. 하단 도움말
+        guide_text = "[←/→] 탭 전환  [↑/↓] 선택  [ENTER] " + ("구매" if self.shop_category_index == 0 else "판매") + "  [Q/ESC] 나가기"
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(guide_text)) // 2, start_y + POPUP_HEIGHT - 2, guide_text, "dark_grey")
 
 if __name__ == '__main__':

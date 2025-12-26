@@ -27,16 +27,12 @@ from dungeon.ui import ConsoleUI
 ITEM_DEFINITIONS = load_item_definitions()
 SKILL_DEFINITIONS = load_skill_definitions()
 
-def start_game(ui, player_name: str, new_game=False):
+def start_game(ui, player_name: str, new_game=False, game_state_data=None):
     """새 게임 또는 이어하기를 시작합니다."""
-    game_state_data = None
-
-    if not new_game:
-        game_state_data = load_game_data()
 
     if new_game or not game_state_data:
-        if new_game and game_state_data:
-            delete_save_data() # 새 게임 선택 시 기존 데이터 삭제
+        # 새 게임 시작 전 기존 같은 이름의 데이터가 있는지 확인 (선택적)
+        # 여기서는 단순히 덮어쓰거나 무시
 
         player_instance = Player(name=player_name)
         # 새 게임 시작 시 초기 게임 상태 데이터 생성 (ECS 컴포넌트 포함)
@@ -74,15 +70,11 @@ def start_game(ui, player_name: str, new_game=False):
     # Engine 인스턴스 생성 및 실행
     # game_state_data를 전달하여 로드된 데이터(또는 초기 데이터)로 시작
     game_engine = engine.Engine(player_name, game_state_data)
-    game_engine.run()
-    
-    # TODO: 게임 종료 코드를 Engine에서 반환받는 로직 추가 필요
-    game_result = "QUIT" 
-
+    game_result = game_engine.run()
     
     if game_result == "DEATH":
-        delete_save_data()
-        ui.show_game_over_screen("당신은 죽었습니다!")
+        delete_save_data(player_name)
+        ui.show_game_over_screen("당신은 던전에서 장렬히 전사했습니다...")
 
 
 def main_menu():
@@ -94,12 +86,20 @@ def main_menu():
             player_name = ui.get_player_name()
             start_game(ui, player_name, new_game=True)
         elif choice == 1: # 이어하기
-            if load_game_data():
-                start_game(ui, None, new_game=False) # 저장된 게임이 있으면 이름 입력 없이 시작
-            else:
-                ui.add_message("저장된 게임이 없습니다. 새 게임을 시작합니다.")
-                player_name = ui.get_player_name()
-                start_game(ui, player_name, new_game=True)
+            from dungeon.data_manager import list_save_files
+            save_files = list_save_files()
+            
+            action, selected_name = ui.show_save_list(save_files)
+            if action == "LOAD":
+                game_state_data = load_game_data(selected_name)
+                if game_state_data:
+                    start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
+                else:
+                    ui.add_message("파일 로드에 실패했습니다.")
+            elif action == "DELETE":
+                delete_save_data(selected_name)
+                ui.add_message(f"{selected_name}의 저장 데이터를 삭제했습니다.")
+            # action이 None이면 다시 루프로 돌아감
         elif choice == 2: # 게임 종료
             break
     del ui

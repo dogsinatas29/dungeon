@@ -176,7 +176,7 @@ def initialize_event_listeners(world: World):
     # 주의: 순환 참조를 막기 위해 함수 내에서 임포트합니다.
     from .systems import (
     InputSystem, MovementSystem, CombatSystem, MonsterAISystem, RenderSystem,
-    MessageEvent, CollisionEvent, MoveSuccessEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent
+    MessageEvent, CollisionEvent, MoveSuccessEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, SkillUseEvent
 )
     
     # EventManager에 이벤트 타입이 등록되어 있어야 함 (빈 리스트라도)
@@ -186,6 +186,7 @@ def initialize_event_listeners(world: World):
     world.event_manager.listeners[DirectionalAttackEvent] = []
     world.event_manager.listeners[MapTransitionEvent] = []
     world.event_manager.listeners[ShopOpenEvent] = []
+    world.event_manager.listeners[SkillUseEvent] = []
 
     for system in world._systems:
         for event_type in world.event_manager.listeners.keys():

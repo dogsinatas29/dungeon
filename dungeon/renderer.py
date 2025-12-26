@@ -11,6 +11,11 @@ COLOR_MAP = {
     "gold": "\033[33m",
     "brown": "\033[38;5;130m",
     "dark_grey": "\033[90m",
+    "magenta": "\033[95m",
+    "cyan": "\033[36m",
+    "purple": "\033[35m",
+    "invert": "\033[7m",
+    "white_bg": "\033[47m\033[30m", # 흰 배경에 검은 글씨
     "reset": "\033[0m"
 }
 

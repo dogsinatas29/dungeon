@@ -47,7 +47,7 @@ class DungeonMap:
         self.exit_type = EXIT_CHAR 
         
         self.visited: set[Tuple[int, int]] = set() 
-        self.fog_enabled = False # 디버깅을 위해 일시적으로 안개 비활성화 
+        self.fog_enabled = True # 전장의 안개 기본 활성화
         
         self.generate_map() 
         

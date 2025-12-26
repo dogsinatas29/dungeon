@@ -6,7 +6,7 @@ import os
 # -----------------------------------------------------------------------
 class ItemDefinition:
     # 'item_type' 대신 CSV 헤더와 동일하게 'type'으로 인자명을 통일합니다.
-    def __init__(self, name, type, description, symbol, color, required_level, attack, defense, hp_effect, mp_effect, hand_type=1):
+    def __init__(self, name, type, description, symbol, color, required_level, attack, defense, hp_effect, mp_effect, hand_type=1, attack_range=1, skill_id=None, flags="", **kwargs):
         self.name = name
         self.type = type # 'self.type'에 'type' 인자를 할당합니다.
         self.description = description
@@ -18,6 +18,28 @@ class ItemDefinition:
         self.hp_effect = int(hp_effect)
         self.mp_effect = int(mp_effect)
         self.hand_type = int(hand_type) # 1: 한손, 2: 양손
+        self.attack_range = int(attack_range)
+        self.skill_id = skill_id
+        # 플래그 처리 (콤마로 구분된 문자열을 Set으로 변환)
+        self.flags = {f.strip().upper() for f in flags.split(',') if f.strip()}
+
+    def to_dict(self):
+        """JSON 저장을 위해 딕셔너리로 변환"""
+        return {
+            "name": self.name,
+            "type": self.type,
+            "description": self.description,
+            "symbol": self.symbol,
+            "color": self.color,
+            "required_level": self.required_level,
+            "attack": self.attack,
+            "defense": self.defense,
+            "hp_effect": self.hp_effect,
+            "mp_effect": self.mp_effect,
+            "hand_type": self.hand_type,
+            "attack_range": self.attack_range,
+            "skill_id": getattr(self, "skill_id", None)
+        }
 
 # 참고: Python 내장 함수 'type'과 이름이 겹치지만, **row 언패킹을 위해 이 이름을 사용해야 합니다.**
 
@@ -26,7 +48,7 @@ class ItemDefinition:
 # -----------------------------------------------------------------------
 class MonsterDefinition:
     # CSV 헤더(monster_data.txt의 헤더)에 맞춰 정의
-    def __init__(self, ID, Name, Symbol, Color, HP, ATT, DEF, LV, EXP_GIVEN, CRIT_CHANCE, CRIT_MULT, MOVE_TYPE, ACTION_DELAY, **kwargs):
+    def __init__(self, ID, Name, Symbol, Color, HP, ATT, DEF, LV, EXP_GIVEN, CRIT_CHANCE, CRIT_MULT, MOVE_TYPE, ACTION_DELAY, flags="", **kwargs):
         self.ID = ID
         self.name = Name 
         self.symbol = Symbol
@@ -40,7 +62,28 @@ class MonsterDefinition:
         self.crit_mult = float(CRIT_MULT)
         self.move_type = MOVE_TYPE
         self.action_delay = float(ACTION_DELAY)
+        # 플래그 처리
+        self.flags = {f.strip().upper() for f in flags.split(',') if f.strip()}
         # kwargs는 향후 필드 추가에 대비한 안전장치
+
+class SkillDefinition:
+    """스킬 데이터를 담는 컨테이너 (CSV/텍스트파일 연동)"""
+    def __init__(self, ID, 이름, 필요레벨, 속성, 소모타입, 소모값, 필요장비, 효과_설명, 데미지, 스킬타입, 스킬서브타입, 사거리, 적중효과="없음", flags="", **kwargs):
+        self.id = ID
+        self.name = 이름
+        self.required_level = int(필요레벨)
+        self.element = 속성
+        self.cost_type = 소모타입
+        self.cost_value = int(소모값)
+        self.required_weapon = 필요장비
+        self.description = 효과_설명
+        self.damage = int(데미지)
+        self.type = 스킬타입           # ATTACK, RECOVERY
+        self.subtype = 스킬서브타입    # PROJECTILE, AREA, SELF
+        self.range = int(사거리)
+        self.on_hit_effect = 적중효과 # EXPLOSION, STUN, KNOCKBACK 등
+        # 플래그 처리
+        self.flags = {f.strip().upper() for f in flags.split(',') if f.strip()}
 
 # -----------------------------------------------------------------------
 # [추가] load_data_from_csv 헬퍼 함수
@@ -88,25 +131,65 @@ def get_item_definition(item_id):
     defs = load_item_definitions()
     return defs.get(item_id)
 
-def load_skill_definitions():
-    """Start.py 호환성: 스킬 정의 로드 (placeholder)"""
-    return {}
+def load_monster_definitions(data_path="data"):
+    """monster_data.txt 파일에서 몬스터 정의 로드"""
+    return load_data_from_csv('monster_data.txt', MonsterDefinition, data_path)
 
-def save_game_data(data, filename="savegame.json"):
-    """Start.py 호환성: 게임 데이터 저장"""
+def load_skill_definitions(data_path="data"):
+    """skills.txt 파일에서 스킬 정의 로드"""
+    file_path = os.path.join(data_path, 'skills.txt')
+    skills = {}
+    try:
+        if not os.path.exists(file_path):
+            return {}
+        with open(file_path, 'r', encoding='utf-8') as f:
+            # 주석(#) 라인 제외하되, 첫 번째 라인(헤더)의 '#'는 제거하여 DictReader에서 사용
+            raw_lines = f.readlines()
+            processed_lines = []
+            header_found = False
+            
+            for line in raw_lines:
+                clean_line = line.strip()
+                if not clean_line: continue
+                
+                if clean_line.startswith('#'):
+                    if not header_found:
+                        # 첫 번째 주석 라인을 헤더로 간주하고 '#' 제거
+                        processed_lines.append(clean_line.lstrip('#').strip())
+                        header_found = True
+                    continue # 다른 주석 라인은 무시
+                
+                processed_lines.append(line)
+                if not header_found: header_found = True # 주석 없는 첫 라인이 헤더일 경우
+                
+            reader = csv.DictReader(processed_lines)
+            for row in reader:
+                # 키에서 공백 제거 (DictReader 필드명에 공백이 섞일 수 있음)
+                clean_row = {k.strip(): v for k, v in row.items() if k}
+                skill = SkillDefinition(**clean_row)
+                skills[skill.name] = skill
+        return skills
+    except Exception as e:
+        print(f"Error loading skill definitions: {e}")
+        return {}
+
+def save_game_data(data, name):
+    """플레이어 이름을 기반으로 게임 데이터 저장"""
     import json
     save_dir = "game_data"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     
+    filename = f"{name}.json"
     file_path = os.path.join(save_dir, filename)
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
-    print(f"Game saved to {file_path}")
+    # print(f"Game saved to {file_path}")
 
-def load_game_data(filename="savegame.json"):
-    """Start.py 호환성: 저장된 게임 데이터 로드 (JSON)"""
+def load_game_data(name):
+    """플레이어 이름을 기반으로 저장된 게임 데이터 로드 (JSON)"""
     import json
+    filename = f"{name}.json"
     file_path = os.path.join("game_data", filename)
     if not os.path.exists(file_path):
         return None
@@ -118,10 +201,21 @@ def load_game_data(filename="savegame.json"):
         print(f"Failed to load save file: {e}")
         return None
 
-def delete_save_data(filename="savegame.json"):
-    """Start.py 호환성: 저장 데이터 삭제"""
+def delete_save_data(name):
+    """플레이어 이름을 기반으로 저장 데이터 삭제"""
+    filename = f"{name}.json"
     file_path = os.path.join("game_data", filename)
     if os.path.exists(file_path):
         os.remove(file_path)
-        print("Save file deleted.")
+        # print(f"Save file {filename} deleted.")
+
+def list_save_files():
+    """game_data 디렉토리의 모든 세이브 파일(.json) 목록을 반환"""
+    save_dir = "game_data"
+    if not os.path.exists(save_dir) or not os.path.isdir(save_dir):
+        return []
+    
+    files = [f.replace('.json', '') for f in os.listdir(save_dir) if f.endswith('.json')]
+    return sorted(files)
+
 

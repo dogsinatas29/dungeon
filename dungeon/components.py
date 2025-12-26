@@ -35,10 +35,24 @@ class StatsComponent(Component):
         self.current_stamina = current_stamina
         self.element = element
         self.gold = gold
+        self.weapon_range = 1 # 장착된 무기의 사거리
+
+        # 실시간 액션 관련 (초 단위)
+        self.last_action_time = 0.0
+        self.action_delay = 0.2 # 기본 공격/이동 쿨다운 (0.2초)
+        
+        # 어빌리티 플래그 (Set[str])
+        self.flags = {f.strip().upper() for f in element.split(',') if f.strip()} if isinstance(element, str) and ',' in element else set()
+        if isinstance(element, str) and element != "NONE" and ',' not in element:
+            self.flags.add(element.upper())
         
     @property
     def is_alive(self):
         return self.current_hp > 0
+
+    def to_dict(self):
+        """JSON 저장을 위해 딕셔너리로 변환"""
+        return {k: v for k, v in vars(self).items() if not k.startswith('_')}
 
 class MonsterComponent(Component):
     """몬스터 유형 식별자"""
@@ -64,6 +78,19 @@ class InventoryComponent(Component):
         self.item_slots = item_slots if item_slots else [None] * 5 # 1~5번 아이템
         self.skill_slots = skill_slots if skill_slots else [None] * 5 # 6~0번 스킬
         self.skills = skills if skills else ["기본 공격"]
+        # 스킬 레벨 관리 (Dict[skill_name, level])
+        self.skill_levels = {name: 1 for name in self.skills}
+
+    def to_dict(self):
+        """JSON 저장을 위해 딕셔너리로 변환 (ItemDefinition 객체 처리)"""
+        return {
+            "items": {k: {"item": v["item"].to_dict() if hasattr(v["item"], "to_dict") else v["item"], "qty": v["qty"]} for k, v in self.items.items()},
+            "equipped": {k: v.to_dict() if hasattr(v, "to_dict") else v for k, v in self.equipped.items()},
+            "item_slots": self.item_slots,
+            "skill_slots": self.skill_slots,
+            "skills": self.skills,
+            "skill_levels": self.skill_levels
+        }
 
 class LevelComponent(Component):
     """레벨, 경험치, 직업 데이터"""
@@ -122,3 +149,29 @@ class ShopComponent(Component):
     """상점 컴포넌트"""
     def __init__(self, items: List[Dict] = None):
         self.items = items if items else [] # 판매 목록
+
+class EffectComponent(Component):
+    """임시 시각적 효과 (공격 궤적 등)"""
+    def __init__(self, duration: int = 1):
+        self.duration = duration # 표시될 턴 수
+
+class StunComponent(Component):
+    """스턴 상태: 일정 턴 동안 행동 불가"""
+    def __init__(self, duration: int = 1):
+        self.duration = duration
+
+class SkillEffectComponent(Component):
+    """지속형 스킬 효과 (예: 휠 윈드 오라)"""
+    def __init__(self, name: str, duration: int, damage: int, radius: int = 1, effect_type: str = "AURA", flags: set = None):
+        self.name = name
+        self.duration = duration
+        self.damage = damage
+        self.radius = radius
+        self.effect_type = effect_type
+        self.flags = flags if flags else set()
+        self.tick_count = 0 # 시각 효과(깜빡임)를 위한 카운터
+
+class HitFlashComponent(Component):
+    """피격 시 시각적 피드백(번쩍임)을 위한 컴포넌트"""
+    def __init__(self, duration: float = 0.15):
+        self.duration = duration

@@ -5,10 +5,12 @@ from .ecs import System, Entity, Event, EventManager # EventManager는 필요 �
 from .components import (
     PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, 
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
-    RenderComponent, InventoryComponent, ChestComponent, ShopComponent
+    RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
+    EffectComponent, SkillEffectComponent, HitFlashComponent
 )
 import readchar
 import random
+import time
 
 # --- Event 정의 (시스템 통신 표준) ---
 class MoveSuccessEvent(Event):
@@ -52,6 +54,14 @@ class DirectionalAttackEvent(Event):
         self.dy = dy
         self.range_dist = range_dist
 
+class SkillUseEvent(Event):
+    """플레이어가 스킬을 사용할 때 발생"""
+    def __init__(self, attacker_id: int, skill_name: str, dx: int, dy: int = 0):
+        self.attacker_id = attacker_id
+        self.skill_name = skill_name
+        self.dx = dx
+        self.dy = dy
+
 
 # --- 1.3 주요 시스템 클래스 (로직 구현) ---
 
@@ -62,51 +72,111 @@ class InputSystem(System):
     
     def handle_input(self, action: str) -> bool:
         """Engine에서 직접 호출되어 목표 위치 컴포넌트 생성"""
+        # 0. 이전 턴의 이펙트 엔티티 정리
+        from .components import EffectComponent
+        effect_entities = self.world.get_entities_with_components({EffectComponent})
+        for effect in effect_entities:
+            self.world.delete_entity(effect.entity_id)
+
         player_entity = self.world.get_player_entity()
         if not player_entity: return False
+
+        stats = player_entity.get_component(StatsComponent)
+        if not stats: return False
+
+        # 1. 쿨다운 확인 (실시간 이동/공격 제한)
+        current_time = time.time()
+        if current_time - stats.last_action_time < stats.action_delay:
+            if action.lower() != 'q':
+                return False
+
+        # 스턴 상태 확인
+        stun = player_entity.get_component(StunComponent)
+        if stun:
+            if action == 'q':
+                self.world.engine.is_running = False
+                return True
+            self.event_manager.push(MessageEvent("몸이 움직이지 않습니다... (기절 중)"))
+            return False
+
+        # 액션 허용됨 -> 시간 갱신 (실제 이동/공격 로직에서 한 번 더 갱신할 수 있음)
+        stats.last_action_time = current_time
 
         # 공격 모드 전환 (Space 키)
         if action == ' ':
             # Engine의 is_attack_mode 토글
             self.world.engine.is_attack_mode = not self.world.engine.is_attack_mode
-            status = "진입" if self.world.engine.is_attack_mode else "해제"
-            self.event_manager.push(MessageEvent(f"공격 모드 {status}. 방향키로 공격하세요."))
+            if self.world.engine.is_attack_mode:
+                self.event_manager.push(MessageEvent("공격 방향을 선택하세요... [Space] 취소"))
+            else:
+                self.event_manager.push(MessageEvent("공격 모드 해제."))
             return False # 턴을 소모하지 않음
 
+        # 입력값 정규화 (소문자 및 좌우 공백 제거)
+        action_clean = action.strip()
+        action_lower = action_clean.lower()
+
         move_map = {
-            readchar.key.UP: (0, -1),
-            readchar.key.DOWN: (0, 1),
-            readchar.key.LEFT: (-1, 0),
-            readchar.key.RIGHT: (1, 0),
-            # Explicit ANSI support for safety
+            # Standard ANSI
             '\x1b[A': (0, -1),
             '\x1b[B': (0, 1),
             '\x1b[D': (-1, 0),
             '\x1b[C': (1, 0),
-            # Application cursor keys (sometimes sent by terminals)
+            # Application cursor keys
             '\x1bOA': (0, -1),
             '\x1bOB': (0, 1),
             '\x1bOD': (-1, 0),
             '\x1bOC': (1, 0),
+            # WASD (Wait/Up/Left/Down/Right)
+            'w': (0, -1), 'W': (0, -1),
+            'a': (-1, 0), 'A': (-1, 0),
+            's': (0, 1),  'S': (0, 1),
+            'd': (1, 0),  'D': (1, 0),
         }
 
-        if action in move_map:
-            dx, dy = move_map[action]
+        # readchar가 설치되어 있다면 해당 키 상수들도 매핑에 포함 (하위 호환성)
+        try:
+            import readchar
+            move_map.update({
+                readchar.key.UP: (0, -1),
+                readchar.key.DOWN: (0, 1),
+                readchar.key.LEFT: (-1, 0),
+                readchar.key.RIGHT: (1, 0),
+            })
+        except:
+            pass
+
+        if action_clean in move_map:
+            dx, dy = move_map[action_clean]
             
-            # 공격 모드인 경우
+            # 공격 모드인 경우 (Space 또는 스킬 입력 후 방향키 입력 시)
             if self.world.engine.is_attack_mode:
                 self.world.engine.is_attack_mode = False # 공격 후 모드 해제
                 
-                # 사거리 정보 가져오기 (기본 1, 장착 장비에 따라 확장 가능)
-                # TODO: InventoryComponent의 equipped 무기에서 range 값 가져오기
-                attack_range = 3 # 임시 테스트용 사거리
-                
-                self.event_manager.push(DirectionalAttackEvent(
-                    attacker_id=player_entity.entity_id,
-                    dx=dx,
-                    dy=dy,
-                    range_dist=attack_range
-                ))
+                # 활성화된 스킬이 있는 경우
+                active_skill = getattr(self.world.engine, 'active_skill_name', None)
+                if active_skill:
+                    self.world.engine.active_skill_name = None
+                    self.event_manager.push(SkillUseEvent(
+                        attacker_id=player_entity.entity_id,
+                        skill_name=active_skill,
+                        dx=dx,
+                        dy=dy
+                    ))
+                else:
+                    # 일반 무기 공격
+                    # 원거리 공격 사거리 (장비 스탯 반영)
+                    attack_range = 1
+                    stats = player_entity.get_component(StatsComponent)
+                    if stats:
+                        attack_range = stats.weapon_range
+                    
+                    self.event_manager.push(DirectionalAttackEvent(
+                        attacker_id=player_entity.entity_id,
+                        dx=dx,
+                        dy=dy,
+                        range_dist=attack_range
+                    ))
                 return True # 턴 소모
                 
             # 일반 이동 모드
@@ -114,14 +184,23 @@ class InputSystem(System):
                 player_entity.remove_component(DesiredPositionComponent)
                 
             player_entity.add_component(DesiredPositionComponent(dx=dx, dy=dy))
-            
+            return True # 턴 소모
+        
+        # 퀵슬롯 (1~0)
+        if action_clean in "1234567890":
+            return self.world.engine._trigger_quick_slot(action_clean)
+        
+        # 제자리 대기 (Wait)
+        if action_lower in ['.', '5', 'x', 'z']: # 대기 키 확장
+            self.event_manager.push(MessageEvent("제자리에서 대기합니다."))
             return True # 턴 소모
 
-        if action == 'q':
+        if action_lower == 'q':
             self.world.engine.is_running = False
             return True
         
-        self.world.event_manager.push(MessageEvent(f"알 수 없는 명령: {action}"))
+        # [DEBUG] 알 수 없는 명령 로그
+        # self.world.event_manager.push(MessageEvent(f"알 수 없는 명령: {repr(action_clean)}"))
         return False
 
 
@@ -174,10 +253,10 @@ class MovementSystem(System):
                 position.x, position.y = new_x, new_y
                 self.event_manager.push(MoveSuccessEvent(entity.entity_id, old_x, old_y, new_x, new_y))
                 
-                # 스태미너 소모 (20이동당 1소모 = 1이동당 0.05소모)
+                # 스태미너 소모 (5이동당 1소모 = 1이동당 0.2소모)
                 stats = entity.get_component(StatsComponent)
                 if stats:
-                    stats.current_stamina -= 0.05
+                    stats.current_stamina -= 0.2
                     if stats.current_stamina <= 0:
                         stats.current_stamina = 0
                         stats.current_hp = 0
@@ -251,14 +330,44 @@ class MonsterAISystem(System):
         for monster in monsters:
             # 안전장치: 플레이어는 제외
             if monster.entity_id == player_entity.entity_id: continue
+
+            # 스턴 상태 확인 및 처리
+            stun = monster.get_component(StunComponent)
+            if stun:
+                stun.duration -= 1
+                if stun.duration <= 0:
+                    monster.remove_component(StunComponent)
+                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}의 스턴이 해제되었습니다."))
+                continue # 스턴 중에는 행동 불가
             
             ai = monster.get_component(AIComponent)
             pos = monster.get_component(PositionComponent)
-            if not ai or not pos: continue
+            stats = monster.get_component(StatsComponent)
+            if not ai or not pos or not stats: continue
+
+            # 실시간 행동 지연(Cooldown) 확인
+            current_time = time.time()
+            # 몬스터는 플레이어보다 약간 느리게 설정 (기본 0.6초 지연)
+            monster_delay = getattr(stats, 'action_delay', 0.6)
+            if current_time - stats.last_action_time < monster_delay:
+                continue
             
             # 맨해튼 거리 계산
             dist = abs(player_pos.x - pos.x) + abs(player_pos.y - pos.y)
             
+            # 5. 행동 결정 (플래그 기반 확장)
+            if "TELEPORT" in stats.flags and random.random() < 0.2:
+                # 30% 확률로 플레이어 근처로 순간이동
+                map_ent = self.world.get_entities_with_components({MapComponent})
+                if map_ent:
+                    mc = map_ent[0].get_component(MapComponent)
+                    tx, ty = player_pos.x + random.randint(-2, 2), player_pos.y + random.randint(-2, 2)
+                    if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
+                        pos.x, pos.y = tx, ty
+                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}가 갑자기 뒤로 나타났습니다!"))
+                        stats.last_action_time = current_time
+                        continue
+
             # 탐지 범위 밖이면 무시
             if dist > ai.detection_range:
                 continue
@@ -283,12 +392,82 @@ class MonsterAISystem(System):
                 if monster.has_component(DesiredPositionComponent):
                     monster.remove_component(DesiredPositionComponent)
                 monster.add_component(DesiredPositionComponent(dx=dx, dy=dy))
+                # 행동 수행 시간 기록
+                stats.last_action_time = current_time
 
 
 class CombatSystem(System):
     """엔티티 간 충돌 시 전투(데미지 계산)를 처리합니다."""
     def process(self):
-        pass
+        """매 턴 지속형 스킬 효과(오라) 처리"""
+        aura_entities = self.world.get_entities_with_components({SkillEffectComponent, PositionComponent})
+        for entity in aura_entities:
+            self._handle_skill_aura(entity)
+
+    def _handle_skill_aura(self, entity: Entity):
+        """지속 스킬(예: 휠 윈드)의 실시간 효과 처리"""
+        effect = entity.get_component(SkillEffectComponent)
+        pos = entity.get_component(PositionComponent)
+        if not effect or not pos: return
+
+        # 시각 효과 및 로직 틱 증가
+        effect.tick_count += 1
+        
+        # 데미지 및 넉백은 약 0.3초마다(6프레임마다) 1번씩만 적용
+        if effect.tick_count % 6 != 0:
+            return
+
+        # 주변 적 탐색 (8방향)
+        for dy in range(-effect.radius, effect.radius + 1):
+            for dx in range(-effect.radius, effect.radius + 1):
+                if dx == 0 and dy == 0: continue
+                
+                tx, ty = pos.x + dx, pos.y + dy
+                targets = [
+                    e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                    if e.get_component(PositionComponent).x == tx 
+                    and e.get_component(PositionComponent).y == ty
+                    and e.entity_id != entity.entity_id
+                ]
+                
+                for target in targets:
+                    # 1. 데미지 적용
+                    self._apply_damage(entity, target, distance=1)
+                    
+                    # 2. 스턴 효과 (0.5초 부여 + 연출)
+                    if not target.has_component(StunComponent):
+                        target.add_component(StunComponent(duration=0.5))
+                        # 시각 효과 추가
+                        e_id = self.world.create_entity().entity_id
+                        self.world.add_component(e_id, PositionComponent(x=tx, y=ty))
+                        self.world.add_component(e_id, RenderComponent(char='?', color='yellow'))
+                        self.world.add_component(e_id, EffectComponent(duration=0.2))
+                    
+                    # 3. 넉백 효과 (플레이어 반대 방향으로 1칸)
+                    self._apply_knockback(entity, target)
+
+    def _apply_knockback(self, attacker: Entity, target: Entity):
+        """대상을 공격자 반대 방향으로 밀어냄"""
+        a_pos = attacker.get_component(PositionComponent)
+        t_pos = target.get_component(PositionComponent)
+        map_ent = self.world.get_entities_with_components({MapComponent})
+        if not a_pos or not t_pos or not map_ent: return
+        map_comp = map_ent[0].get_component(MapComponent)
+
+        # 밀려날 방향 (공격자 -> 대상 방향 그대로)
+        dx = 1 if t_pos.x > a_pos.x else (-1 if t_pos.x < a_pos.x else 0)
+        dy = 1 if t_pos.y > a_pos.y else (-1 if t_pos.y < a_pos.y else 0)
+        
+        nx, ny = t_pos.x + dx, t_pos.y + dy
+        
+        # 이동 가능한 공간(바닥)이고 다른 엔티티가 없는지 확인
+        if 0 <= nx < map_comp.width and 0 <= ny < map_comp.height and map_comp.tiles[ny][nx] == '.':
+            # 다른 엔티티 체크
+            others = [e for e in self.world.get_entities_with_components({PositionComponent}) 
+                     if e.get_component(PositionComponent).x == nx and e.get_component(PositionComponent).y == ny]
+            if not others:
+                t_pos.x, t_pos.y = nx, ny
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}이(가) 뒤로 밀려났습니다!"))
 
     def handle_directional_attack_event(self, event: DirectionalAttackEvent):
         """특정 방향으로 사거리 내의 모든 적을 공격"""
@@ -309,7 +488,7 @@ class CombatSystem(System):
         attacker_name = self._get_entity_name(attacker)
         self.event_manager.push(MessageEvent(f'"{attacker_name}"의 원거리 공격!'))
 
-        # 사거리만큼 일직선상 조사
+        # 사거리만큼 일직선상 조사 (애니메이션 효과 포함)
         for dist in range(1, event.range_dist + 1):
             target_x = a_pos.x + (event.dx * dist)
             target_y = a_pos.y + (event.dy * dist)
@@ -317,11 +496,29 @@ class CombatSystem(System):
             # 맵 경계/벽 체크 (공격 차단)
             if not (0 <= target_x < map_comp.width and 0 <= target_y < map_comp.height):
                 break
+            
+            # 시각적 이펙트 생성 및 애니메이션
+            from .components import EffectComponent
+            effect_entity = self.world.create_entity()
+            self.world.add_component(effect_entity.entity_id, PositionComponent(x=target_x, y=target_y))
+            effect_char = '-' if event.dx != 0 else '|'
+            self.world.add_component(effect_entity.entity_id, RenderComponent(char=effect_char, color='yellow'))
+            self.world.add_component(effect_entity.entity_id, EffectComponent(duration=0.2))
+
+            # 즉시 렌더링 호출 (애니메이션 느낌 유도)
+            if hasattr(self.world, 'engine'):
+                self.world.engine._render()
+                time.sleep(0.03) # 30ms 대기
+
             if map_comp.tiles[target_y][target_x] == '#':
                 self.event_manager.push(MessageEvent("공격이 벽에 막혔습니다."))
+                self.world.delete_entity(effect_entity.entity_id) # 잔상 삭제
                 break
 
-            # 해당 위치의 엔티티 찾기
+            # 잔상 삭제 (날아가는 표현을 위해 현재 타일 이펙트 제거)
+            self.world.delete_entity(effect_entity.entity_id)
+
+            # 해당 위치의 엔티티 찾기 (관통 공격이므로 매 칸 체크)
             targets_at_pos = [
                 e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
                 if e.get_component(PositionComponent).x == target_x
@@ -419,35 +616,82 @@ class CombatSystem(System):
         damage = max(1, int(a_stats.attack * damage_multiplier) - t_stats.defense)
         t_stats.current_hp -= damage
         
+        # 4. 피격 피드백 (Hit Flash) 추가
+        if not target.has_component(HitFlashComponent):
+            target.add_component(HitFlashComponent(duration=0.15))
+
+        # 5. 적중 효과 (플래그 기반) 어빌리티
+        if hasattr(attacker, 'get_component'):
+            a_flags = a_stats.flags # 무기나 몬스터 본체의 플래그
+            if "STUN_ON_HIT" in a_flags:
+                if not target.has_component(StunComponent):
+                   target.add_component(StunComponent(duration=1.0))
+                   self.event_manager.push(MessageEvent(f"{target_name}이(가) 충격으로 기절했습니다!"))
+            
+            # 타격 시 스턴 플래그가 있는 스킬인 경우
+            skill_source = getattr(self, '_current_skill_on_hit', None)
+            if skill_source and "STUN" in skill_source.flags:
+                if not target.has_component(StunComponent):
+                   target.add_component(StunComponent(duration=2.0))
+            if skill_source and "KNOCKBACK" in skill_source.flags:
+                self._apply_knockback(attacker, target)
+        
         attacker_name = self._get_entity_name(attacker)
         target_name = self._get_entity_name(target)
         
         self.event_manager.push(MessageEvent(f'"{target_name}"은(는) {damage}의 데미지를 입었다.{advantage_msg}'))
         
+        # 3.5 주변 동료 분노 (Angry AI)
+        # 플레이어가 몬스터를 공격한 경우에만 발동
+        player_entity = self.world.get_player_entity()
+        if player_entity and attacker.entity_id == player_entity.entity_id and target.has_component(MonsterComponent):
+            t_pos = target.get_component(PositionComponent)
+            if t_pos:
+                # 주변 5칸 내의 다른 몬스터들 탐색
+                all_monsters = self.world.get_entities_with_components([MonsterComponent, AIComponent, PositionComponent])
+                for ally in all_monsters:
+                    if ally.entity_id == target.entity_id: continue
+                    a_pos = ally.get_component(PositionComponent)
+                    dist = abs(a_pos.x - t_pos.x) + abs(a_pos.y - t_pos.y) # Manhattan distance
+                    if dist <= 5:
+                        ai_comp = ally.get_component(AIComponent)
+                        if ai_comp.behavior != AIComponent.CHASE:
+                            ai_comp.behavior = AIComponent.CHASE
+                            # (선택) 분노 메시지는 너무 많아질 수 있으므로 로그에 1번만 출력하거나 생략
+    
         # 4. 사망 처리
         if t_stats.current_hp <= 0:
             t_stats.current_hp = 0
             self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
             
             if target.has_component(MonsterComponent):
-                # 몬스터 사망 시 시체 생성
+                # 몬스터 사망 시 시체로 변환 (영구적 죽음)
                 pos = target.get_component(PositionComponent)
                 if pos:
-                    corpse_entity = self.world.create_entity()
-                    self.world.add_component(corpse_entity.entity_id, PositionComponent(x=pos.x, y=pos.y))
-                    self.world.add_component(corpse_entity.entity_id, RenderComponent(char='%', color='red'))
-                    self.world.add_component(corpse_entity.entity_id, CorpseComponent(original_name=target_name))
+                    # 1. 컴포넌트 정리 (동작/기여 로직 제거)
+                    target.remove_component(AIComponent)
+                    target.remove_component(MonsterComponent)
+                    target.remove_component(StatsComponent)
                     
-                    # 전리품 설정 (랜덤 골드 및 확률적 아이템)
-                    loot_items = []
-                    item_defs = self.world.engine.item_defs if hasattr(self.world.engine, 'item_defs') else None
-                    if item_defs and random.random() < 0.2: # 20% 확률로 아이템 드롭
-                        random_item_name = random.choice(list(item_defs.keys()))
-                        loot_items.append({'item': item_defs[random_item_name], 'qty': 1})
+                    # 2. 시각 효과 변경 (시체 토큰으로 변환)
+                    render = target.get_component(RenderComponent)
+                    if render:
+                        render.char = '%'
+                        render.color = 'dark_grey'
                     
-                    self.world.add_component(corpse_entity.entity_id, LootComponent(items=loot_items, gold=random.randint(5, 20)))
-                
-                self.world.delete_entity(target.entity_id)
+                    # 3. 시체 컴포넌트 추가
+                    target.add_component(CorpseComponent(original_name=target_name))
+                    
+                    # 4. 전리품 설정 (기존 로직 유지하되 엔티티는 그대로 둠)
+                    if not target.has_component(LootComponent):
+                        loot_items = []
+                        item_defs = self.world.engine.item_defs if hasattr(self.world.engine, 'item_defs') else None
+                        if item_defs and random.random() < 0.2:
+                            random_item_name = random.choice(list(item_defs.keys()))
+                            loot_items.append({'item': item_defs[random_item_name], 'qty': 1})
+                        
+                        target.add_component(LootComponent(items=loot_items, gold=random.randint(5, 20)))
+                # 더 이상 delete_entity를 하지 않음
 
     def handle_collision_event(self, event: CollisionEvent):
         """충돌 이벤트 발생 시 공격자와 대상이 있으면 전투 처리"""
@@ -466,6 +710,381 @@ class CombatSystem(System):
             return
 
         self._apply_damage(attacker, target, distance=1)
+
+    def handle_skill_use_event(self, event: SkillUseEvent):
+        """스킬 사용 로직 처리"""
+        attacker = self.world.get_entity(event.attacker_id)
+        if not attacker: return
+
+        a_stats = attacker.get_component(StatsComponent)
+        if not a_stats: return
+
+        # 스킬 데이터 가져오기 (Engine에 저장된 데이터를 사용)
+        skill_defs = getattr(self.world.engine, 'skill_defs', {})
+        skill = skill_defs.get(event.skill_name)
+        
+        # 만약 DB에 없다면 (샌드박스 등의 하드코딩된 이름일 경우 임시 생성)
+        if not skill:
+            # 샌드박스 등에서 직접 넘긴 이름일 경우를 위한 예외 처리
+            if "화염구" in event.skill_name:
+                skill = type('obj', (object,), {
+                    'name': event.skill_name, 'cost_value': 10, 'damage': 30, 
+                    'subtype': 'PROJECTILE', 'range': 6, 'type': 'ATTACK', 'element': '불', 'cost_type': 'MP'
+                })
+            else:
+                self.event_manager.push(MessageEvent(f"알 수 없는 스킬입니다: {event.skill_name}"))
+                return
+
+        # MP/STAMINA 소모 체크
+        if hasattr(skill, 'cost_type'):
+            if skill.cost_type == "MP":
+                if a_stats.current_mp < skill.cost_value:
+                    self.event_manager.push(MessageEvent("마력이 부족합니다!"))
+                    return
+                a_stats.current_mp -= skill.cost_value
+            elif skill.cost_type == "STAMINA":
+                if a_stats.current_stamina < skill.cost_value:
+                    self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
+                    return
+                a_stats.current_stamina -= skill.cost_value
+        else: # 기본 MP 소모
+            if a_stats.current_mp < skill.cost_value:
+                self.event_manager.push(MessageEvent("마력이 부족합니다!"))
+                return
+            a_stats.current_mp -= skill.cost_value
+
+        # 스킬 레벨 가져오기
+        inv = attacker.get_component(InventoryComponent)
+        skill_level = 1
+        if inv and skill.name in inv.skill_levels:
+            skill_level = inv.skill_levels[skill.name]
+        elif inv:
+            # 베이스 네임으로 재시도 (LvX 제거된 이름)
+            import re
+            base_name = re.sub(r' Lv\d+', '', skill.name)
+            skill_level = inv.skill_levels.get(base_name, 1)
+
+        # 레벨 기반 스케일링 (SCALABLE 플래그가 있는 경우에만 적용)
+        if "SCALABLE" in getattr(skill, 'flags', set()):
+            # 1. 데미지: 레벨당 +50% 복리 또는 합산 (여기선 합산)
+            scaled_damage = int(skill.damage * (1 + 0.5 * (skill_level - 1)))
+            # 2. 사거리: 레벨당 +1
+            scaled_range = skill.range + (skill_level - 1)
+            # 3. 지속시간: 레벨당 +1초 (속성에 따라 다를 수 있음)
+            scaled_duration = getattr(skill, 'duration', 5.0) + (skill_level - 1)
+        else:
+            scaled_damage = skill.damage
+            scaled_range = skill.range
+            scaled_duration = getattr(skill, 'duration', 5.0)
+
+        # 시스템 전역 사용을 위해 스킬 객체 복사본 생성하여 스케일링 값 저장
+        from copy import copy
+        effective_skill = copy(skill)
+        effective_skill.damage = scaled_damage
+        effective_skill.range = scaled_range
+        effective_skill.duration = scaled_duration
+        
+        self.event_manager.push(MessageEvent(f"'{effective_skill.name}' 발동! (Lv.{skill_level}, MP -{skill.cost_value})"))
+
+        # 스킬 타입별 처리 (플래그 기반)
+        if "PROJECTILE" in effective_skill.flags or effective_skill.subtype == "PROJECTILE":
+            self._handle_projectile_skill(attacker, effective_skill, event.dx, event.dy)
+        elif "AREA" in effective_skill.flags or effective_skill.subtype == "AREA":
+            self._handle_area_skill(attacker, effective_skill)
+        elif "AURA" in effective_skill.flags or effective_skill.subtype == "SELF" and "STUN" in effective_skill.flags:
+            # 지속형 오라 효과 (예: 휠 윈드)
+            attacker.add_component(SkillEffectComponent(
+                name=effective_skill.name,
+                duration=effective_skill.duration,
+                damage=effective_skill.damage,
+                radius=effective_skill.range,
+                flags=effective_skill.flags
+            ))
+        else:
+            self._handle_self_skill(attacker, effective_skill)
+
+
+        # 마지막 렌더링 (잔상 제거용)
+        if hasattr(self.world, 'engine'):
+            self.world.engine._render()
+
+    def _handle_projectile_skill(self, attacker, skill, dx, dy):
+        """직선 발사형 스킬: 레벨별 특수 연출 처리"""
+        a_pos = attacker.get_component(PositionComponent)
+        map_entities = self.world.get_entities_with_components({MapComponent})
+        if not map_entities: return
+        map_comp = map_entities[0].get_component(MapComponent)
+        
+        # 시각적 이펙트를 표시할 위치 리스트
+        for dist in range(1, skill.range + 1):
+            tx, ty = a_pos.x + (dx * dist), a_pos.y + (dy * dist)
+            
+            # 발사 패턴 (플래그 기반)
+            positions = []
+            if "SPLIT" in skill.flags: # 갈라지는 탄환
+                if dist < skill.range:
+                    if dx != 0: positions = [(tx, ty - 1), (tx, ty + 1)]
+                    else: positions = [(tx - 1, ty), (tx + 1, ty)]
+                else: positions = [(tx, ty)]
+            elif "CONVERGE" in skill.flags: # 모여드는 탄환
+                # (생략: 갈래 로직은 동일하게 구현하거나 각기 다르게 처리 가능)
+                if dist < skill.range:
+                    if dx != 0: positions = [(tx, ty - 2), (tx, ty + 2)]
+                    else: positions = [(tx - 2, ty), (tx + 2, ty)]
+                else: positions = [(tx, ty)]
+            else: # 일반
+                positions = [(tx, ty)]
+
+            # 유효한 위치만 필터링 (벽 체크 등)
+            valid_positions = []
+            for px, py in positions:
+                if (0 <= px < map_comp.width and 0 <= py < map_comp.height) and map_comp.tiles[py][px] != '#':
+                    valid_positions.append((px, py))
+            
+            if not valid_positions and dist == 1: # 시작부터 막히면 종료
+                break
+            
+            # 이펙트 생성
+            effect_ids = []
+            from .components import EffectComponent, RenderComponent
+            char = '#' if "Lv1" in skill.name or "Lv2" in skill.name or "Lv3" in skill.name else '*'
+            color = 'red' if getattr(skill, 'element', '') == '불' else 'blue'
+            
+            for px, py in valid_positions:
+                effect = self.world.create_entity()
+                e_id = effect.entity_id
+                self.world.add_component(e_id, PositionComponent(x=px, y=py))
+                self.world.add_component(e_id, RenderComponent(char=char, color=color))
+                self.world.add_component(e_id, EffectComponent(duration=0.2))
+                effect_ids.append(e_id)
+
+            # 애니메이션 렌더링
+            if hasattr(self.world, 'engine'):
+                self.world.engine._render()
+                time.sleep(0.04)
+
+            # 적 충돌 체크 (모든 발사 위치에서 체크)
+            hit_target = False
+            for px, py in valid_positions:
+                targets = [
+                    e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                    if e.get_component(PositionComponent).x == px 
+                    and e.get_component(PositionComponent).y == py
+                    and e.entity_id != attacker.entity_id
+                ]
+                
+                if targets:
+                    on_hit = getattr(skill, 'on_hit_effect', "없음")
+                    if on_hit == "EXPLOSION":
+                        self._handle_explosion(attacker, px, py, skill)
+                    else:
+                        for target in targets:
+                            self._apply_skill_damage(attacker, target, skill, dx, dy)
+                    hit_target = True
+                    break
+
+            # 이펙트 엔티티 삭제
+            for e_id in effect_ids:
+                self.world.delete_entity(e_id)
+
+            if hit_target:
+                if hasattr(self.world, 'engine'):
+                    self.world.engine._render()
+                return
+
+        # 사거리 끝에서 종료 시 렌더링 (잔상 제거)
+        if hasattr(self.world, 'engine'):
+            self.world.engine._render()
+
+    def _handle_explosion(self, attacker, cx, cy, skill):
+        """폭발 효과: 지정된 좌표 주변 8방향(3x3)에 피해 및 이펙트 생성"""
+        from .components import EffectComponent, RenderComponent, PositionComponent, StatsComponent
+        
+        self.event_manager.push(MessageEvent(f"!!! '{skill.name}' 폭발 !!!"))
+        
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                tx, ty = cx + dx, cy + dy
+                
+                # 시각적 이펙트 (폭발 느낌)
+                e_id = self.world.create_entity().entity_id
+                self.world.add_component(e_id, PositionComponent(x=tx, y=ty))
+                self.world.add_component(e_id, RenderComponent(char='#', color='yellow'))
+                self.world.add_component(e_id, EffectComponent(duration=0.2))
+                
+                # 범위 내 모든 엔티티 피해 적용
+                targets = [
+                    e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                    if e.get_component(PositionComponent).x == tx 
+                    and e.get_component(PositionComponent).y == ty
+                ]
+                for target in targets:
+                    self._apply_skill_damage(attacker, target, skill, dx, dy)
+        
+        # 폭발 애니메이션 표시
+        if hasattr(self.world, 'engine'):
+            self.world.engine._render()
+            time.sleep(0.15) # 폭발 연출을 위해 잠시 대기
+            
+            # 폭발 이펙트 엔티티 정리
+            effect_entities = self.world.get_entities_with_components({EffectComponent})
+            for effect in effect_entities:
+                # 폭발 이펙트만 골라서 삭제 (노란색 '#' 문자)
+                render = effect.get_component(RenderComponent)
+                if render and render.char == '#' and render.color == 'yellow':
+                    self.world.delete_entity(effect.entity_id)
+            
+            # 최종 렌더링 (잔상 제거)
+            self.world.engine._render()
+
+    def _handle_area_skill(self, attacker, skill):
+        """주변 4방향 공격"""
+        a_pos = attacker.get_component(PositionComponent)
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        
+        for dx, dy in directions:
+            for dist in range(1, skill.range + 1):
+                tx, ty = a_pos.x + (dx * dist), a_pos.y + (dy * dist)
+                
+                effect = self.world.create_entity()
+                self.world.add_component(effect.id if hasattr(effect, 'id') else effect.entity_id, PositionComponent(x=tx, y=ty))
+                self.world.add_component(effect.id if hasattr(effect, 'id') else effect.entity_id, RenderComponent(char='x', color='purple'))
+                self.world.add_component(effect.id if hasattr(effect, 'id') else effect.entity_id, EffectComponent(duration=0.2))
+
+                targets = [
+                    e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                    if e.get_component(PositionComponent).x == tx 
+                    and e.get_component(PositionComponent).y == ty
+                    and e.entity_id != attacker.entity_id
+                ]
+                for target in targets:
+                    self._apply_skill_damage(attacker, target, skill, dx, dy)
+
+    def _handle_self_skill(self, attacker, skill):
+        """회복 등 자신에게 거는 스킬"""
+        if skill.type == "RECOVERY":
+            stats = attacker.get_component(StatsComponent)
+            old_hp = stats.current_hp
+            heal_amount = getattr(skill, 'damage', 10)
+            stats.current_hp = min(stats.max_hp, stats.current_hp + heal_amount)
+            recovered = stats.current_hp - old_hp
+            self.event_manager.push(MessageEvent(f"체력을 {recovered} 회복했습니다!"))
+            
+            # 시각 효과 (초록색 반짝임)
+            pos = attacker.get_component(PositionComponent)
+            if pos:
+                e_id = self.world.create_entity().entity_id
+                self.world.add_component(e_id, PositionComponent(x=pos.x, y=pos.y))
+                self.world.add_component(e_id, RenderComponent(char='*', color='green'))
+                self.world.add_component(e_id, EffectComponent(duration=0.2))
+
+    def _apply_skill_damage(self, attacker, target, skill, dx=0, dy=0):
+        """스킬 데미지 및 부가 효과 적용"""
+        a_stats = attacker.get_component(StatsComponent)
+        t_stats = target.get_component(StatsComponent)
+        if not a_stats or not t_stats: return
+
+        # 스킬 기본 데미지 + 스탯 비례
+        base_dmg = getattr(skill, 'damage', 10)
+        damage = max(1, base_dmg - t_stats.defense)
+        
+        t_stats.current_hp -= damage
+        attacker_name = self._get_entity_name(attacker)
+        target_name = self._get_entity_name(target)
+        self.event_manager.push(MessageEvent(f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {damage} 데미지!"))
+
+        # 부가 효과 처리
+        on_hit = getattr(skill, 'on_hit_effect', "없음")
+        if on_hit == "STUN":
+            self._handle_stun_effect(target)
+        elif on_hit == "KNOCKBACK":
+            self._handle_knockback(target, dx, dy)
+
+    def _handle_stun_effect(self, target):
+        """스턴 효과 부여 및 시각 효과 (흔들림 + 캐릭터 위에 ?)"""
+        if not target.has_component(StunComponent):
+            target.add_component(StunComponent(duration=2))
+            
+            # 1. 흔들림 애니메이션 (좌우로 떨리는 느낌)
+            pos = target.get_component(PositionComponent)
+            if pos and hasattr(self.world, 'engine'):
+                old_x = pos.x
+                for _ in range(3): # 3번 흔들림
+                    pos.x = old_x + 1
+                    self.world.engine._render()
+                    time.sleep(0.03)
+                    pos.x = old_x - 1
+                    self.world.engine._render()
+                    time.sleep(0.03)
+                pos.x = old_x # 원래 위치 복구
+            
+            # 2. 시각 효과 (머리 위 '?' 마크)
+            if pos:
+                # 머리 위 위치 (맵 밖으로 나가지 않게 체크)
+                tx, ty = pos.x, max(0, pos.y - 1)
+                
+                e_id = self.world.create_entity().entity_id
+                self.world.add_component(e_id, PositionComponent(x=tx, y=ty))
+                self.world.add_component(e_id, RenderComponent(char='?', color='yellow'))
+                self.world.add_component(e_id, EffectComponent(duration=0.2))
+            
+            self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}가 기절했습니다!"))
+
+    def _handle_knockback(self, target, dx, dy):
+        """넉백 효과: 타격 방향으로 밀어냄"""
+        pos = target.get_component(PositionComponent)
+        if not pos: return
+
+        # 1칸 밀어내기 시도
+        new_x = pos.x + dx
+        new_y = pos.y + dy
+
+        map_entity_list = self.world.get_entities_with_components({MapComponent})
+        if not map_entity_list: return
+        map_comp = map_entity_list[0].get_component(MapComponent)
+
+        # 벽이나 경계 체크
+        if 0 <= new_x < map_comp.width and 0 <= new_y < map_comp.height:
+            if map_comp.tiles[new_y][new_x] == '#':
+                # 벽에 부딪힘 -> 추가 데미지
+                stats = target.get_component(StatsComponent)
+                if stats:
+                    extra_dmg = 5
+                    stats.current_hp -= extra_dmg
+                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}가 벽에 부딪혀 {extra_dmg}의 추가 피해를 입었습니다!"))
+                return
+
+            # 다른 엔티티 있는지 체크
+            blocking_entities = [
+                e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                if e.get_component(PositionComponent).x == new_x 
+                and e.get_component(PositionComponent).y == new_y
+                and e.entity_id != target.entity_id
+            ]
+
+            if blocking_entities:
+                collision_target = blocking_entities[0]
+                stats_target = target.get_component(StatsComponent)
+                stats_collision = collision_target.get_component(StatsComponent)
+                
+                impact_dmg = 5
+                if stats_target: stats_target.current_hp -= impact_dmg
+                if stats_collision: stats_collision.current_hp -= impact_dmg
+                
+                name_target = self.world.engine._get_entity_name(target)
+                name_collision = self.world.engine._get_entity_name(collision_target)
+                self.event_manager.push(MessageEvent(f"{name_target}와 {name_collision}가 충돌하여 서로 {impact_dmg}의 피해를 입었습니다!"))
+                return
+
+            # 가로막는 것이 없으면 이동
+            pos.x, pos.y = new_x, new_y
+            self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}가 뒤로 밀려났습니다!"))
+        else:
+            # 맵 경계 밖 (벽 취급)
+            stats = target.get_component(StatsComponent)
+            if stats:
+                stats.current_hp -= 5
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}가 벽에 부딪혀 피해를 입었습니다!"))
 
     def _get_entity_name(self, entity) -> str:
         """엔티티의 이름을 가져옵니다 (메시지용)"""
@@ -512,10 +1131,86 @@ class RenderSystem(System):
                  if target_entity:
                      monster_comp = target_entity.get_component(MonsterComponent)
                      if monster_comp:
-                         message_comp.add_message(f"{monster_comp.type_name}와 충돌했습니다. 전투가 시작됩니다.")
+                         if monster_comp.type_name == "상인":
+                             message_comp.add_message("상인을 만났습니다. (거래 가능)")
+                         else:
+                             message_comp.add_message(f"{monster_comp.type_name}와 충돌했습니다. 전투가 시작됩니다.")
                      else:
                          message_comp.add_message(f"알 수 없는 엔티티와 충돌했습니다.")
             else:
                  message_comp.add_message(f"충돌 발생: {event.collision_type}")
 
     # handle_move_success_event는 현재 특별한 메시지가 필요 없으므로 생략
+class RegenerationSystem(System):
+    """실시간 HP/MP/Stamina 회복 및 소모를 처리하는 시스템"""
+    def __init__(self, world):
+        super().__init__(world)
+        self.last_regen_time = time.time()
+
+    def process(self):
+        current_time = time.time()
+        dt = current_time - self.last_regen_time
+        if dt < 1.0: # 1초마다 회복 로직 실행
+            return
+        
+        self.last_regen_time = current_time
+        
+        for entity in self.world.get_entities_with_components({StatsComponent}):
+            stats = entity.get_component(StatsComponent)
+            
+            # HP 자연 회복 (레벨당 1)
+            if stats.current_hp > 0 and stats.current_hp < stats.max_hp:
+                stats.current_hp = min(stats.max_hp, stats.current_hp + 1)
+            
+            # MP 자연 회복 (기본 2)
+            if stats.current_mp < stats.max_mp:
+                stats.current_mp = min(stats.max_mp, stats.current_mp + 2)
+                
+            # 스테미너 자연 회복 (가만히 있을 때)
+            if stats.current_stamina < stats.max_stamina:
+                stats.current_stamina = min(stats.max_stamina, stats.current_stamina + 0.1)
+
+class TimeSystem(System):
+    """지속 시간(Duration)이 있는 컴포넌트들을 실시간으로 관리하는 시스템"""
+    def __init__(self, world):
+        super().__init__(world)
+        self.last_tick = time.time()
+
+    def process(self):
+        current_time = time.time()
+        dt = current_time - self.last_tick
+        self.last_tick = current_time
+
+        # 1. 스턴(Stun) 시간 감액
+        stun_entities = self.world.get_entities_with_components({StunComponent})
+        for entity in list(stun_entities): # 리스트 복사로 안전하게 순회
+            stun = entity.get_component(StunComponent)
+            stun.duration -= dt
+            if stun.duration <= 0:
+                entity.remove_component(StunComponent)
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 기절이 해제되었습니다!"))
+
+        # 2. 시각 효과(Effect) 시간 감액
+        effect_entities = self.world.get_entities_with_components({EffectComponent})
+        for entity in list(effect_entities):
+            effect = entity.get_component(EffectComponent)
+            effect.duration -= dt
+            if effect.duration <= 0:
+                self.world.delete_entity(entity.entity_id)
+
+        # 3. 지속 스킬(SkillEffect) 시간 감액
+        skill_entities = self.world.get_entities_with_components({SkillEffectComponent})
+        for entity in list(skill_entities):
+            skill = entity.get_component(SkillEffectComponent)
+            skill.duration -= dt
+            if skill.duration <= 0:
+                entity.remove_component(SkillEffectComponent)
+                self.event_manager.push(MessageEvent(f"{skill.name} 효과가 끝났습니다."))
+
+        # 4. 피격 피드백(HitFlash) 시간 감액
+        flash_entities = self.world.get_entities_with_components({HitFlashComponent})
+        for entity in list(flash_entities):
+            flash = entity.get_component(HitFlashComponent)
+            flash.duration -= dt
+            if flash.duration <= 0:
+                entity.remove_component(HitFlashComponent)

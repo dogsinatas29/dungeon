@@ -72,14 +72,14 @@ class Item:
             )
         elif item_type == 'SKILLBOOK':
             return SkillBook(
-                item_id=definition.id,
+                item_id=definition.id if hasattr(definition, 'id') else definition.name,
                 name=definition.name,
                 description=getattr(definition, 'description', ""),
                 item_type=item_type,
                 value=getattr(definition, 'value', 0),
-                req_level=getattr(definition, 'req_level', 0),
-                # items.txt에서 effect_type 필드를 skill_id로 사용
-                skill_id=getattr(definition, 'effect_type', 'NONE')
+                req_level=getattr(definition, 'required_level', 0),
+                # data_manager.ItemDefinition의 skill_id 필드 사용
+                skill_id=getattr(definition, 'skill_id', 'NONE')
             )
         # TODO: 다른 아이템 타입에 대한 처리 추가 (ETC 등)
         else: # ETC 등 다른 모든 타입

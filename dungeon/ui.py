@@ -27,8 +27,11 @@ class ConsoleUI:
         self.messages = [] # 메시지 로그를 저장할 리스트
 
     def _clear_screen(self):
-        """화면을 깨끗하게 지웁니다."""
-        os.system(self.clear_command)
+        """화면을 깨끗하게 지웁니다. (ANSI 이스케이프 코드 사용으로 깜빡임 최소화)"""
+        # \033[H: 커서를 홈 위치(0,0)로 이동
+        # \033[J: 커서 위치부터 화면 끝까지 지움
+        sys.stdout.write("\033[H\033[J")
+        sys.stdout.flush()
 
     def add_message(self, message: str):
         """메시지 로그에 새로운 메시지를 추가합니다."""
@@ -102,43 +105,88 @@ class ConsoleUI:
         print(f"{COLOR_MAP['red']}        G A M E  O V E R           {COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['red']}==================================={COLOR_MAP['reset']}")
         print(f"\n    {message}\n")
-        print("    콘솔 창을 닫아 게임을 종료하십시오.")
+        print("    아무 키나 눌러 메인 메뉴로 돌아갑니다.")
+        self.get_key_input()
+
+    def show_save_list(self, save_files: list):
+        """저장된 게임 목록을 표시하고 선택(L), 삭제(D), 취소(ESC) 입력을 처리합니다."""
+        selected_index = 0
+        
+        while True:
+            self._clear_screen()
+            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}       저장된 게임 불러오기        {COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+            
+            if not save_files:
+                print("\n  저장된 게임이 없습니다.")
+                print(f"\n{COLOR_MAP['green']}  [B] 뒤로 가기{COLOR_MAP['reset']}")
+            else:
+                print("\n  [목록]")
+                for i, filename in enumerate(save_files):
+                    prefix = "> " if i == selected_index else "  "
+                    color = COLOR_MAP['green'] if i == selected_index else COLOR_MAP['white']
+                    print(f"{color}{prefix}{filename}{COLOR_MAP['reset']}")
+                
+                print(f"\n{COLOR_MAP['green']}  [↑/↓] 이동 | [ENTER/L] 불러오기 | [D/DEL] 삭제 | [B] 뒤로 가기{COLOR_MAP['reset']}")
+
+            key = self.get_key_input()
+
+            # 사용자의 환경에서 'b'가 확실히 작동하므로 이를 기본 종료 키로 사용
+            if key.lower() == 'b':
+                return None, None
+            
+            if not save_files:
+                continue
+
+            if key == readchar.key.UP:
+                selected_index = max(0, selected_index - 1)
+            elif key == readchar.key.DOWN:
+                selected_index = min(len(save_files) - 1, selected_index + 1)
+            elif key == readchar.key.ENTER or key == 'l' or key == 'L':
+                return "LOAD", save_files[selected_index]
+            elif key == readchar.key.DELETE or key in [readchar.key.DELETE, 'd', 'D', '\x1b[3~']: # DEL 키 ANSI 코드 포함
+                return "DELETE", save_files[selected_index]
         
     def render_all(self, map_data, player_stats):
         """
-        맵, 로그, 상태를 포함한 전체 화면을 렌더링합니다.
-        
-        Args:
-            map_data (str): 렌더링할 맵 문자열 (RendererSystem에서 생성)
-            player_stats (dict): 플레이어 상태 정보
+        맵, 로그, 상태를 포함한 전체 화면을 렌더링합니다. (버퍼링 및 ANSI 제어로 깜빡임 제로)
         """
-        self._clear_screen()
+        buffer = []
+        # \033[H: 커서를 맨 위(0,0)로 이동 (화면을 지우는 것보다 훨씬 빠름)
+        buffer.append("\033[H")
         
         # 1. 맵 렌더링
-        print(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}")
+        buffer.append(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}\n")
 
         for y_idx, row in enumerate(map_data):
             rendered_row = []
             for x_idx, (char, color) in enumerate(row):
                 rendered_row.append(f"{COLOR_MAP[color]}{char}")
-            final_row_string = "".join(rendered_row) + f"{COLOR_MAP['reset']}"
-            logging.debug(f"ConsoleUI.render_all: 렌더링될 행 {y_idx}: '{final_row_string.replace('\033', '[ESC]')}'") # ESC 코드 표시
-            print(final_row_string)
-
+            buffer.append("".join(rendered_row) + f"{COLOR_MAP['reset']}\n")
         
         # 2. 플레이어 상태
-        print(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}")
-        print(f" 이름: {player_stats.get('name', 'N/A')}")
-        print(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']} | 공격력: {player_stats.get('attack', 0)} | 방어력: {player_stats.get('defense', 0)}")
-        print(f" 열쇠: {', '.join(player_stats.get('inventory', ['없음']))}")
+        buffer.append(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}\n")
+        buffer.append(f" 이름: {player_stats.get('name', 'N/A'):<10} | 레벨: {player_stats.get('level', 1)}\n")
+        buffer.append(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<10} | MP: {player_stats.get('mp', 0)} | 골드: {player_stats.get('gold', 0)}G\n")
         
         # 3. 메시지 로그
-        print(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}")
-        for msg in self.messages[-5:]:
-            print(f"> {msg}")
+        buffer.append(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}\n")
+        msgs = self.messages[-5:]
+        for msg in msgs:
+            buffer.append(f"> {msg:<60}\n")
+        # 로그가 5줄 미만일 때 줄 맞춤
+        for _ in range(5 - len(msgs)):
+            buffer.append("\n")
         
         # 4. 입력 가이드
-        print(f"\n{COLOR_MAP['green']}[이동] 방향키, HJKL, YUBN | [Q] 종료 | [I] 인벤토리{COLOR_MAP['reset']}")
+        buffer.append(f"\n{COLOR_MAP['green']}[이동] 방향키 | [5/.] 대기 | [I] 인벤토리 | [1-0] 퀵슬롯{COLOR_MAP['reset']}\n")
+        
+        # \033[J: 커서 아래의 남은 잔상들을 지움 (맵 크기가 줄어들거나 할 때 유용)
+        buffer.append("\033[J")
+        
+        # 한 번에 출력하여 원자성 확보
+        sys.stdout.write("".join(buffer))
         sys.stdout.flush()
 
     def render_inventory(self, player_inventory_items: dict, player_equipped_items: dict):
