@@ -21,3 +21,4 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 방패 밀치기 스킬북,SKILLBOOK,전방의 적을 밀쳐내는 기술 서적.,B,#F5F5DC,1,0,0,0,0,0,0,SHIELD_BASH,
 화염의 검,WEAPON,타오르는 불꽃이 깃든 검.,/,#FF4500,1,12,0,0,0,1,1,None,ELEMENT_FIRE
 물방울 갑옷,ARMOR,물의 기운이 서린 갑옷.,[,#1E90FF,1,0,4,0,0,1,0,None,ELEMENT_WATER
+횃불,CONSUMABLE,30초 동안 시야 반경이 2배로 증가합니다.,i,#FFD700,1,0,0,0,0,0,0,None,VISION_UP

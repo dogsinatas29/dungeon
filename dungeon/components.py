@@ -36,6 +36,7 @@ class StatsComponent(Component):
         self.element = element
         self.gold = gold
         self.weapon_range = 1 # 장착된 무기의 사거리
+        self.vision_range = 5 # 기본 시야 반경
 
         # 실시간 액션 관련 (초 단위)
         self.last_action_time = 0.0

@@ -283,6 +283,10 @@ class Engine:
 
         # 2. 복도 스폰 추가 (10% 확률)
         for cx, cy in dungeon_map.corridors:
+            # [안전지대] 시작 지점 근처(반경 8칸)는 스폰 제외
+            if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 64:
+                continue
+
             if random.random() < 0.1:
                 monster_entity = self.world.create_entity()
                 self.world.add_component(monster_entity.entity_id, PositionComponent(x=cx, y=cy))
@@ -515,6 +519,7 @@ class Engine:
                 if self.state == GameState.PLAYING:
                     self.turn_number += 1 # 이제 turn_number는 전역 틱(Tick) 카운터로 작동
                     
+                    # [중요] 시스템 실행 전 이벤트 처리
                     # [중요] 시스템 실행 전 이벤트 처리
                     self.world.event_manager.process_events()
                     
@@ -1114,7 +1119,10 @@ class Engine:
         if player_entity and self.dungeon_map:
             p_pos = player_entity.get_component(PositionComponent)
             if p_pos:
-                self.dungeon_map.reveal_tiles(p_pos.x, p_pos.y, radius=8)
+                # 시야 밝히기
+                stats = player_entity.get_component(StatsComponent)
+                vision_range = stats.vision_range if stats else 5
+                self.dungeon_map.reveal_tiles(p_pos.x, p_pos.y, radius=vision_range)
 
         # 1. 맵 렌더링 (Left Top - Viewport 적용)
         map_comp_list = self.world.get_entities_with_components([MapComponent])
