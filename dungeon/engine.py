@@ -2251,9 +2251,9 @@ class Engine:
                       if bonuses:
                           self.renderer.draw_text(start_x + 2, detail_y, ', '.join(bonuses), "green")
                           detail_y += 1
-
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
+            help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
             help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
         else:
             help_text = "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기"
