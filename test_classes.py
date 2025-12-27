@@ -121,6 +121,20 @@ def test_sorcerer():
         result = game_engine.run()
         print(f"Game ended with result: {result}")
 
+def test_barbarian():
+    """바바리안 테스트"""
+    print("=" * 60)
+    print("바바리안 (BARBARIAN) 테스트 환경")
+    print("=" * 60)
+    
+    ui = ConsoleUI()
+    game_state = create_test_character("BARBARIAN", "TestBarbarian")
+    
+    if game_state:
+        game_engine = engine.Engine("TestBarbarian", game_state)
+        result = game_engine.run()
+        print(f"Game ended with result: {result}")
+
 def main():
     """메인 테스트 메뉴"""
     print("\n" + "=" * 60)
@@ -130,9 +144,10 @@ def main():
     print("1. 전사 (WARRIOR)")
     print("2. 도적 (ROGUE)")
     print("3. 마법사 (SORCERER)")
-    print("4. 종료")
+    print("4. 바바리안 (BARBARIAN)")
+    print("5. 종료")
     
-    choice = input("\n선택 (1-4): ").strip()
+    choice = input("\n선택 (1-5): ").strip()
     
     if choice == "1":
         test_warrior()
@@ -141,6 +156,8 @@ def main():
     elif choice == "3":
         test_sorcerer()
     elif choice == "4":
+        test_barbarian()
+    elif choice == "5":
         print("테스트를 종료합니다.")
     else:
         print("잘못된 선택입니다.")
