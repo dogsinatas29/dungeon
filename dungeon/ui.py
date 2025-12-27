@@ -108,6 +108,41 @@ class ConsoleUI:
         print("    아무 키나 눌러 메인 메뉴로 돌아갑니다.")
         self.get_key_input()
 
+    def show_class_selection(self, class_defs: dict):
+        """직업 선택 메뉴를 표시하고 선택된 직업 정의를 반환합니다."""
+        selected_index = 0
+        class_list = list(class_defs.values())
+        
+        while True:
+            self._clear_screen()
+            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}           직 업 선 택           {COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+            
+            print("\n  당신의 직업을 선택하세요:\n")
+            for i, cls in enumerate(class_list):
+                prefix = "> " if i == selected_index else "  "
+                color = COLOR_MAP['green'] if i == selected_index else COLOR_MAP['white']
+                print(f"{color}{prefix}{cls.name} - {cls.description}{COLOR_MAP['reset']}")
+            
+            # 선택된 직업 상세 정보 표시
+            sel_cls = class_list[selected_index]
+            print(f"\n{COLOR_MAP['blue']}--- [ {sel_cls.name} ] 상세 능력치 ---{COLOR_MAP['reset']}")
+            print(f" HP: {sel_cls.hp:<4} | MP: {sel_cls.mp:<4}")
+            print(f" STR: {sel_cls.str:<3} | MAG: {sel_cls.mag:<3} | DEX: {sel_cls.dex:<3} | VIT: {sel_cls.vit:<3}")
+            print(f" 기본 스킬: {sel_cls.base_skill}")
+            
+            print(f"\n{COLOR_MAP['green']}  [↑/↓] 이동 | [ENTER] 선택{COLOR_MAP['reset']}")
+
+            key = self.get_key_input()
+
+            if key == readchar.key.UP:
+                selected_index = max(0, selected_index - 1)
+            elif key == readchar.key.DOWN:
+                selected_index = min(len(class_list) - 1, selected_index + 1)
+            elif key == readchar.key.ENTER:
+                return class_list[selected_index]
+
     def show_save_list(self, save_files: list):
         """저장된 게임 목록을 표시하고 선택(L), 삭제(D), 취소(ESC) 입력을 처리합니다."""
         selected_index = 0

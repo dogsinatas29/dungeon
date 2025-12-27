@@ -29,7 +29,8 @@ class SoundSystem(System):
             "MAGIC_ICE": "ice.wav",
             "MAGIC_BOLT": "bolt.wav",
             "HEAL": "heal.wav",
-            "EXPLOSION": "explosion.wav"
+            "EXPLOSION": "explosion.wav",
+            "COIN": "coin.wav"
         }
         self.sound_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds")
 

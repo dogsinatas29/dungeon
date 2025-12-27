@@ -1,56 +1,254 @@
 {
     "Sharp": {
         "name_kr": "날카로운",
-        "attack_bonus": 3,
-        "defense_bonus": 0,
-        "hp_bonus": 0,
-        "mp_bonus": 0,
-        "flags": []
+        "damage_percent_min": 20,
+        "damage_percent_max": 35,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 1
     },
-    "Hard": {
-        "name_kr": "단단한",
-        "attack_bonus": 0,
-        "defense_bonus": 2,
-        "hp_bonus": 5,
-        "mp_bonus": 0,
-        "flags": []
+    "Fine": {
+        "name_kr": "정교한",
+        "to_hit_bonus_min": 20,
+        "to_hit_bonus_max": 30,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 1
     },
-    "Piercing": {
-        "name_kr": "관통하는",
-        "attack_bonus": 1,
-        "defense_bonus": 0,
-        "hp_bonus": 0,
-        "mp_bonus": 0,
-        "flags": [
-            "PIERCING"
-        ]
+    "Warrior's": {
+        "name_kr": "전사의",
+        "to_hit_bonus_min": 20,
+        "to_hit_bonus_max": 30,
+        "damage_percent_min": 40,
+        "damage_percent_max": 50,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 5
     },
-    "Burning": {
-        "name_kr": "불타는",
-        "attack_bonus": 2,
-        "defense_bonus": 0,
-        "hp_bonus": 0,
-        "mp_bonus": 10,
-        "element": "불",
-        "flags": []
+    "Merciless": {
+        "name_kr": "무자비한",
+        "damage_percent_min": 151,
+        "damage_percent_max": 175,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 12
     },
-    "Frozen": {
-        "name_kr": "얼어붙은",
-        "attack_bonus": 1,
-        "defense_bonus": 1,
-        "hp_bonus": 0,
-        "mp_bonus": 10,
-        "element": "물",
-        "flags": []
+    "King's": {
+        "name_kr": "왕의",
+        "to_hit_bonus_min": 76,
+        "to_hit_bonus_max": 100,
+        "damage_percent_min": 151,
+        "damage_percent_max": 175,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 15
     },
-    "Explosive": {
-        "name_kr": "폭발하는",
-        "attack_bonus": 4,
-        "defense_bonus": 0,
-        "hp_bonus": 0,
-        "mp_bonus": 0,
-        "flags": [
-            "SPLASH"
-        ]
+    "Hyena's": {
+        "name_kr": "하이에나의",
+        "mp_bonus_min": 11,
+        "mp_bonus_max": 25,
+        "allowed_types": [
+            "WEAPON",
+            "STAFF",
+            "ACCESSORY"
+        ],
+        "min_level": 1
+    },
+    "Frog's": {
+        "name_kr": "개구리의",
+        "mp_bonus_min": 26,
+        "mp_bonus_max": 40,
+        "allowed_types": [
+            "WEAPON",
+            "STAFF",
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Dragon's": {
+        "name_kr": "용의",
+        "mp_bonus_min": 81,
+        "mp_bonus_max": 100,
+        "allowed_types": [
+            "WEAPON",
+            "STAFF",
+            "ACCESSORY"
+        ],
+        "min_level": 12
+    },
+    "Wizard's": {
+        "name_kr": "마법사의",
+        "mp_bonus_min": 16,
+        "mp_bonus_max": 30,
+        "allowed_types": [
+            "STAFF"
+        ],
+        "min_level": 8
+    },
+    "Cobalt": {
+        "name_kr": "코발트의",
+        "res_lightning_min": 41,
+        "res_lightning_max": 50,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Garnet": {
+        "name_kr": "석류석의",
+        "res_fire_min": 41,
+        "res_fire_max": 50,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Ruby": {
+        "name_kr": "루비의",
+        "res_fire_min": 51,
+        "res_fire_max": 60,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Obsidian": {
+        "name_kr": "흑요석의",
+        "res_all_min": 31,
+        "res_all_max": 40,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 15
+    },
+    "Jade": {
+        "name_kr": "비취",
+        "res_all_min": 10,
+        "res_all_max": 20,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 8
+    },
+    "Obsidian": {
+        "name_kr": "흑요석",
+        "res_all_min": 31,
+        "res_all_max": 40,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 15
+    },
+    "Dragon's": {
+        "name_kr": "용의",
+        "mp_bonus_min": 81,
+        "mp_bonus_max": 100,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 15
+    },
+    "Silver": {
+        "name_kr": "은빛",
+        "to_hit_bonus_min": 11,
+        "to_hit_bonus_max": 20,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Gold": {
+        "name_kr": "금빛",
+        "to_hit_bonus_min": 21,
+        "to_hit_bonus_max": 30,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Ruby": {
+        "name_kr": "루비",
+        "res_fire_min": 51,
+        "res_fire_max": 60,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Sapphire": {
+        "name_kr": "사파이어",
+        "res_lightning_min": 51,
+        "res_lightning_max": 60,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Emerald": {
+        "name_kr": "에메랄드",
+        "res_poison_min": 51,
+        "res_poison_max": 60,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Blessed": {
+        "name_kr": "축복받은",
+        "hp_bonus_min": 30,
+        "hp_bonus_max": 50,
+        "mp_bonus_min": 20,
+        "mp_bonus_max": 30,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Arcane": {
+        "name_kr": "비전의",
+        "mag_bonus_min": 10,
+        "mag_bonus_max": 20,
+        "mp_bonus_min": 30,
+        "mp_bonus_max": 50,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 8
+    },
+    "Glorious": {
+        "name_kr": "영광스러운",
+        "str_bonus_min": 5,
+        "str_bonus_max": 10,
+        "dex_bonus_min": 5,
+        "dex_bonus_max": 10,
+        "vit_bonus_min": 5,
+        "vit_bonus_max": 10,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Cursed": {
+        "name_kr": "저주받은",
+        "allowed_types": [
+            "WEAPON",
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 1
     }
 }

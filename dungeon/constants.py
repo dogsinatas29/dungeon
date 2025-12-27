@@ -33,7 +33,7 @@ ELEMENT_WOOD = "WOOD"
 ELEMENT_EARTH = "EARTH"
 ELEMENT_POISON = "POISON"
 
-# 속성 색상 매핑
+# 속성 색상 매핑 (Legacy: UI 오버홀 이후에는 RARITY_COLORS 사용 권장)
 ELEMENT_COLORS = {
     ELEMENT_NONE: "white",
     ELEMENT_WATER: "blue",
@@ -41,6 +41,16 @@ ELEMENT_COLORS = {
     ELEMENT_WOOD: "green",
     ELEMENT_EARTH: "yellow",
     ELEMENT_POISON: "magenta"
+}
+
+# 속성 아이콘 매핑 (NEW)
+ELEMENT_ICONS = {
+    ELEMENT_NONE: "",
+    ELEMENT_WATER: "❄️", # User request: Ice='❄️'. Mapping WATER to Ice icon for now.
+    ELEMENT_FIRE: "🔥",
+    ELEMENT_WOOD: "🌲",
+    ELEMENT_EARTH: "⛰️",
+    ELEMENT_POISON: "☠️"
 }
 
 # 상성 관계 (A > B: A가 B를 공격할 때 우위)
@@ -52,3 +62,8 @@ ELEMENT_ADVANTAGE = {
     ELEMENT_EARTH: ELEMENT_WATER
 }
 
+# --- Rarity Colors (NEW) ---
+RARITY_NORMAL = "white"
+RARITY_MAGIC = "cyan"
+RARITY_UNIQUE = "yellow"
+RARITY_CURSED = "red"

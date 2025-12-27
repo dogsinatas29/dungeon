@@ -17,17 +17,53 @@ class RenderComponent(Component):
         self.char = char
         self.color = color
 
+class StatModifierComponent(Component):
+    """일시적인 능력치 증감 (버프/디버프)"""
+    def __init__(self, str_mod: int = 0, mag_mod: int = 0, dex_mod: int = 0, vit_bonus: int = 0, duration: float = 0.0, source: str = ""):
+        self.str_mod = str_mod
+        self.mag_mod = mag_mod
+        self.dex_mod = dex_mod
+        self.vit_mod = vit_bonus # items.csv 헤더가 vit_bonus이므로 호환성 유지
+        self.duration = duration
+        self.expires_at = 0.0 # TimeSystem에서 설정됨
+        self.source = source
+
 class StatsComponent(Component):
     """전투 및 능력치 데이터 (GEMINI.md 호환)"""
-    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE", gold: int = 0, base_attack: int = None, base_defense: int = None, **kwargs):
+    def __init__(self, max_hp: int, current_hp: int, attack: int, defense: int, max_mp: int = 0, current_mp: int = 0, max_stamina: float = 100.0, current_stamina: float = 100.0, element: str = "NONE", gold: int = 0, base_attack: int = None, base_defense: int = None, 
+                 strength: int = 10, mag: int = 10, dex: int = 10, vit: int = 10, attack_min: int = None, attack_max: int = None, defense_min: int = None, defense_max: int = None, **kwargs):
         self.max_hp = max_hp
         self.current_hp = current_hp
-        self.attack = attack
-        self.defense = defense
+        self.attack = attack_max if attack_max is not None else attack
+        self.attack_min = attack_min if attack_min is not None else self.attack
+        self.attack_max = attack_max if attack_max is not None else self.attack
+        self.defense = defense_max if defense_max is not None else defense
+        self.defense_min = defense_min if defense_min is not None else self.defense
+        self.defense_max = defense_max if defense_max is not None else self.defense
         
         # 기본 능력치 (장비 효과 제외)
-        self.base_attack = base_attack if base_attack is not None else attack
-        self.base_defense = base_defense if base_defense is not None else defense
+        self.base_attack = base_attack if base_attack is not None else self.attack
+        self.base_attack_min = attack_min if attack_min is not None else self.attack_min
+        self.base_attack_max = attack_max if attack_max is not None else self.attack_max
+        self.base_defense = base_defense if base_defense is not None else self.defense
+        self.base_defense_min = defense_min if defense_min is not None else self.defense_min
+        self.base_defense_max = defense_max if defense_max is not None else self.defense_max
+        
+        # [Fix] Base Max HP/MP for recalc
+        self.base_max_hp = max_hp
+        self.base_max_mp = max_mp
+        
+        # 신규 스탯 (STR, MAG, DEX, VIT)
+        self.str = strength
+        self.mag = mag
+        self.dex = dex
+        self.vit = vit
+        
+        # 기본 능력치 저장 (강화/버프 제외 순수 능력치)
+        self.base_str = strength
+        self.base_mag = mag
+        self.base_dex = dex
+        self.base_vit = vit
         
         self.max_mp = max_mp
         self.current_mp = current_mp
@@ -37,16 +73,39 @@ class StatsComponent(Component):
         self.gold = gold
         self.weapon_range = 1 # 장착된 무기의 사거리
         self.vision_range = 5 # 기본 시야 반경
+        
+        # [Diablo 1] 저항력 (Fire, Ice, Lightning, Poison)
+        self.res_fire = kwargs.get('res_fire', 0)
+        self.res_ice = kwargs.get('res_ice', 0)
+        self.res_lightning = kwargs.get('res_lightning', 0)
+        self.res_poison = kwargs.get('res_poison', 0)
+        self.res_all = kwargs.get('res_all', 0)
+        
+        # [Affix System] 추가 스탯
+        self.damage_percent = 0 # 데미지 % 증가
+        self.damage_max_bonus = 0 # 최대 데미지 추가 (of Carnage)
+        self.to_hit_bonus = 0   # 명중률 % 증가
+        self.life_leech = 0     # 생명력 흡수 (%)
+        self.attack_speed = 0   # 공격 속도 (단계)
 
         # 실시간 액션 관련 (초 단위)
         self.last_action_time = 0.0
         self.action_delay = 0.2 # 기본 공격/이동 쿨다운 (0.2초)
         
         # 어빌리티 플래그 (Set[str])
-        self.flags = {f.strip().upper() for f in element.split(',') if f.strip()} if isinstance(element, str) and ',' in element else set()
-        if isinstance(element, str) and element != "NONE" and ',' not in element:
-            self.flags.add(element.upper())
-        self.base_flags = self.flags.copy()
+        # JSON 로딩 시 list로 들어오거나 콤마 구분자 문자열로 들어올 수 있음
+        if isinstance(kwargs.get('flags'), list):
+            self.flags = set(kwargs['flags'])
+        else:
+            self.flags = {f.strip().upper() for f in element.split(',') if f.strip()} if isinstance(element, str) and ',' in element else set()
+            if isinstance(element, str) and element != "NONE" and ',' not in element:
+                self.flags.add(element.upper())
+        
+        # 기본 플래그 복원
+        if isinstance(kwargs.get('base_flags'), list):
+            self.base_flags = set(kwargs['base_flags'])
+        else:
+            self.base_flags = self.flags.copy()
         
         # 특수 상태
         self.sees_hidden = False
@@ -57,8 +116,13 @@ class StatsComponent(Component):
         return self.current_hp > 0
 
     def to_dict(self):
-        """JSON 저장을 위해 딕셔너리로 변환"""
-        return {k: v for k, v in vars(self).items() if not k.startswith('_')}
+        """JSON 저장을 위해 딕셔너리로 변환 (set은 list로 변환)"""
+        data = {k: v for k, v in vars(self).items() if not k.startswith('_')}
+        if 'flags' in data and isinstance(data['flags'], set):
+            data['flags'] = list(data['flags'])
+        if 'base_flags' in data and isinstance(data['base_flags'], set):
+            data['base_flags'] = list(data['base_flags'])
+        return data
 
 class MonsterComponent(Component):
     """몬스터 유형 식별자"""
@@ -78,24 +142,36 @@ class AIComponent(Component):
 
 class InventoryComponent(Component):
     """아이템 및 장비 데이터를 저장"""
-    def __init__(self, items: dict = None, equipped: dict = None, item_slots: list = None, skill_slots: list = None, skills: list = None):
+    def __init__(self, items: dict = None, equipped: dict = None, item_slots: list = None, skill_slots: list = None, skills: list = None, skill_levels: dict = None, skill_books_read: dict = None):
         self.items = items if items else {}
         self.equipped = equipped if equipped else {}
         self.item_slots = item_slots if item_slots else [None] * 5 # 1~5번 아이템
         self.skill_slots = skill_slots if skill_slots else [None] * 5 # 6~0번 스킬
         self.skills = skills if skills else ["기본 공격"]
         # 스킬 레벨 관리 (Dict[skill_name, level])
-        self.skill_levels = {name: 1 for name in self.skills}
+        self.skill_levels = skill_levels if skill_levels else {name: 1 for name in self.skills}
+        # 스킬북 읽은 횟수 (Dict[skill_name, read_count])
+        self.skill_books_read = skill_books_read if skill_books_read else {name: 0 for name in self.skills}
 
     def to_dict(self):
         """JSON 저장을 위해 딕셔너리로 변환 (ItemDefinition 객체 처리)"""
+        serialized_items = {}
+        for k, v in self.items.items():
+            # v: {'item': ItemDefinition, 'qty': int, 'prefix': str(optional), ...}
+            new_v = v.copy()
+            if "item" in new_v and hasattr(new_v["item"], "to_dict"):
+                new_v["item"] = new_v["item"].to_dict()
+            # prefix는 문자열 ID이므로 그대로 저장
+            serialized_items[k] = new_v
+        
         return {
-            "items": {k: {"item": v["item"].to_dict() if hasattr(v["item"], "to_dict") else v["item"], "qty": v["qty"]} for k, v in self.items.items()},
+            "items": serialized_items,
             "equipped": {k: v.to_dict() if hasattr(v, "to_dict") else v for k, v in self.equipped.items()},
             "item_slots": self.item_slots,
             "skill_slots": self.skill_slots,
             "skills": self.skills,
-            "skill_levels": self.skill_levels
+            "skill_levels": self.skill_levels,
+            "skill_books_read": self.skill_books_read
         }
 
 class LevelComponent(Component):
@@ -141,6 +217,19 @@ class LootComponent(Component):
         self.items = items if items else []  # [{'item': Item, 'qty': 1}, ...]
         self.gold = gold
 
+    def to_dict(self):
+        serialized_items = []
+        for v in self.items:
+            # v: {'item': ItemDefinition, 'qty': int, ...}
+            new_v = v.copy()
+            if "item" in new_v and hasattr(new_v["item"], "to_dict"):
+                new_v["item"] = new_v["item"].to_dict()
+            serialized_items.append(new_v)
+        return {
+            "items": serialized_items,
+            "gold": self.gold
+        }
+
 class CorpseComponent(Component):
     """시체임을 나타내는 컴포넌트"""
     def __init__(self, original_name: str):
@@ -155,6 +244,28 @@ class ShopComponent(Component):
     """상점 컴포넌트"""
     def __init__(self, items: List[Dict] = None):
         self.items = items if items else [] # 판매 목록
+
+    def to_dict(self):
+        serialized_items = []
+        for v in self.items:
+            # v: {'item': ItemDefinition, 'price': int, ...}
+            new_v = v.copy()
+            if "item" in new_v and hasattr(new_v["item"], "to_dict"):
+                new_v["item"] = new_v["item"].to_dict()
+            serialized_items.append(new_v)
+        return {
+            "items": serialized_items
+        }
+
+class ShrineComponent(Component):
+    """신전 컴포넌트 - 복구 또는 강화 서비스 제공"""
+    def __init__(self, is_used: bool = False):
+        self.is_used = is_used  # 사용 여부 (한 번 사용하면 소멸)
+    
+    def to_dict(self):
+        return {
+            "is_used": self.is_used
+        }
 
 class EffectComponent(Component):
     """임시 시각적 효과 (공격 궤적 등)"""
@@ -174,8 +285,19 @@ class SkillEffectComponent(Component):
         self.damage = damage
         self.radius = radius
         self.effect_type = effect_type
-        self.flags = flags if flags else set()
+        self.flags = set(flags) if flags else set() # list 등으로 들어와도 set으로 변환
         self.tick_count = 0 # 시각 효과(깜빡임)를 위한 카운터
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "duration": self.duration,
+            "damage": self.damage,
+            "radius": self.radius,
+            "effect_type": self.effect_type,
+            "flags": list(self.flags),
+            "tick_count": self.tick_count
+        }
 
 class HitFlashComponent(Component):
     """피격 시 시각적 피드백(번쩍임)을 위한 컴포넌트"""

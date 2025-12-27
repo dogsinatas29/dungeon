@@ -35,6 +35,11 @@ class ShopOpenEvent(Event):
     def __init__(self, shopkeeper_id: int):
         self.shopkeeper_id = shopkeeper_id
 
+class ShrineOpenEvent(Event):
+    """신전과 충돌 시 신전 UI를 열기 위해 발생"""
+    def __init__(self, shrine_id: int):
+        self.shrine_id = shrine_id
+
 class DirectionalAttackEvent(Event):
     """플레이어가 특정 방향으로 원거리 공격을 수행할 때 발생"""
     def __init__(self, attacker_id: int, dx: int, dy: int, range_dist: int):

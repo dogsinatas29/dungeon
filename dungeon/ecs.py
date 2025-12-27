@@ -12,20 +12,46 @@ class Entity:
     """게임 내 모든 객체를 나타내며, 컴포넌트들의 묶음"""
     def __init__(self, entity_id: int):
         self.entity_id = entity_id
-        self._components: Dict[Type[Component], Component] = {}
+        # 컴포넌트 타입별로 인스턴스 리스트 저장 (여러 보너스/상태이상 중첩 지원)
+        self._components: Dict[Type[Component], List[Component]] = {}
 
-    def add_component(self, component: Component):
-        self._components[type(component)] = component
+    def add_component(self, component: Component, overwrite: bool = False):
+        """컴포넌트를 추가합니다. overwrite=True이면 기존 동일 타입 컴포넌트를 제거하고 추가합니다."""
+        c_type = type(component)
+        if overwrite or c_type not in self._components:
+            self._components[c_type] = [component]
+        else:
+            self._components[c_type].append(component)
+        # 역방향 참조 (편의용)
+        if hasattr(component, 'entity'):
+            component.entity = self
 
     def remove_component(self, component_type: Type[Component]):
+        """해당 타입의 모든 컴포넌트를 제거합니다."""
         if component_type in self._components:
             del self._components[component_type]
 
+    def remove_component_instance(self, component: Component):
+        """특정 컴포넌트 인스턴스 하나만 제거합니다."""
+        c_type = type(component)
+        if c_type in self._components:
+            if component in self._components[c_type]:
+                self._components[c_type].remove(component)
+                if not self._components[c_type]:
+                    del self._components[c_type]
+
     def get_component(self, component_type: Type[Component]) -> Component | None:
-        return self._components.get(component_type)
+        """해당 타입의 첫 번째 컴포넌트를 반환합니다."""
+        comps = self._components.get(component_type)
+        return comps[0] if comps else None
+
+    def get_components(self, component_type: Type[Component]) -> List[Component]:
+        """해당 타입의 모든 컴포넌트 인스턴스 리스트를 반환합니다."""
+        return self._components.get(component_type, [])
 
     def has_component(self, component_type: Type[Component]) -> bool:
-        return component_type in self._components
+        """해당 타입의 컴포넌트가 하나라도 있는지 확인합니다."""
+        return component_type in self._components and len(self._components[component_type]) > 0
 
 class Event:
     """시스템 간 통신을 위한 메시지"""
@@ -115,9 +141,9 @@ class World:
         if entity_id in self._entities:
             del self._entities[entity_id]
 
-    def add_component(self, entity_id: int, component: Component):
+    def add_component(self, entity_id: int, component: Component, overwrite: bool = False):
         if entity_id in self._entities:
-            self._entities[entity_id].add_component(component)
+            self._entities[entity_id].add_component(component, overwrite)
 
     def remove_component(self, entity_id: int, component_type: Type[Component]):
         if entity_id in self._entities:

@@ -27,7 +27,7 @@ from dungeon.ui import ConsoleUI
 ITEM_DEFINITIONS = load_item_definitions()
 SKILL_DEFINITIONS = load_skill_definitions()
 
-def start_game(ui, player_name: str, new_game=False, game_state_data=None):
+def start_game(ui, player_name: str, new_game=False, game_state_data=None, class_data=None):
     """새 게임 또는 이어하기를 시작합니다."""
 
     if new_game or not game_state_data:
@@ -41,22 +41,14 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None):
                 "1": {
                     "PositionComponent": {'x': 0, 'y': 0, 'map_id': "1F"},
                     "MovableComponent": {},
-                    "StatsComponent": {
-                        'max_hp': 100, 
-                        'current_hp': 100, 
-                        'attack': 10,
-                        'defense': 5,
-                        'max_mp': 50,
-                        'current_mp': 50,
-                        'max_stamina': 100,\
-                        'current_stamina': 100
-                    },
+                    # StatsComponent는 Engine._initialize_world에서 class_data를 기반으로 생성됨
                     "NameComponent": {'name': player_name},
                     "InventoryComponent": {'items': {}, 'equipped': {}},
                 }
             },
             "player_specific_data": player_instance.to_dict(),
-            "dungeon_maps": {}
+            "dungeon_maps": {},
+            "selected_class": class_data.class_id if class_data else None
         }
         game_state_data = initial_game_state
         ui.add_message(f"{player_name}, 던전에 온 것을 환영하네.")
@@ -83,8 +75,16 @@ def main_menu():
     while True:
         choice = ui.show_main_menu()
         if choice == 0: # 새 게임
+            # 1. 직업 선택
+            from dungeon.data_manager import load_class_definitions
+            class_defs = load_class_definitions()
+            selected_class = ui.show_class_selection(class_defs)
+            
+            # 2. 이름 입력
             player_name = ui.get_player_name()
-            start_game(ui, player_name, new_game=True)
+            
+            # 3. 게임 시작
+            start_game(ui, player_name, new_game=True, class_data=selected_class)
         elif choice == 1: # 이어하기
             from dungeon.data_manager import list_save_files
             save_files = list_save_files()
@@ -95,7 +95,12 @@ def main_menu():
                 if game_state_data:
                     start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
                 else:
-                    ui.add_message("파일 로드에 실패했습니다.")
+                    ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
+                    ui._clear_screen()
+                    print(f"\n  [오류] {selected_name} 파일을 로드하는 중 문제가 발생했습니다.")
+                    print("  데이터가 손상되었거나 형식이 맞지 않습니다.")
+                    print("\n  아무 키나 눌러 메인 메뉴로 돌아갑니다.")
+                    ui.get_key_input()
             elif action == "DELETE":
                 delete_save_data(selected_name)
                 ui.add_message(f"{selected_name}의 저장 데이터를 삭제했습니다.")

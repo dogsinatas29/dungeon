@@ -12,16 +12,12 @@ def extract_sfx(input_video, start_time, duration, output_name):
 
     output_path = os.path.join(sounds_dir, f"{output_name}.wav")
     
-    # ffmpeg 존재 확인
-    try:
-        subprocess.run(['ffmpeg', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
-        print("❌ 오류: 'ffmpeg'가 시스템에 설치되어 있지 않습니다.")
-        print("설치 방법: sudo apt install ffmpeg")
-        return False
+    # ffmpeg 경로 설정: 로컬 정적 빌드 우선 사용
+    local_ffmpeg = os.path.join(os.path.dirname(__file__), "dungeon/ffmpeg-7.0.2-amd64-static/ffmpeg")
+    ffmpeg_cmd = local_ffmpeg if os.path.exists(local_ffmpeg) else 'ffmpeg'
 
     command = [
-        'ffmpeg', '-i', input_video,
+        ffmpeg_cmd, '-i', input_video,
         '-ss', str(start_time), '-t', str(duration),
         '-vn', '-acodec', 'pcm_s16le', '-ar', '44100', '-ac', '2',
         output_path, '-y'
@@ -42,22 +38,19 @@ def run_pack_extraction(video_file, pack_type="default"):
     # 예시 팩 구성 (필요에 따라 수정 가능)
     packs = {
         "battle": [
-            (0, 1, 'swing'),
-            (2, 1, 'hit'),
-            (4, 1.5, 'crit'),
-            (6, 1, 'miss'),
-            (8, 1, 'block'),
-            (10, 2, 'levelup'),
-            (13, 1, 'coin'),
-            (15, 0.5, 'step')
+            (0.5, 1.5, 'swing'),
+            (2.5, 1.5, 'hit'),
+            (4.5, 2.0, 'crit')
         ],
         "magic": [
-            (0, 2, 'fire'),
-            (3, 2, 'ice'),
-            (6, 2, 'bolt'),
-            (9, 2, 'heal'),
-            (12, 2, 'bash'),
-            (15, 3, 'explosion')
+            (0.5, 2.0, 'fire'),
+            (3.0, 2.0, 'ice'),
+            (5.5, 3.0, 'explosion')
+        ],
+        "system": [
+            (1.0, 1.5, 'coin'),
+            (3.0, 1.5, 'levelup'),
+            (5.0, 1.0, 'step')
         ]
     }
     
