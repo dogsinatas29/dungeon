@@ -1385,6 +1385,10 @@ class Engine:
                     # 0.5초 주기로 z와 Z를 번갈아 표시하거나 깜빡임
                     sleep_char = "z" if int(time.time() * 2) % 2 == 0 else "Z"
                     self.renderer.draw_char(screen_x, screen_y - 1, sleep_char, "light_cyan")
+                
+                # 중독(Poison) 표시: P (보라색/Magenta)
+                elif entity.has_component(PoisonComponent):
+                    self.renderer.draw_char(screen_x, screen_y - 1, "P", "magenta")
         
         # 2-1. 오라/특수 효과 렌더링 (휘몰아치는 연출)
         aura_entities = self.world.get_entities_with_components([PositionComponent, SkillEffectComponent])

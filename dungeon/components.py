@@ -205,3 +205,10 @@ class SleepComponent(Component):
     """수면 상태: 행동 불가, 데미지 입을 시 해제"""
     def __init__(self, duration: float = 5.0):
         self.duration = duration
+
+class PoisonComponent(Component):
+    """중독 상태: 일정 시간마다 데미지 입음"""
+    def __init__(self, damage: int = 5, duration: float = 10.0):
+        self.damage = damage
+        self.duration = duration
+        self.tick_timer = 1.0 # 1초마다 데미지

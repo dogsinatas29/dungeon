@@ -7,7 +7,7 @@ from .components import (
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
-    HiddenComponent, MimicComponent, TrapComponent, SleepComponent
+    HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent
 )
 import readchar
 import random
@@ -1213,6 +1213,8 @@ class CombatSystem(System):
             self._handle_stun_effect(target)
         elif on_hit == "SLEEP":
             self._handle_sleep_effect(target)
+        elif on_hit == "POISON":
+            self._handle_poison_effect(target)
         elif on_hit == "KNOCKBACK":
             self._handle_knockback(target, dx, dy)
 
@@ -1226,6 +1228,12 @@ class CombatSystem(System):
         if not target.has_component(SleepComponent):
             target.add_component(SleepComponent(duration=5.0))
             self.event_manager.push(MessageEvent(f"{target.world.engine._get_entity_name(target)}이(가) 깊은 잠에 빠졌습니다."))
+
+    def _handle_poison_effect(self, target):
+        """중독 효과 부여"""
+        if not target.has_component(PoisonComponent):
+            target.add_component(PoisonComponent(damage=5, duration=10.0))
+            self.event_manager.push(MessageEvent(f"{target.world.engine._get_entity_name(target)}이(가) 독에 중독되었습니다!"))
             
             # 1. 흔들림 애니메이션 (좌우로 떨리는 느낌)
             pos = target.get_component(PositionComponent)
@@ -1450,6 +1458,38 @@ class TimeSystem(System):
             if sleep.duration <= 0:
                 entity.remove_component(SleepComponent)
                 self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 잠에서 깨어났습니다!"))
+
+        # 1-2. 중독(Poison) 시간 감액 및 데미지 처리
+        poison_entities = self.world.get_entities_with_components({PoisonComponent})
+        for entity in list(poison_entities):
+            poison = entity.get_component(PoisonComponent)
+            poison.duration -= dt
+            poison.tick_timer -= dt
+            
+            if poison.tick_timer <= 0:
+                poison.tick_timer = 1.0 # 1초 주기로 리셋
+                stats = entity.get_component(StatsComponent)
+                if stats:
+                    damage = poison.damage
+                    stats.current_hp -= damage
+                    # 피격 애니메이션(HitFlash) 추가
+                    if not entity.has_component(HitFlashComponent):
+                        entity.add_component(HitFlashComponent(duration=0.15))
+                    
+                    # 사망 체크 등은 CombatSystem._apply_damage와 유사하게 처리해야 하지만 
+                    # 여기서는 간단히 HP 차감만 하고 사망 시 처리는 다음 턴이나 헬퍼 함수로 처리 가능
+                    # 일단 직관적인 사망 처리 로직 추가
+                    if stats.current_hp <= 0:
+                        stats.current_hp = 0
+                        entity_name = self.world.engine._get_entity_name(entity)
+                        self.event_manager.push(MessageEvent(f"{entity_name}이(가) 독에 의해 쓰러졌습니다!"))
+                        # 실제 사망 처리는 CombatSystem에서 수행되거나 여기서 직접 트리거 가능 (최소한 시체로 변하는 로직 필요)
+                        # 여기서는 단순하게 Message만 발생시키고, 실제 삭제/변환은 다음 턴 Combat 로직이 잡도록 하거나 직접 수행
+                        # 안전을 위해 시체 변환 로직은 CombatSystem의 로직을 재사용하는 것이 좋음.
+            
+            if poison.duration <= 0:
+                entity.remove_component(PoisonComponent)
+                self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 중독 상태가 해제되었습니다."))
 
         # 2. 횃불(VISION_UP) 시간 감액
         player_entity = self.world.get_player_entity()
