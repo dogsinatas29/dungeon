@@ -55,6 +55,13 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
 ## TODO List
 
 ### High Priority
+- [ ] **Diablo 1 Boss System**:
+  - [ ] 9 Unique Bosses (The Butcher, Leoric, Gharbad, Zhar, Snotspill, Warlord of Blood, Lachdanan, Lazarus, Diablo)
+  - [ ] Boss dialogue/bark system ("Ah... Fresh Meat!")
+  - [ ] Guaranteed unique item drops per boss
+  - [ ] Hand-crafted boss maps (25F, 50F, 75F, 99F)
+  - [ ] Special boss abilities (summons, teleport, apocalypse, etc.)
+  - [ ] Diablo's pillar-based arena (99F)
 - [ ] **Staff Combat System** - dual-mode weapon mechanics:
   - [ ] Physical bash attack (melee, uses durability, STR-based damage)
   - [ ] Spell casting mode (ranged, uses charges, spell-specific damage)
