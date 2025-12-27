@@ -69,9 +69,10 @@ class MonsterDefinition:
 
 class SkillDefinition:
     """스킬 데이터를 담는 컨테이너 (CSV/텍스트파일 연동)"""
-    def __init__(self, ID, 이름, 필요레벨, 속성, 소모타입, 소모값, 필요장비, 효과_설명, 데미지, 스킬타입, 스킬서브타입, 사거리, 적중효과="없음", flags="", **kwargs):
+    def __init__(self, ID, 이름, 분류, 필요레벨, 속성, 소모타입, 소모값, 필요장비, 효과_설명, 데미지, 스킬타입, 스킬서브타입, 사거리, 적중효과="없음", flags="", **kwargs):
         self.id = ID
         self.name = 이름
+        self.category = 분류
         self.required_level = int(필요레벨)
         self.element = 속성
         self.cost_type = 소모타입
