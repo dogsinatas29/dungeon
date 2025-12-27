@@ -62,38 +62,61 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None, class
     # Engine 인스턴스 생성 및 실행
     # game_state_data를 전달하여 로드된 데이터(또는 초기 데이터)로 시작
     game_engine = engine.Engine(player_name, game_state_data)
+    
     game_result = game_engine.run()
     
     if game_result == "DEATH":
-        delete_save_data(player_name)
-        ui.show_game_over_screen("당신은 던전에서 장렬히 전사했습니다...")
+        ui.show_death_screen()
+        # 저장 파일 삭제
+        save_path = os.path.join(SAVE_DIR, f"{player_name}.json")
+        if os.path.exists(save_path):
+            os.remove(save_path)
+    elif game_result == "MENU":
+        # 메인 메뉴로 복귀 (게임 저장)
+        return "MENU"
+    
+    return game_result
 
 
 def main_menu():
-    """메인 메뉴를 표시하고 사용자 입력을 처리합니다."""
-    ui = ConsoleUI()
-    while True:
-        choice = ui.show_main_menu()
-        if choice == 0: # 새 게임
-            # 1. 직업 선택
+    """메인 메뉴 표시 및 선택 처리"""
+    ui = ConsoleUI() # Assuming UI() was a typo and ConsoleUI is intended, or UI needs to be imported/defined. Sticking to ConsoleUI for consistency with existing imports.
+    
+    while True:  # 메인 메뉴 루프
+        choice = ui.show_main_menu() # This method's return type would need to change to "NEW", "LOAD", "QUIT"
+        
+        if choice == "NEW":
+            # 직업 선택
             from dungeon.data_manager import load_class_definitions
             class_defs = load_class_definitions()
-            selected_class = ui.show_class_selection(class_defs)
+            selected_class = ui.show_class_selection(class_defs) # Assuming this is the equivalent of ui.select_class()
+            if not selected_class:
+                continue  # 취소 시 메인 메뉴로
             
-            # 2. 이름 입력
+            # 이름 입력
             player_name = ui.get_player_name()
+            if not player_name:
+                continue  # 취소 시 메인 메뉴로
             
-            # 3. 게임 시작
-            start_game(ui, player_name, new_game=True, class_data=selected_class)
-        elif choice == 1: # 이어하기
+            result = start_game(ui, player_name, new_game=True, class_data=selected_class)
+            if result == "MENU":
+                continue  # 메인 메뉴로 복귀
+            elif result == "QUIT": # Assuming start_game can also return "QUIT"
+                break  # 게임 종료
+        
+        elif choice == "LOAD":
             from dungeon.data_manager import list_save_files
             save_files = list_save_files()
+            action, selected_name = ui.show_save_list(save_files) # Assuming this is the equivalent of ui.select_save_file()
             
-            action, selected_name = ui.show_save_list(save_files)
             if action == "LOAD":
                 game_state_data = load_game_data(selected_name)
                 if game_state_data:
-                    start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
+                    result = start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
+                    if result == "MENU":
+                        continue  # 메인 메뉴로 복귀
+                    elif result == "QUIT": # Assuming start_game can also return "QUIT"
+                        break  # 게임 종료
                 else:
                     ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
                     ui._clear_screen()

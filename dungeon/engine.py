@@ -895,6 +895,13 @@ class Engine:
                     # Ctrl+C 처리 (\x03)
                     if action == '\x03':
                         raise KeyboardInterrupt
+                    
+                    # ESC 키로 메인 메뉴 복귀
+                    if action == '\x1b':  # ESC key
+                        self.world.event_manager.push(MessageEvent("메인 메뉴로 돌아갑니다..."))
+                        game_result = "MENU"
+                        self.is_running = False
+                        continue
 
                     action_lower = action.lower()
 
