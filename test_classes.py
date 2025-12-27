@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dungeon import engine
-from dungeon.ui import UI
+from dungeon.ui import ConsoleUI
 from dungeon.data_manager import load_class_definitions
 
 def create_test_character(class_id, player_name="TestPlayer"):
@@ -85,7 +85,7 @@ def test_warrior():
     print("전사 (WARRIOR) 테스트 환경")
     print("=" * 60)
     
-    ui = UI()
+    ui = ConsoleUI()
     game_state = create_test_character("WARRIOR", "TestWarrior")
     
     if game_state:
@@ -99,7 +99,7 @@ def test_rogue():
     print("도적 (ROGUE) 테스트 환경")
     print("=" * 60)
     
-    ui = UI()
+    ui = ConsoleUI()
     game_state = create_test_character("ROGUE", "TestRogue")
     
     if game_state:
@@ -113,7 +113,7 @@ def test_sorcerer():
     print("마법사 (SORCERER) 테스트 환경")
     print("=" * 60)
     
-    ui = UI()
+    ui = ConsoleUI()
     game_state = create_test_character("SORCERER", "TestSorcerer")
     
     if game_state:
