@@ -1441,6 +1441,10 @@ class Engine:
             
             skill_def = self.skill_defs.get(item.skill_id)
             if not skill_def:
+                # [Fix] skill_defs가 '이름'(한글)으로 인덱싱되어 있을 경우 대비하여 ID로 재검색
+                skill_def = next((s for s in self.skill_defs.values() if s.id == item.skill_id), None)
+            
+            if not skill_def:
                 self.world.event_manager.push(MessageEvent(f"존재하지 않는 기술의 비급서입니다: {item.skill_id}"))
                 return
             
