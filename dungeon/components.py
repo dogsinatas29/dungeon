@@ -92,6 +92,10 @@ class StatsComponent(Component):
         self.last_action_time = 0.0
         self.action_delay = 0.2 # 기본 공격/이동 쿨다운 (0.2초)
         
+        # [Real-time] 행동 쿨다운
+        self.last_action_time = 0.0
+        self.action_cooldown = 0.3  # 300ms - 플레이어 행동 간격
+        
         # 어빌리티 플래그 (Set[str])
         # JSON 로딩 시 list로 들어오거나 콤마 구분자 문자열로 들어올 수 있음
         if isinstance(kwargs.get('flags'), list):
