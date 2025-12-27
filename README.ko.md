@@ -2,7 +2,7 @@
 
 [English](README.md) | **한국어**
 
-파이썬 기반의 클래식 터미널 로그라이크 던전 크롤러 게임입니다. Entity Component System (ECS) 아키텍처를 사용하며 디아블로 1에서 영감을 받았습니다.
+Diablo like real time rogue for terminal
 
 ![Gameplay Screenshot](screenshots/gameplay_test.png)
 

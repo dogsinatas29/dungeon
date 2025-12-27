@@ -2,7 +2,7 @@
 
 **English** | [한국어](README.ko.md)
 
-A classic terminal-based roguelike dungeon crawler built with Python, featuring an Entity Component System (ECS) architecture and inspired by Diablo 1.
+Diablo like real time rogue for terminal
 
 ![Gameplay Screenshot](screenshots/gameplay_test.png)
 
