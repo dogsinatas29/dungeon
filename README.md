@@ -118,6 +118,38 @@ pip install readchar
 python3 dungeon/Start.py
 ```
 
+## Testing
+
+### Test Environment (test_classes.py)
+
+For comprehensive testing of all game features, use the test environment script:
+
+```bash
+python3 test_classes.py
+```
+
+**Features**:
+- Pre-configured characters at level 10
+- 10,000 gold for shop testing
+- All weapons, armor, and accessories
+- All skillbooks (Lv1-3) for every spell
+- 99 of each consumable item
+- Enhanced stats (+10 to all attributes)
+
+**Available Test Classes**:
+1. **Warrior** - High HP (180), STR 40, melee specialist
+2. **Rogue** - High DEX (40), critical hits, trap expert
+3. **Sorcerer** - High MAG (40), spell damage specialist
+4. **Barbarian** - Highest HP (240), STR 50, berserker
+
+**What to Test**:
+- Equipment system (weapons, armor, shields)
+- Skill learning (use skillbooks)
+- Combat mechanics (attack, skills, damage)
+- Item drops and rarity system
+- Shop interactions
+- Character progression
+
 ### Game Mechanics
 
 #### Stats
