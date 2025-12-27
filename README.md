@@ -4,6 +4,8 @@
 
 A classic terminal-based roguelike dungeon crawler built with Python, featuring an Entity Component System (ECS) architecture and inspired by Diablo 1.
 
+![Gameplay Screenshot](screenshots/gameplay_test.png)
+
 **Note**: This project was developed using Gemini as a pair programming assistant.
 
 **Status**: Currently undergoing balance testing.
@@ -58,13 +60,14 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
 ## TODO List
 
 ### High Priority
-- [ ] **Diablo 1 Boss System**:
-  - [ ] 9 Unique Bosses (The Butcher, Leoric, Gharbad, Zhar, Snotspill, Warlord of Blood, Lachdanan, Lazarus, Diablo)
+- [/] **Diablo 1 Boss System**:
+  - [x] **Boss Summoning Mechanic** (Desperate Call at 50% HP)
+  - [x] **Aggressive Boss AI** (All bosses use CHASE mode)
+  - [x] **Final Boss: Diablo** (Epic encounter on Floor 99)
+  - [ ] Other Unique Bosses (Butcher, Leoric, etc.)
   - [ ] Boss dialogue/bark system ("Ah... Fresh Meat!")
   - [ ] Guaranteed unique item drops per boss
-  - [ ] Hand-crafted boss maps (25F, 50F, 75F, 99F)
-  - [ ] Special boss abilities (summons, teleport, apocalypse, etc.)
-  - [ ] Diablo's pillar-based arena (99F)
+  - [x] Hand-crafted boss maps (Reached goal for Floor 99)
 - [x] **Staff Combat System** - dual-mode weapon mechanics:
   - [x] Physical bash attack (melee, uses durability, STR-based damage)
   - [x] Magic Charge mode (consumes staff charges instead of MP for Sorcerers)
