@@ -545,8 +545,14 @@ class CombatSystem(System):
                 and e.entity_id != event.attacker_id
             ]
 
+            hit_any_target = False
             for target in targets_at_pos:
                 self._apply_damage(attacker, target, dist)
+                hit_any_target = True
+            
+            # [Piercing] 관통 플래그가 없으면 첫 타격 적중 시 중단
+            if hit_any_target and "PIERCING" not in a_stats.flags:
+                break
 
     def handle_move_success_event(self, event: MoveSuccessEvent):
         """플레이어가 이동 성공 시 해당 위치에 루팅 가능한 아이템이 있는지 확인"""
@@ -1144,6 +1150,16 @@ class CombatSystem(System):
         effective_skill = copy(skill)
         effective_skill.damage = scaled_damage
         effective_skill.range = scaled_range
+        
+        # [Class Bonus] Rogue Bow Bonus for Skills
+        if level_comp and level_comp.job in ["로그", "ROGUE"]:
+            # 장착된 무기가 활인지 확인
+            inv = attacker.get_component(InventoryComponent)
+            if inv and "손1" in inv.equipped:
+                weapon = inv.equipped["손1"]
+                from .data_manager import ItemDefinition
+                if isinstance(weapon, ItemDefinition) and "RANGED" in getattr(weapon, 'flags', []):
+                    effective_skill.range += 3
         effective_skill.duration = scaled_duration
         
         self.event_manager.push(MessageEvent(f"'{effective_skill.name}' 발동! (Lv.{skill_level}, {resource_used})"))

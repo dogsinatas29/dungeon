@@ -1815,6 +1815,13 @@ class Engine:
         
                 if slot == "손1":
                     stats.weapon_range = item.attack_range
+                    
+                    # [Class Bonus] Rogue Bow Bonus
+                    level_comp = player_entity.get_component(LevelComponent)
+                    if level_comp and level_comp.job in ["로그", "ROGUE"] and "RANGED" in getattr(item, 'flags', []):
+                        # 사거리 보정: +2~4 중 중간값인 3 적용
+                        stats.weapon_range += 3
+                        stats.flags.add("PIERCING")
         
         # [Affix Final Calculation]
         # 1. Damage Max Bonus (of Carnage)
