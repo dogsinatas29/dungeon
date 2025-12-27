@@ -108,7 +108,6 @@ class ConsoleUI:
         menu_lines = [
             "",
             "═" * 40,
-            "           [메뉴]",
             "  1. 새 게임",
             "  2. 이어하기",
             "  3. 게임 종료",
@@ -185,21 +184,42 @@ class ConsoleUI:
         
         while True:
             self._clear_screen()
-            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}       저장된 게임 불러오기        {COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+            terminal_width = shutil.get_terminal_size().columns
+            
+            # Title
+            title_line = "LOAD YOUR GAME"
+            separator = "═" * 40
+            
+            # Center-aligned title
+            title_padding = (terminal_width - len(title_line)) // 2
+            sep_padding = (terminal_width - len(separator)) // 2
+            
+            print(f"{COLOR_MAP['yellow']}{' ' * sep_padding}{separator}{COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}{' ' * title_padding}{title_line}{COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}{' ' * sep_padding}{separator}{COLOR_MAP['reset']}")
+            print()
             
             if not save_files:
-                print("\n  저장된 게임이 없습니다.")
-                print(f"\n{COLOR_MAP['green']}  [B] 뒤로 가기{COLOR_MAP['reset']}")
+                no_save_msg = "저장된 게임이 없습니다."
+                msg_padding = (terminal_width - len(no_save_msg)) // 2
+                print(f"{' ' * msg_padding}{no_save_msg}")
+                
+                back_msg = "[B] 뒤로 가기"
+                back_padding = (terminal_width - len(back_msg)) // 2
+                print(f"\n{COLOR_MAP['green']}{' ' * back_padding}{back_msg}{COLOR_MAP['reset']}")
             else:
-                print("\n  [목록]")
+                # Save list (centered)
                 for i, filename in enumerate(save_files):
                     prefix = "> " if i == selected_index else "  "
                     color = COLOR_MAP['green'] if i == selected_index else COLOR_MAP['white']
-                    print(f"{color}{prefix}{filename}{COLOR_MAP['reset']}")
+                    line = f"{prefix}{filename}"
+                    line_padding = (terminal_width - len(line)) // 2
+                    print(f"{color}{' ' * line_padding}{line}{COLOR_MAP['reset']}")
                 
-                print(f"\n{COLOR_MAP['green']}  [↑/↓] 이동 | [ENTER/L] 불러오기 | [D/DEL] 삭제 | [B] 뒤로 가기{COLOR_MAP['reset']}")
+                # Controls (centered)
+                controls = "[↑/↓] 이동 | [ENTER/L] 불러오기 | [D/DEL] 삭제 | [B] 뒤로 가기"
+                controls_padding = (terminal_width - len(controls)) // 2
+                print(f"\n{COLOR_MAP['green']}{' ' * controls_padding}{controls}{COLOR_MAP['reset']}")
 
             key = self.get_key_input()
 
