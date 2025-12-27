@@ -118,13 +118,6 @@ pip install readchar
 python3 dungeon/Start.py
 ```
 
-### Controls
-- **Arrow Keys**: Move character
-- **Space**: Toggle attack mode
-- **I**: Open inventory
-- **Q**: Quit game
-- **1-9**: Use quick slots
-
 ### Game Mechanics
 
 #### Stats
