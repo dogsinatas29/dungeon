@@ -7,6 +7,7 @@ import json
 import termios
 import tty
 import readchar
+import logging
 from typing import Dict, List, Set, Type, Optional, Any
 from .map import DungeonMap
 
