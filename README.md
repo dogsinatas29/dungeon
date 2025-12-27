@@ -13,6 +13,7 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
 - **Procedurally generated dungeons** with multiple floor types
 - **Permadeath** - true roguelike experience
 - **Character progression** with dynamic job system based on skill usage
+- **Job Specializations**: Unique weapon bonuses for each class (Rogue bows, Barbarian 2H, Sorcerer staves)
 
 ### Combat & Skills
 - **18 Diablo 1 Spells** across 4 tiers:
@@ -62,11 +63,11 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
   - [ ] Hand-crafted boss maps (25F, 50F, 75F, 99F)
   - [ ] Special boss abilities (summons, teleport, apocalypse, etc.)
   - [ ] Diablo's pillar-based arena (99F)
-- [ ] **Staff Combat System** - dual-mode weapon mechanics:
-  - [ ] Physical bash attack (melee, uses durability, STR-based damage)
-  - [ ] Spell casting mode (ranged, uses charges, spell-specific damage)
-  - [ ] Random spell assignment to staves
-  - [ ] 'S' key to activate spell mode + directional casting
+- [x] **Staff Combat System** - dual-mode weapon mechanics:
+  - [x] Physical bash attack (melee, uses durability, STR-based damage)
+  - [x] Magic Charge mode (consumes staff charges instead of MP for Sorcerers)
+  - [x] Random spell assignment to staves
+  - [ ] 'S' key to activate spell mode + directional casting (currently integrated into quickslots)
 - [ ] **Special Spell Effects** (12 spells need implementation):
   - [ ] Holy Bolt - bonus damage vs undead
   - [ ] Inferno - persistent flame wall
@@ -157,6 +158,12 @@ python3 test_classes.py
 - **MP**: Mana points for skills
 - **Stamina**: Depletes with movement (20 tiles = 1 stamina) and skill usage
 - **STR/DEX/MAG/VIT**: Core attributes affecting combat and equipment
+
+#### Job Specializations
+- **Warrior**: High defense and health; masters all weapon types equally.
+- **Rogue**: **Bow Expert**. +3 Range bonus with bows and arrows always **Piercing** through enemies.
+- **Barbarian**: **Two-Handed Master**. +3 Attack and +1 Range bonus when using two-handed weapons.
+- **Sorcerer**: **Magic Staff Recharge**. Can use spells using staff **Charges** instead of MP when a staff is equipped.
 
 #### Combat
 - **Attack Types**: Melee, Ranged, Projectile, Splash
