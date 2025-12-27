@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 import readchar # readchar 임포트 추가
+import shutil
 
 # 터미널 색상 코드를 사용한 렌더링을 위한 딕셔너리
 COLOR_MAP = {
