@@ -1378,6 +1378,13 @@ class Engine:
                         color = "red" if trap.is_triggered else "yellow"
 
                 self.renderer.draw_char(screen_x, screen_y, char, color)
+
+                # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘)
+                # 수면(Sleep) 표시: zZ
+                if entity.has_component(SleepComponent):
+                    # 0.5초 주기로 z와 Z를 번갈아 표시하거나 깜빡임
+                    sleep_char = "z" if int(time.time() * 2) % 2 == 0 else "Z"
+                    self.renderer.draw_char(screen_x, screen_y - 1, sleep_char, "light_cyan")
         
         # 2-1. 오라/특수 효과 렌더링 (휘몰아치는 연출)
         aura_entities = self.world.get_entities_with_components([PositionComponent, SkillEffectComponent])

@@ -7,7 +7,7 @@ from .components import (
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
-    HiddenComponent, MimicComponent, TrapComponent
+    HiddenComponent, MimicComponent, TrapComponent, SleepComponent
 )
 import readchar
 import random
@@ -52,6 +52,15 @@ class InputSystem(System):
                 self.world.engine.is_running = False
                 return True
             self.event_manager.push(MessageEvent("몸이 움직이지 않습니다... (기절 중)"))
+            return False
+
+        # 수면 상태 확인
+        sleep = player_entity.get_component(SleepComponent)
+        if sleep:
+            if action == 'q':
+                self.world.engine.is_running = False
+                return True
+            self.event_manager.push(MessageEvent("깊은 잠에 빠져 움직일 수 없습니다... (수면 중)"))
             return False
 
         # 액션 허용됨 -> 시간 갱신 (실제 이동/공격 로직에서 한 번 더 갱신할 수 있음)
@@ -332,14 +341,10 @@ class MonsterAISystem(System):
             # 안전장치: 플레이어는 제외
             if monster.entity_id == player_entity.entity_id: continue
 
-            # 스턴 상태 확인 및 처리
-            stun = monster.get_component(StunComponent)
-            if stun:
-                stun.duration -= 1
-                if stun.duration <= 0:
-                    monster.remove_component(StunComponent)
-                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}의 스턴이 해제되었습니다."))
-                continue # 스턴 중에는 행동 불가
+            # 스턴/수면 상태 확인 (TimeSystem에서 시간 감액 처리함)
+            if monster.has_component(StunComponent) or monster.has_component(SleepComponent):
+                continue
+ # 스턴 중에는 행동 불가
             
             ai = monster.get_component(AIComponent)
             pos = monster.get_component(PositionComponent)
@@ -805,7 +810,12 @@ class CombatSystem(System):
                         if ai_comp.behavior != AIComponent.CHASE:
                             ai_comp.behavior = AIComponent.CHASE
                             # (선택) 분노 메시지는 너무 많아질 수 있으므로 로그에 1번만 출력하거나 생략
-    
+
+        # 3.5 수면(Sleep) 해제 처리: 공격을 받으면 깨어남
+        if target.has_component(SleepComponent):
+            target.remove_component(SleepComponent)
+            self.event_manager.push(MessageEvent(f"{target_name}이(가) 공격을 받아 잠에서 깨어났습니다!"))
+
         # 4. 사망 처리
         if t_stats.current_hp <= 0:
             t_stats.current_hp = 0
@@ -1201,6 +1211,8 @@ class CombatSystem(System):
         on_hit = getattr(skill, 'on_hit_effect', "없음")
         if on_hit == "STUN":
             self._handle_stun_effect(target)
+        elif on_hit == "SLEEP":
+            self._handle_sleep_effect(target)
         elif on_hit == "KNOCKBACK":
             self._handle_knockback(target, dx, dy)
 
@@ -1208,6 +1220,12 @@ class CombatSystem(System):
         """스턴 효과 부여 및 시각 효과 (흔들림 + 캐릭터 위에 ?)"""
         if not target.has_component(StunComponent):
             target.add_component(StunComponent(duration=2))
+            
+    def _handle_sleep_effect(self, target):
+        """수면 효과 부여"""
+        if not target.has_component(SleepComponent):
+            target.add_component(SleepComponent(duration=5.0))
+            self.event_manager.push(MessageEvent(f"{target.world.engine._get_entity_name(target)}이(가) 깊은 잠에 빠졌습니다."))
             
             # 1. 흔들림 애니메이션 (좌우로 떨리는 느낌)
             pos = target.get_component(PositionComponent)
@@ -1417,12 +1435,21 @@ class TimeSystem(System):
 
         # 1. 스턴(Stun) 시간 감액
         stun_entities = self.world.get_entities_with_components({StunComponent})
-        for entity in stun_entities:
+        for entity in list(stun_entities):
             stun = entity.get_component(StunComponent)
             stun.duration -= dt
             if stun.duration <= 0:
                 entity.remove_component(StunComponent)
-                self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 스턴이 해제되었습니다."))
+                self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 기절이 해제되었습니다!"))
+
+        # 1-1. 수면(Sleep) 시간 감액
+        sleep_entities = self.world.get_entities_with_components({SleepComponent})
+        for entity in list(sleep_entities):
+            sleep = entity.get_component(SleepComponent)
+            sleep.duration -= dt
+            if sleep.duration <= 0:
+                entity.remove_component(SleepComponent)
+                self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 잠에서 깨어났습니다!"))
 
         # 2. 횃불(VISION_UP) 시간 감액
         player_entity = self.world.get_player_entity()
@@ -1438,13 +1465,6 @@ class TimeSystem(System):
                 if current_time >= stats.sees_hidden_expires_at:
                     stats.sees_hidden = False
                     self.world.event_manager.push(MessageEvent("영험한 기운이 사라져 숨겨진 것들이 보이지 않게 되었습니다."))
-        stun_entities = self.world.get_entities_with_components({StunComponent})
-        for entity in list(stun_entities): # 리스트 복사로 안전하게 순회
-            stun = entity.get_component(StunComponent)
-            stun.duration -= dt
-            if stun.duration <= 0:
-                entity.remove_component(StunComponent)
-                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 기절이 해제되었습니다!"))
 
         # 2. 시각 효과(Effect) 시간 감액
         effect_entities = self.world.get_entities_with_components({EffectComponent})

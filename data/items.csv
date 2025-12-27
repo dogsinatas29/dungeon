@@ -37,3 +37,4 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 하급 치유 포션,CONSUMABLE,HP를 20 회복시켜주는 약병.,!,#FF69B4,1,0,0,20,0,0,0,None,
 상급 마나 포션,CONSUMABLE,MP를 50 회복시켜주는 정제된 약병.,!,#00BFFF,10,0,0,0,50,0,0,None,
 힘의 비약,CONSUMABLE,일시적으로 투지를 불태우는 비약.,!,#800000,5,0,0,0,0,0,0,None,
+수면의 서,SKILLBOOK,적을 깊은 잠에 빠뜨리는 고대의 마법서.,B,#AFEEEE,2,0,0,0,0,0,0,SLEEP,

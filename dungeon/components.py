@@ -200,3 +200,8 @@ class TrapComponent(Component):
         self.effect = effect
         self.is_triggered = is_triggered
         self.visible = visible # 횃불 등으로 발견 가능
+
+class SleepComponent(Component):
+    """수면 상태: 행동 불가, 데미지 입을 시 해제"""
+    def __init__(self, duration: float = 5.0):
+        self.duration = duration
