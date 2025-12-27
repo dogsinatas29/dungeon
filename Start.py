@@ -42,8 +42,8 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None, class
                     "PositionComponent": {'x': 0, 'y': 0, 'map_id': "1F"},
                     "MovableComponent": {},
                     # StatsComponent는 Engine._initialize_world에서 class_data를 기반으로 생성됨
+                    # InventoryComponent도 Engine._initialize_world에서 시작 아이템과 함께 생성됨
                     "NameComponent": {'name': player_name},
-                    "InventoryComponent": {'items': {}, 'equipped': {}},
                 }
             },
             "player_specific_data": player_instance.to_dict(),
