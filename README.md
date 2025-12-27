@@ -70,6 +70,7 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
   - [ ] Apocalypse - screen-wide attack
 
 ### Medium Priority
+- [ ] **Language Selection Menu** - choose Korean/English at startup
 - [ ] **Dynamic Job System** - auto-change job based on highest skill level
 - [ ] **Player Action Cooldown** - enforce cooldown in input handling
 - [ ] **Balance Adjustments** - tune difficulty for real-time gameplay
