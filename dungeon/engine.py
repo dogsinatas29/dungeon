@@ -228,11 +228,13 @@ class Engine:
             # 2. 직업별 초기 장비 지급
             stats = player_entity.get_component(StatsComponent)
             if class_def and hasattr(class_def, 'starting_items'):
+                logging.info(f"Loading starting items for {class_def.name}: {class_def.starting_items}")
                 for item_name, qty in class_def.starting_items:
                     # 골드 처리
                     if item_name in ["골드", "Gold", "금화"]:
                          if stats:
                              stats.gold += qty
+                             logging.info(f"Added {qty} gold")
                          continue
 
                     # 아이템 지급
@@ -244,6 +246,7 @@ class Engine:
                             inv.items[item_name]['qty'] += qty
                         else:
                             inv.items[item_name] = {'item': item_def, 'qty': qty}
+                        logging.info(f"Added {qty}x {item_name} to inventory")
 
                         # 3. 자동 장착 로직 (하나만 지급된 경우 장착 시도)
                         if qty == 1:
