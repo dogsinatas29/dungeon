@@ -20,17 +20,23 @@ def create_test_character(class_id, player_name="TestPlayer"):
     class_defs = load_class_definitions()
     selected_class = None
     
-    # class_defs is a list of ClassDefinition objects or dictionaries
-    for cls in class_defs:
-        # Handle both object and dictionary formats
-        cls_id = cls.class_id if hasattr(cls, 'class_id') else cls.get('class_id') if isinstance(cls, dict) else cls
-        if cls_id == class_id:
-            selected_class = cls
-            break
+    # load_class_definitions returns a dictionary with class_id as keys
+    if isinstance(class_defs, dict):
+        selected_class = class_defs.get(class_id)
+    elif isinstance(class_defs, list):
+        # Fallback for list format
+        for cls in class_defs:
+            cls_id = cls.class_id if hasattr(cls, 'class_id') else cls.get('class_id') if isinstance(cls, dict) else cls
+            if cls_id == class_id:
+                selected_class = cls
+                break
     
     if not selected_class:
         print(f"Error: Class {class_id} not found")
-        print(f"Available classes: {[cls.class_id if hasattr(cls, 'class_id') else cls.get('class_id', cls) if isinstance(cls, dict) else cls for cls in class_defs]}")
+        if isinstance(class_defs, dict):
+            print(f"Available classes: {list(class_defs.keys())}")
+        else:
+            print(f"Available classes: {[cls.class_id if hasattr(cls, 'class_id') else cls.get('class_id', cls) if isinstance(cls, dict) else cls for cls in class_defs]}")
         return None
     
     # Extract class attributes
@@ -54,6 +60,9 @@ def create_test_character(class_id, player_name="TestPlayer"):
         starting_skills = selected_class.get('starting_skills', [])
     else:
         print(f"Error: Unknown class format: {type(selected_class)}")
+        print(f"Class data: {selected_class}")
+        if hasattr(selected_class, '__dict__'):
+            print(f"Attributes: {selected_class.__dict__}")
         return None
     
     # 초기 게임 상태 생성
