@@ -196,6 +196,57 @@ class Engine:
                             skill_levels=inv_data.get("skill_levels")
                         )
                         self.world.add_component(player_entity.entity_id, inv)
+        elif game_data and "player_specific_data" in game_data:
+            # 테스트 환경용: player_specific_data 구조 처리
+            player_data = game_data["player_specific_data"]
+            
+            # StatsComponent 생성
+            self.world.add_component(player_entity.entity_id, StatsComponent(
+                max_hp=player_data.get("max_hp", 100),
+                current_hp=player_data.get("hp", 100),
+                attack=player_data.get("str", 10),
+                defense=player_data.get("vit", 10),
+                max_mp=player_data.get("max_mp", 50),
+                current_mp=player_data.get("mp", 50),
+                max_stamina=100,
+                current_stamina=100,
+                strength=player_data.get("str", 10),
+                mag=player_data.get("mag", 10),
+                dex=player_data.get("dex", 10),
+                vit=player_data.get("vit", 10),
+                gold=player_data.get("gold", 0)
+            ))
+            
+            # LevelComponent 생성
+            self.world.add_component(player_entity.entity_id, LevelComponent(
+                level=player_data.get("level", 1),
+                exp=player_data.get("exp", 0),
+                exp_to_next=100,
+                job=player_data.get("job", "Novice")
+            ))
+            
+            # InventoryComponent 생성
+            if "inventory" in game_data:
+                inv_data = game_data["inventory"]
+                
+                # 아이템 딕셔너리 생성
+                restored_items = {}
+                for item_name, item_info in inv_data.get("items", {}).items():
+                    if item_name in self.item_defs:
+                        item_def = self.item_defs[item_name]
+                        qty = item_info.get("qty", 1)
+                        restored_items[item_name] = {"item": item_def, "qty": qty}
+                
+                # 인벤토리 컴포넌트 추가
+                inv = InventoryComponent(
+                    items=restored_items,
+                    equipped=inv_data.get("equipped", {}),
+                    item_slots=inv_data.get("item_slots", [None] * 5),
+                    skill_slots=inv_data.get("skill_slots", [None] * 5),
+                    skills=inv_data.get("skills", []),
+                    skill_levels=inv_data.get("skill_levels", {})
+                )
+                self.world.add_component(player_entity.entity_id, inv)
         else:
             # preserve_player도 없고 game_data도 없는 경우 (이론상 발생 방지)
             self.world.add_component(player_entity.entity_id, StatsComponent(max_hp=100, current_hp=100, attack=10, defense=5, max_mp=50, current_mp=50, max_stamina=100, current_stamina=100))
