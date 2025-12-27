@@ -24,7 +24,7 @@ from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
     TimeSystem, RegenerationSystem, LevelSystem, TrapSystem
 )
-from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent
+from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
 from .sound_system import SoundSystem
 from .renderer import Renderer
 from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
