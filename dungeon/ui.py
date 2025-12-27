@@ -150,24 +150,65 @@ class ConsoleUI:
         
         while True:
             self._clear_screen()
-            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}      SELECT YOUR CLASS       {COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
+            terminal_width = shutil.get_terminal_size().columns
             
-            print("\n  당신의 직업을 선택하세요:\n")
+            # ASCII Art Title
+            title = [
+                "",
+                "  ███████╗███████╗██╗     ███████╗ ██████╗████████╗",
+                "  ██╔════╝██╔════╝██║     ██╔════╝██╔════╝╚══██╔══╝",
+                "  ███████╗█████╗  ██║     █████╗  ██║        ██║   ",
+                "  ╚════██║██╔══╝  ██║     ██╔══╝  ██║        ██║   ",
+                "  ███████║███████╗███████╗███████╗╚██████╗   ██║   ",
+                "  ╚══════╝╚══════╝╚══════╝╚══════╝ ╚═════╝   ╚═╝   ",
+                "",
+                "  ██╗   ██╗ ██████╗ ██╗   ██╗██████╗      ██████╗██╗      █████╗ ███████╗███████╗",
+                "  ╚██╗ ██╔╝██╔═══██╗██║   ██║██╔══██╗    ██╔════╝██║     ██╔══██╗██╔════╝██╔════╝",
+                "   ╚████╔╝ ██║   ██║██║   ██║██████╔╝    ██║     ██║     ███████║███████╗███████╗",
+                "    ╚██╔╝  ██║   ██║██║   ██║██╔══██╗    ██║     ██║     ██╔══██║╚════██║╚════██║",
+                "     ██║   ╚██████╔╝╚██████╔╝██║  ██║    ╚██████╗███████╗██║  ██║███████║███████║",
+                "     ╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝",
+                ""
+            ]
+            
+            for line in title:
+                padding = (terminal_width - len(line)) // 2
+                print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
+            
+            # Class list
+            prompt = "당신의 직업을 선택하세요:"
+            prompt_padding = (terminal_width - len(prompt)) // 2
+            print(f"{' ' * prompt_padding}{prompt}\n")
+            
             for i, cls in enumerate(class_list):
                 prefix = "> " if i == selected_index else "  "
                 color = COLOR_MAP['green'] if i == selected_index else COLOR_MAP['white']
-                print(f"{color}{prefix}{cls.name} - {cls.description}{COLOR_MAP['reset']}")
+                line = f"{prefix}{cls.name} - {cls.description}"
+                line_padding = (terminal_width - len(line)) // 2
+                print(f"{color}{' ' * line_padding}{line}{COLOR_MAP['reset']}")
             
-            # 선택된 직업 상세 정보 표시
+            # Selected class details
             sel_cls = class_list[selected_index]
-            print(f"\n{COLOR_MAP['blue']}--- [ {sel_cls.name} ] 상세 능력치 ---{COLOR_MAP['reset']}")
-            print(f" HP: {sel_cls.hp:<4} | MP: {sel_cls.mp:<4}")
-            print(f" STR: {sel_cls.str:<3} | MAG: {sel_cls.mag:<3} | DEX: {sel_cls.dex:<3} | VIT: {sel_cls.vit:<3}")
-            print(f" 기본 스킬: {sel_cls.base_skill}")
+            print()
+            detail_title = f"--- [ {sel_cls.name} ] 상세 능력치 ---"
+            detail_padding = (terminal_width - len(detail_title)) // 2
+            print(f"{COLOR_MAP['blue']}{' ' * detail_padding}{detail_title}{COLOR_MAP['reset']}")
             
-            print(f"\n{COLOR_MAP['green']}  [↑/↓] 이동 | [ENTER] 선택{COLOR_MAP['reset']}")
+            stats_line = f" HP: {sel_cls.hp:<4} | MP: {sel_cls.mp:<4}"
+            stats_padding = (terminal_width - len(stats_line)) // 2
+            print(f"{' ' * stats_padding}{stats_line}")
+            
+            attrs_line = f" STR: {sel_cls.strength:<3} | MAG: {sel_cls.mag:<3} | DEX: {sel_cls.dex:<3} | VIT: {sel_cls.vit:<3}"
+            attrs_padding = (terminal_width - len(attrs_line)) // 2
+            print(f"{' ' * attrs_padding}{attrs_line}")
+            
+            skill_line = f" 기본 스킬: {sel_cls.base_skill}"
+            skill_padding = (terminal_width - len(skill_line)) // 2
+            print(f"{' ' * skill_padding}{skill_line}")
+            
+            controls = "[↑/↓] 이동 | [ENTER] 선택"
+            controls_padding = (terminal_width - len(controls)) // 2
+            print(f"\n{COLOR_MAP['green']}{' ' * controls_padding}{controls}{COLOR_MAP['reset']}")
 
             key = self.get_key_input()
 
