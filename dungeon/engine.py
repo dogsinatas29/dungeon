@@ -941,20 +941,17 @@ class Engine:
                         self._render()
                         last_frame_time = current_time
                 
-                # 2. 실시간 로직 처리 (입력 여부와 관계없이 매 프레임 실행)
+                # 2. 실시간 로직 처리 (PLAYING 상태일 때만)
                 if self.state == GameState.PLAYING:
-                    self.turn_number += 1 # 이제 turn_number는 전역 틱(Tick) 카운터로 작동
-                    
-                    # [중요] 시스템 실행 전 이벤트 처리
-                    # [중요] 시스템 실행 전 이벤트 처리
+                    # 이벤트 처리
                     self.world.event_manager.process_events()
                     
-                    # 모든 시스템 순차 실행 (InputSystem은 이미 위에서 입력을 받았으므로 process에서 처리 가능)
+                    # 모든 시스템 실행 (실시간)
                     for system in self.world._systems:
                         if system is not None:
                             system.process()
                     
-                    # [중요] 시스템 실행 후 이벤트 처리
+                    # 이벤트 재처리
                     self.world.event_manager.process_events()
 
                     # 플레이어 사망 체크
@@ -965,13 +962,12 @@ class Engine:
                             game_result = "DEATH"
                             self.is_running = False
 
-                # 3. 주기적 렌더링 (Idle Animation 및 실시간 변화 반영)
+                # 3. 주기적 렌더링
                 if elapsed_since_frame >= frame_duration:
-                    if self.state == GameState.PLAYING:
-                        self._render()
+                    self._render()
                     last_frame_time = current_time
                 
-                time.sleep(0.002)
+                time.sleep(0.05)  # 20 FPS for game logic
 
         except KeyboardInterrupt:
             game_result = "QUIT"
