@@ -1229,7 +1229,7 @@ class CombatSystem(System):
             hit_target = False
             
             # 관통 플래그 확인
-            is_piercing = "PIERCING" in skill.flags or "PIERCING" in a_pos.entity.get_component(StatsComponent).flags
+            is_piercing = "PIERCING" in skill.flags or "PIERCING" in attacker.get_component(StatsComponent).flags
             
             for px, py in valid_positions:
                 targets = [
