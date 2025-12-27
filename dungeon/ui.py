@@ -198,7 +198,7 @@ class ConsoleUI:
             stats_padding = (terminal_width - len(stats_line)) // 2
             print(f"{' ' * stats_padding}{stats_line}")
             
-            attrs_line = f" STR: {sel_cls.strength:<3} | MAG: {sel_cls.mag:<3} | DEX: {sel_cls.dex:<3} | VIT: {sel_cls.vit:<3}"
+            attrs_line = f" STR: {sel_cls.str:<3} | MAG: {sel_cls.mag:<3} | DEX: {sel_cls.dex:<3} | VIT: {sel_cls.vit:<3}"
             attrs_padding = (terminal_width - len(attrs_line)) // 2
             print(f"{' ' * attrs_padding}{attrs_line}")
             
