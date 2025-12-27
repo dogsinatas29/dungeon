@@ -2198,54 +2198,6 @@ class Engine:
                          
                          self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{icon}{name} x{qty}{_s}", color)
                          current_y += 1
-                  
-                  # 5. 선택된 아이템 상세 정보 (하단 패널)
-                  if filtered_items and 0 <= self.selected_item_index < len(filtered_items) and self.inventory_category_index != 3:
-                      item_id, item_data = filtered_items[self.selected_item_index]
-                      item = item_data['item']
-                      
-                      detail_y = start_y + POPUP_HEIGHT - 9
-                      self.renderer.draw_text(start_x + 1, detail_y, "─" * (POPUP_WIDTH - 2), "cyan")
-                      detail_y += 1
-                      
-                      # 필요 레벨
-                      if hasattr(item, 'required_level') and item.required_level > 0:
-                          level_comp = player_entity.get_component(LevelComponent)
-                          current_level = level_comp.level if level_comp else 1
-                          level_color = "red" if current_level < item.required_level else "green"
-                          req_text = f"필요 Lv: {item.required_level} (현재: {current_level})"
-                          self.renderer.draw_text(start_x + 2, detail_y, req_text, level_color)
-                          detail_y += 1
-                      
-                      # 공격력/방어력
-                      if item.type == "WEAPON":
-                          atk_min = getattr(item, 'attack_min', getattr(item, 'attack', 0))
-                          atk_max = getattr(item, 'attack_max', getattr(item, 'attack', 0))
-                          self.renderer.draw_text(start_x + 2, detail_y, f"공격력: {atk_min}-{atk_max}", "red")
-                          detail_y += 1
-                      elif item.type in ["ARMOR", "SHIELD"]:
-                          def_min = getattr(item, 'defense_min', getattr(item, 'defense', 0))
-                          def_max = getattr(item, 'defense_max', getattr(item, 'defense', 0))
-                          self.renderer.draw_text(start_x + 2, detail_y, f"방어력: {def_min}-{def_max}", "blue")
-                          detail_y += 1
-                      
-                      # 능력치 보너스
-                      bonuses = []
-                      if hasattr(item, 'str_bonus') and item.str_bonus != 0:
-                          bonuses.append(f"STR+{item.str_bonus}")
-                      if hasattr(item, 'mag_bonus') and item.mag_bonus != 0:
-                          bonuses.append(f"MAG+{item.mag_bonus}")
-                      if hasattr(item, 'dex_bonus') and item.dex_bonus != 0:
-                          bonuses.append(f"DEX+{item.dex_bonus}")
-                      if hasattr(item, 'vit_bonus') and item.vit_bonus != 0:
-                          bonuses.append(f"VIT+{item.vit_bonus}")
-                      
-                      if bonuses:
-                          self.renderer.draw_text(start_x + 2, detail_y, ', '.join(bonuses), "green")
-                          detail_y += 1
-
-        # 5. 하단 도움말
-        if self.inventory_category_index == 3:
             help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
         else:
             help_text = "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기"
