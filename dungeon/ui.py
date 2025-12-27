@@ -254,18 +254,29 @@ class ConsoleUI:
             self._clear_screen()
             terminal_width = shutil.get_terminal_size().columns
             
-            # Title
-            title_line = "LOAD YOUR GAME"
-            separator = "═" * 40
             
-            # Center-aligned title
-            title_padding = (terminal_width - len(title_line)) // 2
-            sep_padding = (terminal_width - len(separator)) // 2
+            # ASCII Art Title - LOAD YOUR GAME
+            title = [
+                "",
+                "  ██╗      ██████╗  █████╗ ██████╗     ██╗   ██╗ ██████╗ ██╗   ██╗██████╗ ",
+                "  ██║     ██╔═══██╗██╔══██╗██╔══██╗    ╚██╗ ██╔╝██╔═══██╗██║   ██║██╔══██╗",
+                "  ██║     ██║   ██║███████║██║  ██║     ╚████╔╝ ██║   ██║██║   ██║██████╔╝",
+                "  ██║     ██║   ██║██╔══██║██║  ██║      ╚██╔╝  ██║   ██║██║   ██║██╔══██╗",
+                "  ███████╗╚██████╔╝██║  ██║██████╔╝       ██║   ╚██████╔╝╚██████╔╝██║  ██║",
+                "  ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝        ╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝",
+                "",
+                "   ██████╗  █████╗ ███╗   ███╗███████╗",
+                "  ██╔════╝ ██╔══██╗████╗ ████║██╔════╝",
+                "  ██║  ███╗███████║██╔████╔██║█████╗  ",
+                "  ██║   ██║██╔══██║██║╚██╔╝██║██╔══╝  ",
+                "  ╚██████╔╝██║  ██║██║ ╚═╝ ██║███████╗",
+                "   ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝",
+                ""
+            ]
             
-            print(f"{COLOR_MAP['yellow']}{' ' * sep_padding}{separator}{COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}{' ' * title_padding}{title_line}{COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}{' ' * sep_padding}{separator}{COLOR_MAP['reset']}")
-            print()
+            for line in title:
+                padding = (terminal_width - len(line)) // 2
+                print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
             
             if not save_files:
                 no_save_msg = "저장된 게임이 없습니다."
