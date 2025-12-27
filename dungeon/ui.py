@@ -77,14 +77,49 @@ class ConsoleUI:
     def show_main_menu(self):
         """메인 메뉴를 표시하고 사용자 입력을 받아 반환합니다."""
         self._clear_screen()
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print("\n  [메뉴]")
-        print("  1. 새 게임")
-        print("  2. 이어하기")
-        print("  3. 게임 종료")
-        print(f"\n{COLOR_MAP['green']}[선택] 1, 2, 3을 입력하세요.{COLOR_MAP['reset']}", end='', flush=True)
+        
+        # ASCII Art Title - DUNGEON CRAWL
+        title = [
+            "",
+            "  ██████╗ ██╗   ██╗███╗   ██╗ ██████╗ ███████╗ ██████╗ ███╗   ██╗",
+            "  ██╔══██╗██║   ██║████╗  ██║██╔════╝ ██╔════╝██╔═══██╗████╗  ██║",
+            "  ██║  ██║██║   ██║██╔██╗ ██║██║  ███╗█████╗  ██║   ██║██╔██╗ ██║",
+            "  ██║  ██║██║   ██║██║╚██╗██║██║   ██║██╔══╝  ██║   ██║██║╚██╗██║",
+            "  ██████╔╝╚██████╔╝██║ ╚████║╚██████╔╝███████╗╚██████╔╝██║ ╚████║",
+            "  ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝",
+            "",
+            "   ██████╗██████╗  █████╗ ██╗    ██╗██╗     ",
+            "  ██╔════╝██╔══██╗██╔══██╗██║    ██║██║     ",
+            "  ██║     ██████╔╝███████║██║ █╗ ██║██║     ",
+            "  ██║     ██╔══██╗██╔══██║██║███╗██║██║     ",
+            "  ╚██████╗██║  ██║██║  ██║╚███╔███╔╝███████╗",
+            "   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝",
+            ""
+        ]
+        
+        # Center the title
+        terminal_width = shutil.get_terminal_size().columns
+        for line in title:
+            padding = (terminal_width - len(line)) // 2
+            print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
+        
+        # Menu options (centered)
+        menu_lines = [
+            "",
+            "═" * 40,
+            "           [메뉴]",
+            "  1. 새 게임",
+            "  2. 이어하기",
+            "  3. 게임 종료",
+            "═" * 40,
+            ""
+        ]
+        
+        for line in menu_lines:
+            padding = (terminal_width - len(line)) // 2
+            print(f"{' ' * padding}{line}")
+        
+        print(f"{COLOR_MAP['green']}[선택] 1, 2, 3을 입력하세요.{COLOR_MAP['reset']}", end='', flush=True)
 
         while True:
             choice = self.get_key_input()
