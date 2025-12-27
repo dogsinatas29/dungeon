@@ -55,6 +55,7 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 목걸이,ACCESSORY,마법 옵션이 부여될 수 있는 목걸이.,o,#00FFFF,1,0,0,0,0,0,0,None,,0,0,0,0,0,15
 횃불,CONSUMABLE,120초 동안 시야 반경이 3배로 증가하고 숨겨진 아이템을 감지합니다.,i,#FFD700,1,0,0,0,0,0,0,None,VISION_UP,0,0,0,0,120,0
 체력 물약,CONSUMABLE,HP를 20 회복시켜주는 물약.,!,#FF0000,1,0,0,20,0,0,0,None,,0,0,0,0,0,0
+마력 물약,CONSUMABLE,MP를 20 회복시켜주는 물약.,!,#0000FF,1,0,0,0,20,0,0,None,,0,0,0,0,0,0
 파이어볼트 스킬북,SKILLBOOK,작은 화염 화살을 발사하는 마법서.,B,#FF4500,1,0,0,0,0,0,0,FIREBOLT,,0,0,0,0,0,0
 차지드 볼트 스킬북,SKILLBOOK,무작위 전기 화살을 발사하는 마법서.,B,#FFD700,1,0,0,0,0,0,0,CHARGED_BOLT,,0,0,0,0,0,0
 치유 스킬북,SKILLBOOK,HP를 회복하는 신성 마법서.,B,#FFFFFF,1,0,0,0,0,0,0,HEALING,,0,0,0,0,0,0

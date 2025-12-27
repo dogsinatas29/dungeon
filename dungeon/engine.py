@@ -208,7 +208,7 @@ class Engine:
             class_def = self.class_defs.get(class_id)
             
             # 1. 초기 스킬 설정
-            current_skills = ["기본 공격"]
+            current_skills = []
             if class_def and class_def.base_skill:
                 current_skills.append(class_def.base_skill)
                 

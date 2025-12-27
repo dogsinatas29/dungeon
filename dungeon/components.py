@@ -147,7 +147,7 @@ class InventoryComponent(Component):
         self.equipped = equipped if equipped else {}
         self.item_slots = item_slots if item_slots else [None] * 5 # 1~5번 아이템
         self.skill_slots = skill_slots if skill_slots else [None] * 5 # 6~0번 스킬
-        self.skills = skills if skills else ["기본 공격"]
+        self.skills = skills if skills else []
         # 스킬 레벨 관리 (Dict[skill_name, level])
         self.skill_levels = skill_levels if skill_levels else {name: 1 for name in self.skills}
         # 스킬북 읽은 횟수 (Dict[skill_name, read_count])
