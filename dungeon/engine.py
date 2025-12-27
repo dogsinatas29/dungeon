@@ -61,6 +61,7 @@ class Engine:
         self.active_skill_name = None # 현재 시전 준비 중인 스킬
         self.current_level = 1 # 현재 던전 층수
         self.selected_item_index = 0 # 인벤토리 선택 인덱스
+        self.inventory_scroll_offset = 0 # 인벤토리 스크롤 오프셋
         self.inventory_category_index = 0 # 0: 아이템, 1: 장비, 2: 스크롤, 3: 스킬
         self.shop_category_index = 0 # 0: 사기, 1: 팔기
         self.selected_shop_item_index = 0 # 상점 선택 인덱스
@@ -1279,11 +1280,13 @@ class Engine:
              if item_count > 0:
                  self.selected_item_index = min(item_count - 1, self.selected_item_index + 1)
         elif action in [readchar.key.LEFT, '\x1b[D']:
-             self.inventory_category_index = (self.inventory_category_index - 1) % 4
+             self.inventory_category_index = max(0, self.inventory_category_index - 1)
              self.selected_item_index = 0
+             self.inventory_scroll_offset = 0  # 카테고리 변경 시 스크롤 리셋
         elif action in [readchar.key.RIGHT, '\x1b[C']:
-             self.inventory_category_index = (self.inventory_category_index + 1) % 4
+             self.inventory_category_index = min(3, self.inventory_category_index + 1)
              self.selected_item_index = 0
+             self.inventory_scroll_offset = 0  # 카테고리 변경 시 스크롤 리셋
         elif action == readchar.key.ENTER or action == '\r' or action == '\n' or action == 'e' or action == 'E':
              if filtered_items and 0 <= self.selected_item_index < len(filtered_items):
                  item_id, item_data = filtered_items[self.selected_item_index]
@@ -2216,9 +2219,28 @@ class Engine:
                      # Import constants
                      from .constants import ELEMENT_ICONS, RARITY_NORMAL
                      
-                     for idx, (item_id, item_data) in enumerate(filtered_items):
-                         if current_y >= start_y + POPUP_HEIGHT - 2: break
+                     # 스크롤 가능한 영역 계산
+                     max_visible_items = POPUP_HEIGHT - 7  # 헤더, 푸터 제외
+                     total_items = len(filtered_items)
+                     
+                     # 스크롤 오프셋 조정 (선택된 아이템이 보이도록)
+                     if self.selected_item_index < self.inventory_scroll_offset:
+                         self.inventory_scroll_offset = self.selected_item_index
+                     elif self.selected_item_index >= self.inventory_scroll_offset + max_visible_items:
+                         self.inventory_scroll_offset = self.selected_item_index - max_visible_items + 1
+                     
+                     # 오프셋 범위 제한
+                     max_offset = max(0, total_items - max_visible_items)
+                     self.inventory_scroll_offset = max(0, min(self.inventory_scroll_offset, max_offset))
+                     
+                     # 표시할 아이템 범위
+                     start_idx = self.inventory_scroll_offset
+                     end_idx = min(start_idx + max_visible_items, total_items)
+                     
+                     for idx in range(start_idx, end_idx):
+                         if current_y >= start_y + POPUP_HEIGHT - 3: break
                          
+                         item_id, item_data = filtered_items[idx]
                          item = item_data['item']
                          name = item.name
                          qty = item_data['qty']
@@ -2256,10 +2278,16 @@ class Engine:
                          
                          self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{icon}{name} x{qty}{_s}", color)
                          current_y += 1
-                  
+                     
+                     # 페이지 인디케이터 표시
+                     if total_items > max_visible_items:
+                         current_page = (self.inventory_scroll_offset // max_visible_items) + 1
+                         total_pages = (total_items + max_visible_items - 1) // max_visible_items
+                         page_info = f"Page {current_page}/{total_pages} ({start_idx+1}-{end_idx}/{total_items})"
+                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + POPUP_HEIGHT - 2, page_info, "cyan")
+        
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
-            help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
             help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
         else:
             help_text = "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기"
