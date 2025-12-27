@@ -2207,14 +2207,17 @@ class Engine:
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['WEAPON', 'ARMOR']]
                  elif self.inventory_category_index == 2: # 스크롤
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type == 'SCROLL']
-                 elif self.inventory_category_index == 3: # 스킬
+                 elif self.inventory_category_index == 3: # 스킬 탭
                      filtered_items = []
                      for s_name in inv_comp.skills:
                          s_def = self.skill_defs.get(s_name)
-                         elem = getattr(s_def, 'element', 'NONE') if s_def else 'NONE'
-                         # Dummy item representing skill
-                         dummy = type('obj', (object,), {'name': s_name, 'element': elem, 'color': 'white'})()
-                         filtered_items.append((s_name, {'item': dummy, 'qty': 1}))
+                         if s_def:
+                             # Use s_def directly but wrapped in item-like structure
+                             filtered_items.append((s_name, {'item': s_def, 'qty': 1}))
+                         else:
+                             # Fallback for unknown skills
+                             dummy = type('obj', (object,), {'name': s_name, 'element': 'NONE', 'color': 'white', 'description': '설명이 없습니다.', 'range': 1})()
+                             filtered_items.append((s_name, {'item': dummy, 'qty': 1}))
 
                  if not filtered_items:
                      self.renderer.draw_text(start_x + 2, start_y + 4, "  (비어 있음)", "dark_grey")
@@ -2223,8 +2226,8 @@ class Engine:
                      # Import constants
                      from .constants import ELEMENT_ICONS, RARITY_NORMAL
                      
-                     # 스크롤 가능한 영역 계산
-                     max_visible_items = POPUP_HEIGHT - 7  # 헤더, 푸터 제외
+                     # 스크롤 가능한 영역 계산 (하단에 상세 정보창 공간 확보)
+                     max_visible_items = POPUP_HEIGHT - 9  # 상세 정보창(5줄) + 헤더 등 제외
                      total_items = len(filtered_items)
                      
                      # 스크롤 오프셋 조정 (선택된 아이템이 보이도록)
@@ -2288,7 +2291,51 @@ class Engine:
                          current_page = (self.inventory_scroll_offset // max_visible_items) + 1
                          total_pages = (total_items + max_visible_items - 1) // max_visible_items
                          page_info = f"Page {current_page}/{total_pages} ({start_idx+1}-{end_idx}/{total_items})"
-                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + POPUP_HEIGHT - 2, page_info, "cyan")
+                         # 위치를 약간 위로 조정하여 하단 상세 정보창과 겹치지 않게 함
+                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + POPUP_HEIGHT - 6, page_info, "cyan")
+
+                 # 4.1 선택된 아이템/스킬 상세 정보 표시 (하단 영역)
+                 if 0 <= self.selected_item_index < total_items:
+                     sel_id, sel_data = filtered_items[self.selected_item_index]
+                     sel_item = sel_data['item']
+                     
+                     # 구분선 (상세 정보용)
+                     detail_y = start_y + POPUP_HEIGHT - 5
+                     self.renderer.draw_text(start_x + 1, detail_y, "-" * (POPUP_WIDTH - 2), "dark_grey")
+                     
+                     # 상세 정보 텍스트 (아이템/스킬 공통 필드)
+                     desc = getattr(sel_item, 'description', "")
+                     if desc:
+                         # 한 줄로 표시 (공간 제약)
+                         if len(desc) > POPUP_WIDTH - 10:
+                             desc = desc[:POPUP_WIDTH - 13] + "..."
+                         self.renderer.draw_text(start_x + 2, detail_y + 1, f"설명: {desc}", "white")
+                     
+                     # 스탯 정보
+                     stats_text = ""
+                     if hasattr(sel_item, 'attack') and sel_item.attack != "0":
+                         stats_text += f"공격: {getattr(sel_item, 'attack', '')} "
+                     if hasattr(sel_item, 'defense') and sel_item.defense != 0:
+                         stats_text += f"방어: {sel_item.defense} "
+                     
+                     # 사거리 정보 (핵심!)
+                     r_val = 0
+                     if hasattr(sel_item, 'attack_range'): r_val = sel_item.attack_range
+                     elif hasattr(sel_item, 'range'): r_val = sel_item.range
+                     
+                     if r_val > 0:
+                         stats_text += f"사거리: {r_val} "
+                     
+                     # 스킬 전용 정보
+                     if self.inventory_category_index == 3: # 스킬 탭
+                         s_def = self.skill_defs.get(sel_id)
+                         if s_def:
+                             stats_text += f"비용: {s_def.cost_value}{s_def.cost_type} "
+                             if s_def.required_level > 1:
+                                 stats_text += f"필요Lv: {s_def.required_level} "
+                     
+                     if stats_text:
+                         self.renderer.draw_text(start_x + 2, detail_y + 2, stats_text.strip(), "yellow")
         
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
