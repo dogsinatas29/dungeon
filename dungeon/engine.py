@@ -521,7 +521,7 @@ class Engine:
             ]
             
             # 층수에 맞는 장비/무기 추가 (3개 랜덤 선택)
-            equipment_candidates = self._get_eligible_items(self.dungeon.dungeon_level_tuple[0])
+            equipment_candidates = self._get_eligible_items(dungeon_map.dungeon_level_tuple[0])
             equipment_candidates = [item for item in equipment_candidates if item.type in ['WEAPON', 'ARMOR', 'SHIELD']]
             if equipment_candidates:
                 selected_gear = random.sample(equipment_candidates, min(3, len(equipment_candidates)))
