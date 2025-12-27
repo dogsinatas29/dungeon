@@ -1476,15 +1476,15 @@ class Engine:
             # [VISION_UP] 횃불 효과
             if "VISION_UP" in item.flags:
                 stats.vision_range = 15 # 시야 반경 대폭 증가
-                # 30초 후 만료를 위해 타이머 대신 TimeSystem 연동 (여기서는 단순히 플래그만 추가하고 TimeSystem에서 처리)
+                # 120초 후 만료를 위해 타이머 대신 TimeSystem 연동
                 if "VISION_UP" not in stats.flags:
                     stats.flags.add("VISION_UP")
                     # 만료 시간을 StatsComponent에 저장 (초 단위)
-                    stats.vision_expires_at = time.time() + 30.0
+                    stats.vision_expires_at = time.time() + 120.0
                 
                 # [추가] 숨겨진 아이템 감지 효과
                 stats.sees_hidden = True
-                stats.sees_hidden_expires_at = time.time() + 30.0
+                stats.sees_hidden_expires_at = time.time() + 120.0
                 
                 msg += " 어둠이 걷히며 숨겨진 기운들이 느껴집니다!"
                 
