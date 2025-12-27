@@ -41,10 +41,37 @@ class ConsoleUI:
     def get_player_name(self):
         """플레이어 이름을 한 글자씩 입력받습니다."""
         self._clear_screen()
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}  PYTHON ECS REAL-TIME DUNGEON     {COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        prompt = "\n  당신의 이름은 무엇입니까? (최대 10자) > "
+        terminal_width = shutil.get_terminal_size().columns
+        
+        # ASCII Art Title - ENTER YOUR NAME
+        title = [
+            "",
+            "  ███████╗███╗   ██╗████████╗███████╗██████╗ ",
+            "  ██╔════╝████╗  ██║╚══██╔══╝██╔════╝██╔══██╗",
+            "  █████╗  ██╔██╗ ██║   ██║   █████╗  ██████╔╝",
+            "  ██╔══╝  ██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗",
+            "  ███████╗██║ ╚████║   ██║   ███████╗██║  ██║",
+            "  ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝",
+            "",
+            "  ██╗   ██╗ ██████╗ ██╗   ██╗██████╗     ███╗   ██╗ █████╗ ███╗   ███╗███████╗",
+            "  ╚██╗ ██╔╝██╔═══██╗██║   ██║██╔══██╗    ████╗  ██║██╔══██╗████╗ ████║██╔════╝",
+            "   ╚████╔╝ ██║   ██║██║   ██║██████╔╝    ██╔██╗ ██║███████║██╔████╔██║█████╗  ",
+            "    ╚██╔╝  ██║   ██║██║   ██║██╔══██╗    ██║╚██╗██║██╔══██║██║╚██╔╝██║██╔══╝  ",
+            "     ██║   ╚██████╔╝╚██████╔╝██║  ██║    ██║ ╚████║██║  ██║██║ ╚═╝ ██║███████╗",
+            "     ╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝",
+            ""
+        ]
+        
+        # Center the title
+        for line in title:
+            padding = (terminal_width - len(line)) // 2
+            print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
+        
+        # Prompt (centered)
+        prompt_text = "당신의 이름은 무엇입니까? (최대 10자)"
+        prompt_padding = (terminal_width - len(prompt_text) - 4) // 2
+        prompt = f"{' ' * prompt_padding}{prompt_text} > "
+        
         sys.stdout.write(prompt)
         sys.stdout.flush()
 
