@@ -82,6 +82,13 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
   - [ ] Apocalypse - screen-wide attack
 
 ### Medium Priority
+- [ ] **Item Drop System Overhaul**:
+  - [ ] Drop chance formula (15-25% for normal, 100% for boss)
+  - [ ] Rarity determination (Normal 85%, Magic 14.5%, Unique 0.5%)
+  - [ ] Monster level-based item restrictions
+  - [ ] Magic affix rolling (40% prefix, 40% suffix, 20% both)
+  - [ ] Magic Find (MF) system for accessories
+  - [ ] Boss-specific loot tables
 - [ ] **Language Selection Menu** - choose Korean/English at startup
 - [ ] **Dynamic Job System** - auto-change job based on highest skill level
 - [ ] **Player Action Cooldown** - enforce cooldown in input handling
