@@ -6,6 +6,8 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
 
 **Note**: This project was developed using Gemini as a pair programming assistant.
 
+**Status**: Currently undergoing balance testing.
+
 ## Features
 
 ### Core Gameplay
@@ -220,3 +222,6 @@ This project is open source and available for educational purposes.
 ---
 
 **Developed with Gemini AI as a pair programming assistant**
+**참고**: 이 프로젝트는 Gemini를 페어 프로그래밍 도우미로 사용하여 개발되었습니다.
+
+**상태**: 현재 밸런스 테스트 진행 중...

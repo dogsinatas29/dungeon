@@ -7,7 +7,8 @@ from .components import (
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
-    HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent
+    HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent,
+    StatModifierComponent, ShrineComponent
 )
 import readchar
 import random
@@ -27,8 +28,6 @@ class InputSystem(System):
     
     def handle_input(self, action: str) -> bool:
         """Engine에서 직접 호출되어 목표 위치 컴포넌트 생성"""
-        # 0. 이전 턴의 이펙트 엔티티 정리
-        from .components import EffectComponent
         effect_entities = self.world.get_entities_with_components({EffectComponent})
         for effect in effect_entities:
             self.world.delete_entity(effect.entity_id)
@@ -161,7 +160,6 @@ class InputSystem(System):
             player_pos = player_entity.get_component(PositionComponent)
             if player_pos:
                 # 1. 시체 확인
-                from .components import CorpseComponent
                 corpses = self.world.get_entities_with_components({CorpseComponent, PositionComponent})
                 found_corpse = False
                 for c in corpses:
@@ -173,7 +171,6 @@ class InputSystem(System):
                         break
                 
                 # 2. 계단 확인 (시체가 없거나 시체 확인 후에도 계단 확인 가능)
-                from .components import MapComponent
                 from .constants import EXIT_NORMAL
                 map_entities = self.world.get_entities_with_components({MapComponent})
                 if map_entities:
@@ -516,8 +513,6 @@ class CombatSystem(System):
             if not (0 <= target_x < map_comp.width and 0 <= target_y < map_comp.height):
                 break
             
-            # 시각적 이펙트 생성 및 애니메이션
-            from .components import EffectComponent
             effect_entity = self.world.create_entity()
             self.world.add_component(effect_entity.entity_id, PositionComponent(x=target_x, y=target_y))
             effect_char = '-' if event.dx != 0 else '|'
@@ -656,6 +651,7 @@ class CombatSystem(System):
 
     def _apply_damage(self, attacker: Entity, target: Entity, distance: int, skill=None, damage_factor=1.0, allow_splash=True):
         """실제 데미지 적용 로직 (상성 및 거리 보정 포함)"""
+        from .components import StunComponent, HitFlashComponent
         a_stats = attacker.get_component(StatsComponent)
         t_stats = target.get_component(StatsComponent)
         
@@ -806,7 +802,6 @@ class CombatSystem(System):
 
             # 5. 경직(Hit Recovery) 판정: 데미지 > 최대체력/8
             if final_damage > t_stats.max_hp / 8:
-                from .components import StunComponent
                 if not target.has_component(StunComponent):
                     # 0.5초간 경직
                     target.add_component(StunComponent(duration=0.5))
@@ -1013,7 +1008,6 @@ class CombatSystem(System):
             return
         
         # [Shrine] 신전 상호작용
-        from .components import ShrineComponent
         if target.has_component(ShrineComponent) and attacker.entity_id == self.world.get_player_entity().entity_id:
             shrine_comp = target.get_component(ShrineComponent)
             if not shrine_comp.is_used:
@@ -1113,7 +1107,6 @@ class CombatSystem(System):
         # [Buff] 능력치 버프 스킬 처리
         if any(v != 0 for v in [getattr(skill, 'str_bonus', 0), getattr(skill, 'mag_bonus', 0), 
                                 getattr(skill, 'dex_bonus', 0), getattr(skill, 'vit_bonus', 0)]) and getattr(skill, 'duration', 0) > 0:
-            from .components import StatModifierComponent
             modifiers = attacker.get_components(StatModifierComponent)
             buff_source = f"SKILL_{skill.name}"
             existing = next((m for m in modifiers if m.source == buff_source), None)
@@ -1235,7 +1228,6 @@ class CombatSystem(System):
             
             # 이펙트 생성
             effect_ids = []
-            from .components import EffectComponent, RenderComponent
             char = '#' if "Lv1" in skill.name or "Lv2" in skill.name or "Lv3" in skill.name else '*'
             color = 'red' if getattr(skill, 'element', '') == '불' else 'blue'
             
@@ -1304,7 +1296,6 @@ class CombatSystem(System):
 
     def _handle_explosion(self, attacker, cx, cy, skill):
         """폭발 효과: 지정된 좌표 주변 8방향(3x3)에 피해 및 이펙트 생성"""
-        from .components import EffectComponent, RenderComponent, PositionComponent, StatsComponent
         
         self.event_manager.push(MessageEvent(f"!!! '{skill.name}' 폭발 !!!"))
         
@@ -1717,7 +1708,6 @@ class TimeSystem(System):
         needs_recalc = False
         current_time = time.time()
         for entity in list(self.world._entities.values()):
-            from .components import StatModifierComponent
             modifiers = entity.get_components(StatModifierComponent)
             if not modifiers: continue
             
