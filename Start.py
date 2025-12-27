@@ -80,16 +80,16 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None, class
 
 def main_menu():
     """메인 메뉴 표시 및 선택 처리"""
-    ui = ConsoleUI() # Assuming UI() was a typo and ConsoleUI is intended, or UI needs to be imported/defined. Sticking to ConsoleUI for consistency with existing imports.
+    ui = ConsoleUI()
     
     while True:  # 메인 메뉴 루프
-        choice = ui.show_main_menu() # This method's return type would need to change to "NEW", "LOAD", "QUIT"
+        choice = ui.show_main_menu()  # Returns 0, 1, or 2
         
-        if choice == "NEW":
+        if choice == 0:  # 새 게임
             # 직업 선택
             from dungeon.data_manager import load_class_definitions
             class_defs = load_class_definitions()
-            selected_class = ui.show_class_selection(class_defs) # Assuming this is the equivalent of ui.select_class()
+            selected_class = ui.show_class_selection(class_defs)
             if not selected_class:
                 continue  # 취소 시 메인 메뉴로
             
@@ -101,13 +101,13 @@ def main_menu():
             result = start_game(ui, player_name, new_game=True, class_data=selected_class)
             if result == "MENU":
                 continue  # 메인 메뉴로 복귀
-            elif result == "QUIT": # Assuming start_game can also return "QUIT"
+            elif result == "QUIT":
                 break  # 게임 종료
         
-        elif choice == "LOAD":
+        elif choice == 1:  # 이어하기
             from dungeon.data_manager import list_save_files
             save_files = list_save_files()
-            action, selected_name = ui.show_save_list(save_files) # Assuming this is the equivalent of ui.select_save_file()
+            action, selected_name = ui.show_save_list(save_files)
             
             if action == "LOAD":
                 game_state_data = load_game_data(selected_name)
@@ -115,7 +115,7 @@ def main_menu():
                     result = start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
                     if result == "MENU":
                         continue  # 메인 메뉴로 복귀
-                    elif result == "QUIT": # Assuming start_game can also return "QUIT"
+                    elif result == "QUIT":
                         break  # 게임 종료
                 else:
                     ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
@@ -128,8 +128,10 @@ def main_menu():
                 delete_save_data(selected_name)
                 ui.add_message(f"{selected_name}의 저장 데이터를 삭제했습니다.")
             # action이 None이면 다시 루프로 돌아감
-        elif choice == 2: # 게임 종료
+        
+        elif choice == 2:  # 게임 종료
             break
+    
     del ui
 
 if __name__ == "__main__":
