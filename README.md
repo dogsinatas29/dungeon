@@ -1,4 +1,6 @@
-# Python ECS Real-Time Dungeon Crawler
+# Dungeon Crawl
+
+**English** | [한국어](README.ko.md)
 
 A classic terminal-based roguelike dungeon crawler built with Python, featuring an Entity Component System (ECS) architecture and inspired by Diablo 1.
 
