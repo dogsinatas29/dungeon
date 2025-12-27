@@ -19,13 +19,41 @@ def create_test_character(class_id, player_name="TestPlayer"):
     
     class_defs = load_class_definitions()
     selected_class = None
+    
+    # class_defs is a list of ClassDefinition objects or dictionaries
     for cls in class_defs:
-        if cls.class_id == class_id:
+        # Handle both object and dictionary formats
+        cls_id = cls.class_id if hasattr(cls, 'class_id') else cls.get('class_id') if isinstance(cls, dict) else cls
+        if cls_id == class_id:
             selected_class = cls
             break
     
     if not selected_class:
         print(f"Error: Class {class_id} not found")
+        print(f"Available classes: {[cls.class_id if hasattr(cls, 'class_id') else cls.get('class_id', cls) if isinstance(cls, dict) else cls for cls in class_defs]}")
+        return None
+    
+    # Extract class attributes
+    if hasattr(selected_class, 'hp'):
+        # ClassDefinition object
+        hp = selected_class.hp
+        mp = selected_class.mp
+        str_val = selected_class.str
+        mag = selected_class.mag
+        dex = selected_class.dex
+        vit = selected_class.vit
+        starting_skills = list(selected_class.starting_skills) if hasattr(selected_class, 'starting_skills') else []
+    elif isinstance(selected_class, dict):
+        # Dictionary format
+        hp = selected_class.get('hp', 100)
+        mp = selected_class.get('mp', 50)
+        str_val = selected_class.get('str', 10)
+        mag = selected_class.get('mag', 10)
+        dex = selected_class.get('dex', 10)
+        vit = selected_class.get('vit', 10)
+        starting_skills = selected_class.get('starting_skills', [])
+    else:
+        print(f"Error: Unknown class format: {type(selected_class)}")
         return None
     
     # 초기 게임 상태 생성
@@ -34,15 +62,15 @@ def create_test_character(class_id, player_name="TestPlayer"):
             "name": player_name,
             "level": 10,  # 레벨 10으로 시작
             "exp": 0,
-            "hp": selected_class.hp * 2,
-            "max_hp": selected_class.hp * 2,
-            "mp": selected_class.mp * 2,
-            "max_mp": selected_class.mp * 2,
+            "hp": hp * 2,
+            "max_hp": hp * 2,
+            "mp": mp * 2,
+            "max_mp": mp * 2,
             "gold": 10000,  # 골드 10000
-            "str": selected_class.str + 10,
-            "mag": selected_class.mag + 10,
-            "dex": selected_class.dex + 10,
-            "vit": selected_class.vit + 10,
+            "str": str_val + 10,
+            "mag": mag + 10,
+            "dex": dex + 10,
+            "vit": vit + 10,
         },
         "inventory": {
             "items": {
@@ -70,7 +98,7 @@ def create_test_character(class_id, player_name="TestPlayer"):
                 "힘의 반지": {"qty": 1},
             },
             "equipped": {},
-            "skills": list(selected_class.starting_skills) if hasattr(selected_class, 'starting_skills') else [],
+            "skills": starting_skills,
         },
         "current_floor": 1,
         "dungeon_maps": {},
