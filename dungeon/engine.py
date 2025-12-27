@@ -819,7 +819,6 @@ class Engine:
         if not original: return None
         
         # 원본 데이터 복제 (얕은 복사로 충분, 내부 리스트/셋은 새로 생성됨)
-        import copy
         item = copy.copy(original)
         
         # 딥카피가 필요한 속성들 수동 복사
@@ -830,8 +829,6 @@ class Engine:
             pdef = self.prefix_defs[prefix_id]
             item.prefix_id = prefix_id
             item.name = f"{pdef.name_kr} {item.name}"
-            
-            import random
             
             # 1. Attack / Hit
             if pdef.damage_percent_min or pdef.damage_percent_max:
@@ -863,8 +860,6 @@ class Engine:
             else:
                  item.name = f"{item.name} ({sdef.name_kr})"
 
-            import random
-            
             # Helper to apply stat with Cursed check
             is_cursed = (prefix_id == "Cursed")
             
@@ -2662,7 +2657,6 @@ class Engine:
     
     def _shrine_enhance_item(self, item):
         """강화: 아이템 등급 +1, 성공/실패 처리"""
-        import random
         
         current_level = getattr(item, 'enhancement_level', 0)
         

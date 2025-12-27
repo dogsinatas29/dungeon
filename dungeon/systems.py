@@ -812,12 +812,6 @@ class CombatSystem(System):
                     target.add_component(StunComponent(duration=0.5))
                     self.event_manager.push(MessageEvent(f"'{target_name}'이(가) 강력한 충격으로 경직되었습니다!"))
             
-            # 5.5 Durability Loss (내구도 감소)
-            # - Attacker (Weapon): 10% chance
-            # - Target (Armor): 10% chance
-            import random
-            from .components import InventoryComponent
-            
             # A. Attacker Weapon Durability
             a_inv = attacker.get_component(InventoryComponent)
             if a_inv and final_damage > 0:
