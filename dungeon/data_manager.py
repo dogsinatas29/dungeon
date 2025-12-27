@@ -135,13 +135,14 @@ def load_suffixes():
 class ItemDefinition:
     # 'item_type' 대신 CSV 헤더와 동일하게 'type'으로 인자명을 통일합니다.
     def __init__(self, name, type, description, symbol, color, required_level, attack, defense, hp_effect, mp_effect, hand_type=1, attack_range=1, skill_id=None, flags="", 
-                 str_bonus=0, mag_bonus=0, dex_bonus=0, vit_bonus=0, duration=0, **kwargs):
+                 str_bonus=0, mag_bonus=0, dex_bonus=0, vit_bonus=0, duration=0, min_floor=1, **kwargs):
         self.name = name
         self.type = type # 'self.type'에 'type' 인자를 할당합니다.
         self.description = description
         self.symbol = symbol
         self.color = color
         self.required_level = int(required_level)
+        self.min_floor = int(min_floor)
         self.attack_min, self.attack_max = parse_damage_range(attack)
         self.attack = self.attack_max # 하위 호환성 유지 (최댓값을 기본 attack으로)
         self.defense_min, self.defense_max = parse_damage_range(defense)
@@ -212,6 +213,7 @@ class ItemDefinition:
             "symbol": self.symbol,
             "color": self.color,
             "required_level": self.required_level,
+            "min_floor": self.min_floor,
             "attack": self.attack_max,
             "attack_min": self.attack_min,
             "attack_max": self.attack_max,

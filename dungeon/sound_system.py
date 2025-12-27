@@ -34,41 +34,40 @@ class SoundSystem(System):
         }
         self.sound_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds")
 
-    def process_event(self, event):
-        if event.type == "SOUND":
-            self._play_sound(event.sound_type, event.message)
+    def handle_sound_event(self, event):
+        self._play_sound(event.sound_type, event.message)
         
-        elif event.type == "SKILL_USE":
-            # 1. 스킬의 플래그에서 소리 정보 탐색
-            skill = getattr(event, 'skill', None) or event.skill_name
-            
-            # 만약 skill이 이름(문자열)이라면 엔진에서 정의를 찾아옴
-            if isinstance(skill, str):
-                skill_defs = getattr(self.world.engine, 'skill_defs', {})
-                skill = skill_defs.get(skill)
+    def handle_skill_use_event(self, event):
+        # 1. 스킬의 플래그에서 소리 정보 탐색
+        skill = getattr(event, 'skill', None) or event.skill_name
+        
+        # 만약 skill이 이름(문자열)이라면 엔진에서 정의를 찾아옴
+        if isinstance(skill, str):
+            skill_defs = getattr(self.world.engine, 'skill_defs', {})
+            skill = skill_defs.get(skill)
 
-            sound_found = False
-            
-            if hasattr(skill, 'flags'):
-                for flag in skill.flags:
-                    if flag.startswith("SOUND_"):
-                        self._play_sound(flag)
-                        sound_found = True
-                        break
-            
-            if sound_found:
-                return
+        sound_found = False
+        
+        if hasattr(skill, 'flags'):
+            for flag in skill.flags:
+                if flag.startswith("SOUND_"):
+                    self._play_sound(flag)
+                    sound_found = True
+                    break
+        
+        if sound_found:
+            return
 
-            # 2. 플래그가 없으면 기존 하드코딩 방식 유지 (하위 호환)
-            skill_name = skill.name if hasattr(skill, 'name') else str(skill)
-            if "파이어볼" in skill_name:
-                self._play_sound("MAGIC")
-            elif "휠 윈드" in skill_name:
-                self._play_sound("SWING")
-            elif "방패 밀치기" in skill_name:
-                self._play_sound("BASH")
-            else:
-                self._play_sound("MAGIC")
+        # 2. 플래그가 없으면 기존 하드코딩 방식 유지 (하위 호환)
+        skill_name = skill.name if hasattr(skill, 'name') else str(skill)
+        if "파이어볼" in skill_name:
+            self._play_sound("MAGIC")
+        elif "휠 윈드" in skill_name:
+            self._play_sound("SWING")
+        elif "방패 밀치기" in skill_name:
+            self._play_sound("BASH")
+        else:
+            self._play_sound("MAGIC")
 
     def _play_sound(self, sound_type, message=""):
         """시각적 피드백 출력 및 실제 파일 재생 시도"""

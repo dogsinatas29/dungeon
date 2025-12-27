@@ -516,10 +516,20 @@ class Engine:
             shop_items = [
                 {'item': self.item_defs.get('체력 물약'), 'price': 20},
                 {'item': self.item_defs.get('마력 물약'), 'price': 20},
-                {'item': self.item_defs.get('화염 스크롤'), 'price': 50},
-                {'item': self.item_defs.get('가죽 갑옷'), 'price': 100},
-                {'item': self.item_defs.get('낡은 검'), 'price': 80},
+                {'item': self.item_defs.get('확인 스크롤'), 'price': 50},
+                {'item': self.item_defs.get('마을 차원문 스크롤'), 'price': 100},
             ]
+            
+            # 층수에 맞는 장비/무기 추가 (3개 랜덤 선택)
+            equipment_candidates = self._get_eligible_items(self.dungeon.dungeon_level_tuple[0])
+            equipment_candidates = [item for item in equipment_candidates if item.type in ['WEAPON', 'ARMOR', 'SHIELD']]
+            if equipment_candidates:
+                selected_gear = random.sample(equipment_candidates, min(3, len(equipment_candidates)))
+                for gear in selected_gear:
+                    # 상점 가격 대략적 책정 (레벨 * 50 + 기본값)
+                    price = gear.required_level * 50 + random.randint(50, 150)
+                    shop_items.append({'item': gear, 'price': price})
+
             shop_items = [si for si in shop_items if si['item'] is not None]
             self.world.add_component(shop.entity_id, ShopComponent(items=shop_items))
             self.world.add_component(shop.entity_id, MonsterComponent(type_name="상인"))
@@ -612,15 +622,13 @@ class Engine:
         # 1. Determine Item
         item_id = None
         if item_pool:
-            candidates = [name for name in item_pool if name in self.item_defs]
-            if candidates:
-                item_id = random.choice(candidates)
+            candidates = [self.item_defs[name] for name in item_pool if name in self.item_defs]
+        else:
+            candidates = self._get_eligible_items(floor)
         
-        if not item_id and self.item_defs:
-            item_id = random.choice(list(self.item_defs.keys()))
-            
-        if item_id:
-            item = self.item_defs[item_id]
+        if candidates:
+            item = random.choice(candidates)
+            item_id = item.name
             
             # 2. Determine Rarity
             rarity = self._get_rarity(floor)
@@ -2792,6 +2800,18 @@ class Engine:
                 y += 1
             
             ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 강화  [B] 뒤로  [Q] 나가기", "dark_grey")
+
+    def _get_eligible_items(self, floor, item_pool=None):
+        """현재 층수에서 획득 가능한 아이템 목록을 반환합니다."""
+        if not self.item_defs: return []
+        
+        eligible = []
+        for item in self.item_defs.values():
+            if getattr(item, 'min_floor', 1) <= floor:
+                if item_pool and item.name not in item_pool:
+                    continue
+                eligible.append(item)
+        return eligible
 
 if __name__ == '__main__':
     engine = Engine()

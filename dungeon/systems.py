@@ -975,9 +975,10 @@ class CombatSystem(System):
                     if not target.has_component(LootComponent):
                         loot_items = []
                         item_defs = self.world.engine.item_defs if hasattr(self.world.engine, 'item_defs') else None
-                        if item_defs and random.random() < 0.2:
-                            random_item_name = random.choice(list(item_defs.keys()))
-                            item = item_defs[random_item_name]
+                        # 층수에 맞는 아이템 후보군 가져오기
+                        eligible = self.world.engine._get_eligible_items(floor)
+                        if eligible and random.random() < 0.2:
+                            item = random.choice(eligible)
                             
                             # [Rarity & Affix System] (Monster Drop)
                             # 1. Get Floor
