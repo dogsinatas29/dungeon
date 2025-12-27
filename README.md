@@ -55,6 +55,11 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
 ## TODO List
 
 ### High Priority
+- [ ] **Staff Combat System** - dual-mode weapon mechanics:
+  - [ ] Physical bash attack (melee, uses durability, STR-based damage)
+  - [ ] Spell casting mode (ranged, uses charges, spell-specific damage)
+  - [ ] Random spell assignment to staves
+  - [ ] 'S' key to activate spell mode + directional casting
 - [ ] **Special Spell Effects** (12 spells need implementation):
   - [ ] Holy Bolt - bonus damage vs undead
   - [ ] Inferno - persistent flame wall
