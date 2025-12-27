@@ -52,6 +52,39 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
 
+## TODO List
+
+### High Priority
+- [ ] **Special Spell Effects** (12 spells need implementation):
+  - [ ] Holy Bolt - bonus damage vs undead
+  - [ ] Inferno - persistent flame wall
+  - [ ] Stone Curse - petrification effect
+  - [ ] Phasing - random teleport
+  - [ ] Chain Lightning - chain attack
+  - [ ] Flame Wave - fire wave attack
+  - [ ] Guardian - summon turret
+  - [ ] Teleport - directional teleport
+  - [ ] Mana Shield - absorb damage with mana
+  - [ ] Nova - omnidirectional attack
+  - [ ] Golem - summon golem
+  - [ ] Apocalypse - screen-wide attack
+
+### Medium Priority
+- [ ] **Dynamic Job System** - auto-change job based on highest skill level
+- [ ] **Player Action Cooldown** - enforce cooldown in input handling
+- [ ] **Balance Adjustments** - tune difficulty for real-time gameplay
+- [ ] **UI Improvements**:
+  - [ ] Cooldown indicators
+  - [ ] Real-time HP/MP bar animations
+  - [ ] Monster action prediction
+
+### Low Priority
+- [ ] **Town/Safe Zone** - safe area for shopping and resting
+- [ ] **Quest System** - objectives and rewards
+- [ ] **Boss Special Patterns** - unique boss behaviors
+- [ ] **More Character Classes** - expand beyond 4 classes
+- [ ] **Multiplayer Support** - co-op gameplay
+
 ## Requirements
 
 ```bash
