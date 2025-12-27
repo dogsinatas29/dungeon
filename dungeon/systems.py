@@ -1070,34 +1070,51 @@ class CombatSystem(System):
         # 스킬 플래그 가져오기
         s_flags = getattr(skill, 'flags', set())
 
+        # [Class Bonus] Sorcerer Staff Charge System
+        # 소서러가 지팡이를 장착하고 있고, 해당 지팡이에 차지가 남아있다면 자원 소모 대신 차지 소모
+        used_charge = False
+        if level_comp and level_comp.job in ["소서러", "SORCERER"]:
+            inv = attacker.get_component(InventoryComponent)
+            if inv and "손1" in inv.equipped:
+                staff = inv.equipped["손1"]
+                from .data_manager import ItemDefinition
+                if isinstance(staff, ItemDefinition) and getattr(staff, 'current_charges', 0) > 0:
+                    # 지팡이 자체 스킬이거나, 마법 계열 스킬인 경우 차지 사용 (여기서는 단순화하여 모든 MP 소모 스킬에 적용)
+                    if skill.cost_type == "MP" or "COST_MP" in s_flags:
+                        staff.current_charges -= 1
+                        used_charge = True
+                        resource_used = f"STAFF CHARGE -1 ({staff.current_charges}/{staff.max_charges})"
+                        self.event_manager.push(MessageEvent(f"지팡이의 마력을 사용하여 정신력을 보존했습니다! (남은 충전: {staff.current_charges})"))
+
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
         cost_val = skill.cost_value
         resource_used = ""
         
-        if "COST_HP" in s_flags:
-            if a_stats.current_hp <= cost_val:
-                self.event_manager.push(MessageEvent("체력이 부족합니다!"))
-                return
-            a_stats.current_hp -= cost_val
-            resource_used = f"HP -{cost_val}"
-        elif "COST_STM" in s_flags:
-            if a_stats.current_stamina < cost_val:
-                self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
-                return
-            a_stats.current_stamina -= cost_val
-            resource_used = f"STM -{cost_val}"
-        elif "COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"):
-            if a_stats.current_mp < cost_val:
-                self.event_manager.push(MessageEvent("마력이 부족합니다!"))
-                return
-            a_stats.current_mp -= cost_val
-            resource_used = f"MP -{cost_val}"
-        elif hasattr(skill, 'cost_type') and skill.cost_type == "STAMINA":
-            if a_stats.current_stamina < cost_val:
-                self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
-                return
-            a_stats.current_stamina -= cost_val
-            resource_used = f"STM -{cost_val}"
+        if not used_charge:
+            if "COST_HP" in s_flags:
+                if a_stats.current_hp <= cost_val:
+                    self.event_manager.push(MessageEvent("체력이 부족합니다!"))
+                    return
+                a_stats.current_hp -= cost_val
+                resource_used = f"HP -{cost_val}"
+            elif "COST_STM" in s_flags:
+                if a_stats.current_stamina < cost_val:
+                    self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
+                    return
+                a_stats.current_stamina -= cost_val
+                resource_used = f"STM -{cost_val}"
+            elif "COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"):
+                if a_stats.current_mp < cost_val:
+                    self.event_manager.push(MessageEvent("마력이 부족합니다!"))
+                    return
+                a_stats.current_mp -= cost_val
+                resource_used = f"MP -{cost_val}"
+            elif hasattr(skill, 'cost_type') and skill.cost_type == "STAMINA":
+                if a_stats.current_stamina < cost_val:
+                    self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
+                    return
+                a_stats.current_stamina -= cost_val
+                resource_used = f"STM -{cost_val}"
 
         # [Buff] 능력치 버프 스킬 처리
         if any(v != 0 for v in [getattr(skill, 'str_bonus', 0), getattr(skill, 'mag_bonus', 0), 

@@ -1822,6 +1822,15 @@ class Engine:
                         # 사거리 보정: +2~4 중 중간값인 3 적용
                         stats.weapon_range += 3
                         stats.flags.add("PIERCING")
+                    
+                    # [Class Bonus] Barbarian Two-Handed Bonus
+                    if level_comp and level_comp.job in ["바바리안", "BARBARIAN"] and item.hand_type == 2:
+                        # 공격력 보정: +2~4 중 중간값인 3 적용
+                        stats.attack_min += 3
+                        stats.attack_max += 3
+                        stats.attack = stats.attack_max
+                        # 사거리 보정: +1
+                        stats.weapon_range += 1
         
         # [Affix Final Calculation]
         # 1. Damage Max Bonus (of Carnage)
@@ -2289,6 +2298,12 @@ class Engine:
                                  if idx != self.selected_item_index: color = "red"
                              else:
                                  _s += f" [{cur_d}/{max_d}]"
+                          
+                         # [Charges]
+                         max_c = getattr(item, 'max_charges', 0)
+                         if max_c > 0:
+                             cur_c = getattr(item, 'current_charges', 0)
+                             _s += f" (Charge: {cur_c}/{max_c})"
                          
                          self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{icon}{name} x{qty}{_s}", color)
                          current_y += 1

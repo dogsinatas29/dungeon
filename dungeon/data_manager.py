@@ -162,6 +162,13 @@ class ItemDefinition:
         self.max_durability = int(kwargs.get('max_durability', 0))
         self.current_durability = int(kwargs.get('current_durability', self.max_durability))
         
+        # Charges (Magic staffs)
+        self.max_charges = int(kwargs.get('max_charges', 0))
+        if self.max_charges == 0 and self.skill_id and self.skill_id != "None":
+             self.max_charges = 20 # Default charges
+             
+        self.current_charges = int(kwargs.get('current_charges', self.max_charges))
+        
         # [Shrine] Enhancement Level
         self.enhancement_level = int(kwargs.get('enhancement_level', 0))  # 0 to +10
 
@@ -243,6 +250,10 @@ class ItemDefinition:
             # [Durability]
             "current_durability": getattr(self, "current_durability", 0),
             "max_durability": getattr(self, "max_durability", 0),
+            
+            # [Charges]
+            "current_charges": getattr(self, "current_charges", 0),
+            "max_charges": getattr(self, "max_charges", 0),
             
             # [Shrine]
             "enhancement_level": getattr(self, "enhancement_level", 0)
