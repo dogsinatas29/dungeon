@@ -2211,11 +2211,12 @@ class Engine:
         player_entity = self.world.get_player_entity()
         if player_entity:
              from .components import InventoryComponent
+             filtered_items = []
+             total_items = 0
              inv_comp = player_entity.get_component(InventoryComponent)
              
              if inv_comp:
                  # 카테고리별 필터링
-                 filtered_items = []
                  if self.inventory_category_index == 0: # 아이템
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
                  elif self.inventory_category_index == 1: # 장비
@@ -2234,6 +2235,8 @@ class Engine:
                              dummy = type('obj', (object,), {'name': s_name, 'element': 'NONE', 'color': 'white', 'description': '설명이 없습니다.', 'range': 1})()
                              filtered_items.append((s_name, {'item': dummy, 'qty': 1}))
 
+                 total_items = len(filtered_items)
+
                  if not filtered_items:
                      self.renderer.draw_text(start_x + 2, start_y + 4, "  (비어 있음)", "dark_grey")
                  else:
@@ -2243,7 +2246,6 @@ class Engine:
                      
                      # 스크롤 가능한 영역 계산 (하단에 상세 정보창 공간 확보)
                      max_visible_items = POPUP_HEIGHT - 9  # 상세 정보창(5줄) + 헤더 등 제외
-                     total_items = len(filtered_items)
                      
                      # 스크롤 오프셋 조정 (선택된 아이템이 보이도록)
                      if self.selected_item_index < self.inventory_scroll_offset:
