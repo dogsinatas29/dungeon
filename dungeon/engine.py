@@ -230,7 +230,7 @@ class Engine:
             if class_def and hasattr(class_def, 'starting_items'):
                 for item_name, qty in class_def.starting_items:
                     # 골드 처리
-                    if item_name in ["골드", "Gold"]:
+                    if item_name in ["골드", "Gold", "금화"]:
                          if stats:
                              stats.gold += qty
                          continue
