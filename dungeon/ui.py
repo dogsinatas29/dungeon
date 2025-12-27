@@ -151,7 +151,7 @@ class ConsoleUI:
         while True:
             self._clear_screen()
             print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-            print(f"{COLOR_MAP['yellow']}           직 업 선 택           {COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}      SELECT YOUR CLASS       {COLOR_MAP['reset']}")
             print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
             
             print("\n  당신의 직업을 선택하세요:\n")
