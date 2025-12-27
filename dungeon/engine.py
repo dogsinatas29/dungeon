@@ -429,7 +429,7 @@ class Engine:
             color = RARITY_MAGIC
 
         self.world.add_component(monster.entity_id, RenderComponent(char=monster_def.symbol, color=color))
-        self.world.add_component(monster.entity_id, MonsterComponent(type_name=m_name))
+        self.world.add_component(monster.entity_id, MonsterComponent(type_name=m_name, monster_id=monster_def.ID))
         self.world.add_component(monster.entity_id, AIComponent(behavior=random.randint(1, 2), detection_range=8))
         
         stats = StatsComponent(
@@ -468,7 +468,7 @@ class Engine:
                     continue
                 self._spawn_monster_at(cx, cy, pool=pool)
 
-    def _spawn_boss(self, x, y, pool=None, boss_name=None):
+    def _spawn_boss(self, x, y, pool=None, boss_name=None, is_summoned=False):
         """지정된 위치에 보스를 스폰합니다."""
         if not self.monster_defs: return
         
@@ -490,14 +490,18 @@ class Engine:
         # Override Boss Color with Unique
         from .constants import RARITY_UNIQUE
         self.world.add_component(boss.entity_id, RenderComponent(char=boss_def.symbol, color=RARITY_UNIQUE))
-        self.world.add_component(boss.entity_id, MonsterComponent(type_name=boss_def.name))
-        self.world.add_component(boss.entity_id, AIComponent(behavior=1, detection_range=15)) # AGGRESSIVE
+        self.world.add_component(boss.entity_id, MonsterComponent(type_name=boss_def.name, monster_id=boss_def.ID, is_summoned=is_summoned))
+
+        
+        # 보스는 항상 앵그리 모드 (CHASE)
+        self.world.add_component(boss.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=15))
         
         stats = StatsComponent(max_hp=boss_def.hp, current_hp=boss_def.hp, attack=boss_def.attack, defense=boss_def.defense)
         stats.flags.update(boss_def.flags)
         stats.action_delay = boss_def.action_delay
         self.world.add_component(boss.entity_id, stats)
         return boss
+
 
     def _spawn_objects(self, dungeon_map, map_config=None):
         """상자, 상인 등 오브젝트를 스폰합니다."""

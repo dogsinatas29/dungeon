@@ -115,6 +115,9 @@ class StatsComponent(Component):
         self.sees_hidden = False
         self.sees_hidden_expires_at = 0.0
         
+        # [Boss Hook]
+        self.has_summoned_help = False
+        
     @property
     def is_alive(self):
         return self.current_hp > 0
@@ -130,9 +133,11 @@ class StatsComponent(Component):
 
 class MonsterComponent(Component):
     """몬스터 유형 식별자"""
-    def __init__(self, type_name: str, level: int = 1):
+    def __init__(self, type_name: str, monster_id: str = None, level: int = 1, is_summoned: bool = False):
         self.type_name = type_name
+        self.monster_id = monster_id
         self.level = level
+        self.is_summoned = is_summoned
 
 class AIComponent(Component):
     """몬스터의 AI 행동 패턴 정의"""

@@ -789,6 +789,14 @@ class CombatSystem(System):
             
             t_stats.current_hp -= final_damage
             
+            # [Boss Overhaul] 지원군 소환 트리거 (체력 50% 이하)
+            if target.has_component(MonsterComponent):
+                m_comp = target.get_component(MonsterComponent)
+                if "BOSS" in t_stats.flags and not getattr(m_comp, 'is_summoned', False) and not getattr(t_stats, 'has_summoned_help', False):
+                    if t_stats.current_hp > 0 and t_stats.current_hp <= t_stats.max_hp / 2:
+                        # 소환 로직 실행
+                        self._trigger_boss_summon(attacker, target)
+
             # [Affix] Life Leech (생명력 흡수)
             if hasattr(a_stats, 'life_leech') and a_stats.life_leech > 0 and final_damage > 0:
                 leech_amount = int(final_damage * a_stats.life_leech / 100)
@@ -990,6 +998,53 @@ class CombatSystem(System):
                         
                         target.add_component(LootComponent(items=loot_items, gold=random.randint(5, 20)))
                 # 더 이상 delete_entity를 하지 않음
+
+    def _trigger_boss_summon(self, attacker: Entity, target: Entity):
+        """보스의 체력이 낮아지면 지원군을 소환합니다."""
+        t_stats = target.get_component(StatsComponent)
+        m_comp = target.get_component(MonsterComponent)
+        if not t_stats or not m_comp: return
+        
+        t_stats.has_summoned_help = True
+        t_pos = target.get_component(PositionComponent)
+        if not t_pos: return
+        
+        from .constants import BOSS_SEQUENCE
+        boss_id = getattr(m_comp, 'monster_id', None)
+        if not boss_id or boss_id not in BOSS_SEQUENCE: return
+        
+        target_name = self._get_entity_name(target)
+        self.event_manager.push(MessageEvent(f"'{target_name}'이(가) 강력한 포효와 함께 지원군을 부릅니다!"))
+        self.event_manager.push(SoundEvent("BOSS_ROAR"))
+        
+        engine = self.world.engine
+        
+        if boss_id == "DIABLO":
+            # 모든 이전 보스 소환
+            predecessors = BOSS_SEQUENCE[:-1]
+            for p_id in predecessors:
+                tx, ty = self._find_spawn_pos(t_pos.x, t_pos.y)
+                engine._spawn_boss(tx, ty, boss_name=p_id, is_summoned=True)
+        else:
+            # 이전 보스 1마리 소환
+            idx = BOSS_SEQUENCE.index(boss_id)
+            if idx > 0:
+                p_id = BOSS_SEQUENCE[idx - 1]
+                tx, ty = self._find_spawn_pos(t_pos.x, t_pos.y)
+                engine._spawn_boss(tx, ty, boss_name=p_id, is_summoned=True)
+
+    def _find_spawn_pos(self, x, y):
+        """주변 빈 공간을 찾습니다."""
+        map_ent = self.world.get_entities_with_components({MapComponent})
+        if not map_ent: return x, y
+        mc = map_ent[0].get_component(MapComponent)
+        
+        for _ in range(15): # 15번 시도
+            tx, ty = x + random.randint(-3, 3), y + random.randint(-3, 3)
+            if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
+                return tx, ty
+        return x, y
+
 
     def handle_collision_event(self, event: CollisionEvent):
         """충돌 이벤트 발생 시 공격자와 대상이 있으면 전투 처리"""

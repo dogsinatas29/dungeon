@@ -67,3 +67,7 @@ RARITY_NORMAL = "white"
 RARITY_MAGIC = "cyan"
 RARITY_UNIQUE = "yellow"
 RARITY_CURSED = "red"
+
+# --- Boss Mechanics ---
+BOSS_SEQUENCE = ["GOBLIN_KING", "LICH", "DRAGON", "DIABLO"]
+

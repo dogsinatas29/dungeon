@@ -102,8 +102,6 @@ A classic terminal-based roguelike dungeon crawler built with Python, featuring 
   - [ ] Monster action prediction
 
 ### Low Priority
-- [ ] **Town/Safe Zone** - safe area for shopping and resting
-- [ ] **Quest System** - objectives and rewards
 - [ ] **Boss Special Patterns** - unique boss behaviors
 - [ ] **More Character Classes** - expand beyond 4 classes
 - [ ] **Multiplayer Support** - co-op gameplay
