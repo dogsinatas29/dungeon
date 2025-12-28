@@ -221,7 +221,8 @@ dungeon/
 │   ├── ui.py            # Terminal UI rendering
 │   ├── data_manager.py  # Data loading
 │   └── sound_system.py  # Audio system
-├── data/
+├── sounds/               # Audio effect files (.wav)
+├── data/                 # Game data files
 │   ├── items.csv        # Item definitions
 │   ├── skills.csv       # Skill definitions
 │   ├── prefixes.json    # Magic item prefixes
