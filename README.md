@@ -172,12 +172,22 @@ python3 test_classes.py
 4. **Barbarian** - Highest HP (240), STR 50, berserker
 
 **What to Test**:
-- Equipment system (weapons, armor, shields)
-- Skill learning (use skillbooks)
-- Combat mechanics (attack, skills, damage)
-- Item drops and rarity system
-- Shop interactions
 - Character progression
+- Shop interactions
+
+### Sandbox Environment (sandbox_test.py)
+
+For high-end game logic testing (Shrines, Bosses, Affixed items):
+
+```bash
+python3 sandbox_test.py
+```
+
+**Features**:
+- Player level 99 with maxed stats (STR/MAG/DEX/VIT 100)
+- Injected with Advanced Shrine materials (99 Oils & Sacrifices)
+- Injected with unique-style affixed items for verification
+- Immediate access to Shrines and Boss encounters
 
 ### Game Mechanics
 
@@ -221,6 +231,8 @@ dungeon/
 │   ├── ui.py            # Terminal UI rendering
 │   ├── data_manager.py  # Data loading
 │   └── sound_system.py  # Audio system
+├── test_classes.py       # Class balance test environment
+├── sandbox_test.py       # High-end systems & sandbox environment
 ├── sounds/               # Audio effect files (.wav)
 ├── data/                 # Game data files
 │   ├── items.csv        # Item definitions
