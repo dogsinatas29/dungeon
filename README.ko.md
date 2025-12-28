@@ -205,6 +205,7 @@ dungeon/
 │   ├── ui.py            # 터미널 UI 렌더링
 │   ├── data_manager.py  # 데이터 로딩
 │   └── sound_system.py  # 오디오 시스템
+├── sounds/               # 오디오 효과음 파일 (.wav)
 ├── data/
 │   ├── items.csv        # 아이템 정의
 │   ├── skills.csv       # 스킬 정의
