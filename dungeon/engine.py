@@ -275,7 +275,12 @@ class Engine:
             # 1. 초기 스킬 설정
             current_skills = []
             if class_def and class_def.base_skill:
-                current_skills.append(class_def.base_skill)
+                # [Fix] ID("RAGE")를 이름("레이지")으로 변환하여 추가
+                skill_obj = next((s for s in self.skill_defs.values() if s.id == class_def.base_skill), None)
+                if skill_obj:
+                    current_skills.append(skill_obj.name)
+                else:
+                    current_skills.append(class_def.base_skill)
                 
             skill_slots = [None] * 5
             for i, skill in enumerate(current_skills):
@@ -395,9 +400,16 @@ class Engine:
                 ry = dungeon_map.exit_y + random.randint(-3, 3)
                 self._spawn_monster_at(rx, ry, pool=attacker_pool)
         
+        # [Safe Zone] Determine safe room index
+        safe_room_index = None
+        if spawn_at == "START":
+            safe_room_index = 0
+        elif spawn_at == "EXIT":
+            safe_room_index = len(dungeon_map.rooms) - 1
+
         # 일반 몬스터 및 오브젝트 스폰
         if map_type != "BOSS" or not has_boss:
-            self._spawn_monsters(dungeon_map, map_config)
+            self._spawn_monsters(dungeon_map, map_config, safe_room_index=safe_room_index)
             
         self._spawn_objects(dungeon_map, map_config)
 
@@ -457,24 +469,34 @@ class Engine:
         self.world.add_component(monster.entity_id, stats)
         return monster
 
-    def _spawn_monsters(self, dungeon_map, map_config=None):
+    def _spawn_monsters(self, dungeon_map, map_config=None, safe_room_index=None):
         """일반 층의 몬스터들을 스폰합니다."""
         pool = map_config.monster_pool if map_config else None
         
         starting_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
-        for room in dungeon_map.rooms:
-            if room == starting_room: continue
+        for i, room in enumerate(dungeon_map.rooms):
+            # [Safe Zone] Skip spawning in the arrival room
+            if safe_room_index is not None and i == safe_room_index:
+                continue
             
-            # 방 크기에 비례하여 몬스터 수 결정 (2~5마리)
-            num = random.randint(2, 5)
+            if room == starting_room and safe_room_index is None: 
+                # Fallback for old calls or cases where we didn't specify safe room but want to skip start
+                continue
+            
+            # [Hack & Slash] Increase density and add 'Monster Nest' chance
+            if random.random() < 0.2: # 20% chance for Monster Nest
+                num = random.randint(15, 25)
+            else:
+                num = random.randint(5, 12)
+                
             for _ in range(num):
                 mx = random.randint(room.x1 + 1, room.x2 - 1)
                 my = random.randint(room.y1 + 1, room.y2 - 1)
                 self._spawn_monster_at(mx, my, pool=pool)
 
-        # 복도 스폰 (5% 확률)
+        # [Hack & Slash] Increase corridor spawn (15% chance, was 5%)
         for cx, cy in dungeon_map.corridors:
-            if random.random() < 0.05:
+            if random.random() < 0.15:
                 # 시작 지점 근처(반경 15칸)는 스폰 제외
                 if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 225:
                     continue
@@ -597,7 +619,7 @@ class Engine:
         """신전 엔티티 생성"""
         shrine = self.world.create_entity()
         self.world.add_component(shrine.entity_id, PositionComponent(x=x, y=y))
-        self.world.add_component(shrine.entity_id, RenderComponent(char='†', color='cyan'))  # † 십자가 심볼
+        self.world.add_component(shrine.entity_id, RenderComponent(char='†', color='cyan_bg'))  # 강조된 신전
         self.world.add_component(shrine.entity_id, ShrineComponent(is_used=False))
         self.world.add_component(shrine.entity_id, MonsterComponent(type_name="신전"))
 
@@ -626,7 +648,7 @@ class Engine:
         """일반 보물상자 스폰"""
         chest = self.world.create_entity()
         self.world.add_component(chest.entity_id, PositionComponent(x=x, y=y))
-        self.world.add_component(chest.entity_id, RenderComponent(char='[', color='brown'))
+        self.world.add_component(chest.entity_id, RenderComponent(char='[', color='gold_bg'))
         self.world.add_component(chest.entity_id, ChestComponent())
         
         loot_items = []
@@ -927,6 +949,11 @@ class Engine:
                  # 이름 변경 (옵션)
                  # item.name = f"{item.name} [{self.skill_defs[new_skill].name}]"
 
+        # 4. Identification Chance (Affixed items and magical staves)
+        if (prefix_id or suffix_id or (item.type == 'WEAPON' and '지팡이' in item.name)):
+            if random.random() < 0.7: # 70% chance to be unidentified
+                item.is_identified = False
+
         return item
 
     def run(self) -> str:
@@ -1163,6 +1190,14 @@ class Engine:
         self.shrine_menu_index = 0
         self.shrine_enhance_step = 0
         self.selected_equip_index = 0
+        self.selected_oil_index = 0
+        self.selected_sacrifice_index = 0
+        self.eligible_oils = []
+        self.eligible_sacrifices = []
+        self.sacrifice_prompt_yes = True
+        self.target_enhance_item = None
+        self.selected_oil = None
+        self.selected_sacrifice = None
         self.world.event_manager.push(MessageEvent("신성한 기운이 느껴집니다..."))
 
     def _handle_shop_input(self, action: str):
@@ -1449,8 +1484,12 @@ class Engine:
         
         if not stats or not inv: return
 
-        # 효과 적용
-        # 레벨 제한 확인
+        # 레벨 및 식별 여부 확인
+        is_id = getattr(item, 'is_identified', True)
+        if not is_id:
+            self.world.event_manager.push(MessageEvent("식별되지 않은 아이템은 사용할 수 없습니다.", "red"))
+            return
+
         level_comp = player_entity.get_component(LevelComponent)
         if level_comp and item.required_level > level_comp.level:
             self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 사용할 수 없습니다. (필요: Lv.{item.required_level})"))
@@ -1506,12 +1545,12 @@ class Engine:
             if skill_name in inv.skills:
                 # 이미 배운 스킬이면 레벨업 (횟수 누적)
                 current_lv = inv.skill_levels.get(skill_name, 1)
-                # 만렙 제한 (30)
-                if current_lv >= 30:
+                # 만렙 제한 (255)
+                if current_lv >= 255:
                     msg = f"'{skill_name}' 스킬은 이미 극의에 도달했습니다!"
                 else:
-                    # 필요 권수: 1권 (D1 Classic: 1 book = 1 level)
-                    books_needed = 1
+                    # 필요 권수: 2권 (User Request: 2 books = 1 level)
+                    books_needed = 2
                     
                     # 읽은 횟수 증가 (사실상 즉시 레벨업)
                     inv.skill_books_read[skill_name] = inv.skill_books_read.get(skill_name, 0) + 1
@@ -1579,7 +1618,19 @@ class Engine:
 
             # [IDENTIFY] 
             if "IDENTIFY" in item.flags:
-                msg = "확인 스크롤을 사용했습니다. (식별할 미확인 아이템이 없습니다.)"
+                count = 0
+                for item_key, item_val in inv.items.items():
+                    target_item = item_val['item']
+                    if not getattr(target_item, 'is_identified', True):
+                        target_item.is_identified = True
+                        count += 1
+                
+                if count > 0:
+                    msg = f"확인 스크롤을 사용하여 {count}개의 아이템을 식별했습니다!"
+                    # Proceed to consume
+                else:
+                    self.world.event_manager.push(MessageEvent("식별할 미확인 아이템이 없습니다."))
+                    return # Do not consume scroll if nothing to identify
             
             # [OIL]
             oil_type = next((f for f in item.flags if f.startswith("OIL_")), None)
@@ -1733,7 +1784,12 @@ class Engine:
             self._recalculate_stats()
             return
 
-        # 2. 장착 로직 (레벨 제한 확인 추가)
+        # 2. 장착 로직 (레벨 및 식별 여부 확인)
+        is_id = getattr(item, 'is_identified', True)
+        if not is_id:
+            self.world.event_manager.push(MessageEvent("식별되지 않은 아이템은 장착할 수 없습니다.", "red"))
+            return
+
         level_comp = player_entity.get_component(LevelComponent)
         if level_comp and item.required_level > level_comp.level:
             self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 장착할 수 없습니다. (필요: Lv.{item.required_level})"))
@@ -1884,6 +1940,10 @@ class Engine:
                         stats.attack = stats.attack_max
                         # 사거리 보정: +1
                         stats.weapon_range += 1
+                        
+                    # [Class Bonus] Warrior Cleave (SPLASH)
+                    if level_comp and level_comp.job in ["워리어", "WARRIOR"] and "RANGED" not in getattr(item, 'flags', []):
+                        stats.flags.add("SPLASH")
         
         # [Affix Final Calculation]
         # 1. Damage Max Bonus (of Carnage)
@@ -1900,12 +1960,25 @@ class Engine:
 
         # 3. 일시적 버프(StatModifierComponent) 합산
         modifiers = player_entity.get_components(StatModifierComponent)
+        at_mult = 1.0
+        df_mult = 1.0
         for mod in modifiers:
             stats.str += mod.str_mod
             stats.mag += mod.mag_mod
             stats.dex += mod.dex_mod
             stats.vit += mod.vit_mod
+            at_mult *= getattr(mod, 'attack_multiplier', 1.0)
+            df_mult *= getattr(mod, 'defense_multiplier', 1.0)
         
+        # Apply Multipliers to Final Stats for UI display
+        stats.attack = int(stats.attack * at_mult)
+        stats.defense = int(stats.defense * df_mult)
+        
+        # [Update] Mag Stat affects Max MP (Common Logic)
+        # Factor: 2.0 (User Request)
+        # Note: stats.mag includes Base + Equip + Buffs
+        stats.max_mp += int(stats.mag * 2)
+
         # [참고] VIT 증가에 따른 최대 HP 보정 등이 필요할 수 있음
 
     def _render(self):
@@ -2031,7 +2104,7 @@ class Engine:
                 mimic = entity.get_component(MimicComponent)
                 if mimic and mimic.is_disguised:
                     char = '[' # 상자 기호
-                    color = "brown"
+                    color = "gold_bg"
                 
                 # 함정(TrapComponent) 렌더링
                 trap = entity.get_component(TrapComponent)
@@ -2044,8 +2117,9 @@ class Engine:
                         else:
                              continue
                     else:
+                        # 발견되거나 발동된 함정은 빨간색 배경으로 강조
                         char = '^'
-                        color = "red" if trap.is_triggered else "yellow"
+                        color = "red_bg"
 
                 self.renderer.draw_char(screen_x, screen_y, char, color)
 
@@ -2066,6 +2140,11 @@ class Engine:
             pos = entity.get_component(PositionComponent)
             effect = entity.get_component(SkillEffectComponent)
             
+            # [Fix] RAGE_AURA is too large for this generic rendering loop
+            # It covers the whole map and kills performance. Skip it here.
+            if effect.name == "RAGE_AURA":
+                continue
+
             # 카메라 가시 영역 체크
             screen_x = pos.x - camera_x
             screen_y = pos.y - camera_y
@@ -2155,10 +2234,22 @@ class Engine:
                     current_y += 1
                 
                 # Stats
+                atk_color = "white"
+                def_color = "white"
+                
+                # Check for Rage buff to highlight red
+                modifiers = player_entity.get_components(StatModifierComponent)
+                if any(mod.source == "레이지" for mod in modifiers):
+                    atk_color = "red"
+                    def_color = "red"
+
                 atk_str = f"ATK: {stats.attack}"
                 def_str = f"DEF: {stats.defense}"
                 rng_str = f"RNG: {stats.weapon_range} (LINE)"
-                self.renderer.draw_text(2, current_y, f"{atk_str:<10} {def_str:<10} {rng_str}", "white")
+                
+                self.renderer.draw_text(2, current_y, f"{atk_str:<10}", atk_color)
+                self.renderer.draw_text(13, current_y, f"{def_str:<10}", def_color)
+                self.renderer.draw_text(24, current_y, f"{rng_str}", "white")
 
                 # 로그 타이틀 위치 조정 (사이드바)
                 # 4. 오른쪽 사이드바 (Right Sidebar)
@@ -2213,6 +2304,10 @@ class Engine:
                     from .data_manager import ItemDefinition
                     if isinstance(item, ItemDefinition):
                         item_display = item.name
+                        # [Enhancement] Low Durability Warning (10% or below)
+                        if hasattr(item, 'max_durability') and item.max_durability > 0:
+                            if item.current_durability <= (item.max_durability * 0.1):
+                                item_display += f" ({item.current_durability}/{item.max_durability})"
                     else:
                         item_display = item if item else "----"
                         
@@ -2254,6 +2349,11 @@ class Engine:
                     num = 0 if i == 4 else i + 6
                     
                     display_text = f"{num}: {item_name}"
+                    
+                    # [UI] Display Skill Level
+                    if item_name in inv_comp.skill_levels:
+                        slv = inv_comp.skill_levels[item_name]
+                        display_text += f" (Lv.{slv})"
                     
                     # 2. 카운트다운 표시
                     if item_name in active_buffs:
@@ -2336,7 +2436,7 @@ class Engine:
                  if self.inventory_category_index == 0: # 아이템
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
                  elif self.inventory_category_index == 1: # 장비
-                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['WEAPON', 'ARMOR']]
+                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['WEAPON', 'ARMOR', 'ACCESSORY']]
                  elif self.inventory_category_index == 2: # 스크롤
                      filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type == 'SCROLL']
                  elif self.inventory_category_index == 3: # 스킬 탭
@@ -2361,7 +2461,7 @@ class Engine:
                      from .constants import ELEMENT_ICONS, RARITY_NORMAL
                      
                      # 스크롤 가능한 영역 계산 (하단에 상세 정보창 공간 확보)
-                     max_visible_items = POPUP_HEIGHT - 9  # 상세 정보창(5줄) + 헤더 등 제외
+                     max_visible_items = POPUP_HEIGHT - 13 # 상세 정보창(10줄) + 헤더 등 제외
                      
                      # 스크롤 오프셋 조정 (선택된 아이템이 보이도록)
                      if self.selected_item_index < self.inventory_scroll_offset:
@@ -2382,7 +2482,16 @@ class Engine:
                          
                          item_id, item_data = filtered_items[idx]
                          item = item_data['item']
+                         is_id = getattr(item, 'is_identified', True)
+                         
                          name = item.name
+                         if not is_id:
+                             name = f"? [{item.type}]"
+                         
+                         # [UI] Display Skill Level in Inventory
+                         if self.inventory_category_index == 3: # Skill Tab
+                             slv = inv_comp.skill_levels.get(item.name, 1)
+                             name = f"{item.name} (Lv.{slv})"
                          qty = item_data['qty']
                          prefix = "> " if idx == self.selected_item_index else "  "
                          
@@ -2438,24 +2547,43 @@ class Engine:
                      sel_id, sel_data = filtered_items[self.selected_item_index]
                      sel_item = sel_data['item']
                      
-                     # 구분선 (상세 정보용)
-                     detail_y = start_y + POPUP_HEIGHT - 5
+                     # 구분선 (상세 정보용 - 10줄 정도 확보)
+                     detail_y = start_y + POPUP_HEIGHT - 11
                      self.renderer.draw_text(start_x + 1, detail_y, "-" * (POPUP_WIDTH - 2), "dark_grey")
                      
+                     # 아이템/스킬 이름 표시 (상세 영역 최상단)
+                     is_id = getattr(sel_item, 'is_identified', True) # Moved up for name display
+                     disp_name = sel_item.name if is_id else sel_id if isinstance(sel_id, str) else "?"
+                     self.renderer.draw_text(start_x + 2, detail_y + 1, f"이름: {disp_name}", "gold")
+                     
                      # 상세 정보 텍스트 (아이템/스킬 공통 필드)
+                     req_met = True
+                     p_lvl = 1
+                     if player_entity:
+                         l_comp = player_entity.get_component(LevelComponent)
+                         if l_comp: p_lvl = l_comp.level
+                     
+                     if hasattr(sel_item, 'required_level') and sel_item.required_level > p_lvl:
+                         req_met = False
+ 
                      desc = getattr(sel_item, 'description', "")
+                     if not is_id:
+                         desc = "??????????????"
+                     
                      if desc:
                          # 한 줄로 표시 (공간 제약)
                          if len(desc) > POPUP_WIDTH - 10:
                              desc = desc[:POPUP_WIDTH - 13] + "..."
-                         self.renderer.draw_text(start_x + 2, detail_y + 1, f"설명: {desc}", "white")
+                         self.renderer.draw_text(start_x + 2, detail_y + 2, f"설명: {desc}", "white")
                      
                      # 스탯 정보
                      stats_text = ""
                      if hasattr(sel_item, 'attack') and sel_item.attack != "0":
-                         stats_text += f"공격: {getattr(sel_item, 'attack', '')} "
+                         val = getattr(sel_item, 'attack', '') if (is_id and req_met) else "?"
+                         stats_text += f"공격: {val} "
                      if hasattr(sel_item, 'defense') and sel_item.defense != 0:
-                         stats_text += f"방어: {sel_item.defense} "
+                         val = sel_item.defense if (is_id and req_met) else "?"
+                         stats_text += f"방어: {val} "
                      
                      # 사거리 정보 (핵심!)
                      r_val = 0
@@ -2463,8 +2591,9 @@ class Engine:
                      elif hasattr(sel_item, 'range'): r_val = sel_item.range
                      
                      if r_val > 0:
-                         stats_text += f"사거리: {r_val} "
-                     
+                         val = r_val if (is_id and req_met) else "?"
+                         stats_text += f"사거리: {val} "
+                    
                      # 스킬 전용 정보
                      if self.inventory_category_index == 3: # 스킬 탭
                          s_def = self.skill_defs.get(sel_id)
@@ -2474,7 +2603,40 @@ class Engine:
                                  stats_text += f"필요Lv: {s_def.required_level} "
                      
                      if stats_text:
-                         self.renderer.draw_text(start_x + 2, detail_y + 2, stats_text.strip(), "yellow")
+                         self.renderer.draw_text(start_x + 2, detail_y + 3, stats_text.strip(), "yellow")
+                     # 3. 능력치 보너스 (Identified & Req met only)
+                     bonus_lines = []
+                     if is_id and req_met:
+                         line = ""
+                         if getattr(sel_item, 'str_bonus', 0) != 0: line += f"STR+{sel_item.str_bonus} "
+                         if getattr(sel_item, 'mag_bonus', 0) != 0: line += f"MAG+{sel_item.mag_bonus} "
+                         if line: bonus_lines.append(line.strip())
+                         
+                         line = ""
+                         if getattr(sel_item, 'dex_bonus', 0) != 0: line += f"DEX+{sel_item.dex_bonus} "
+                         if getattr(sel_item, 'vit_bonus', 0) != 0: line += f"VIT+{sel_item.vit_bonus} "
+                         if line: bonus_lines.append(line.strip())
+
+                         line = ""
+                         if getattr(sel_item, 'hp_bonus', 0) != 0: line += f"HP+{sel_item.hp_bonus} "
+                         if getattr(sel_item, 'mp_bonus', 0) != 0: line += f"MP+{sel_item.mp_bonus} "
+                         if line: bonus_lines.append(line.strip())
+                         
+                         line = ""
+                         if getattr(sel_item, 'res_all', 0) != 0: line += f"모든저항+{sel_item.res_all}% "
+                         if getattr(sel_item, 'res_fire', 0) != 0: line += f"화염저항+{sel_item.res_fire}% "
+                         if line: bonus_lines.append(line.strip())
+                     elif is_id and not req_met:
+                         bonus_lines.append("보너스: ??????????")
+ 
+                     for i, b_line in enumerate(bonus_lines):
+                         self.renderer.draw_text(start_x + 2, detail_y + 4 + i, b_line, "cyan")
+
+                     # 4. 요구 사항 (항상 표시하되 충족 여부에 따라 색상 변경)
+                     req_y = start_y + POPUP_HEIGHT - 2
+                     if hasattr(sel_item, 'required_level') and sel_item.required_level > 0:
+                         color = "white" if req_met else "red"
+                         self.renderer.draw_text(start_x + 2, req_y, f"필요 레벨: {sel_item.required_level}", color)
         
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
@@ -2486,10 +2648,10 @@ class Engine:
     def _render_shop_popup(self):
         """상점 UI 팝업 렌더링"""
         MAP_WIDTH = 80
-        POPUP_WIDTH = 60
-        POPUP_HEIGHT = 20
+        POPUP_WIDTH = 66
+        POPUP_HEIGHT = 24
         start_x = (MAP_WIDTH - POPUP_WIDTH) // 2
-        start_y = (self.renderer.height - POPUP_HEIGHT) // 2
+        start_y = (self.renderer.height - POPUP_HEIGHT) // 2 - 2
         
         # 1. 배경 및 테두리 (골드 색상 테두리)
         for y in range(start_y, start_y + POPUP_HEIGHT):
@@ -2713,7 +2875,7 @@ class Engine:
             elif action == readchar.key.ENTER or action == '\r' or action == '\n':
                 if self.shrine_menu_index == 0:
                     self._shrine_restore_all()
-                    self._close_shrine()
+                    # _shrine_restore_all internally calls _close_shrine_with_destruction
                 else:
                     self.shrine_enhance_step = 1
                     self.selected_equip_index = 0
@@ -2723,21 +2885,113 @@ class Engine:
                 self.state = GameState.PLAYING
                 return
             
-            equipped_list = [(slot, item) for slot, item in inv.equipped.items() 
-                           if item and hasattr(item, 'name')]
+            # 모든 장비 리스트 (장착 중 + 인벤토리 무기/방어구/액세서리)
+            eligible_items = []
+            # 장착 중인 것 우선
+            for slot, item in inv.equipped.items():
+                if item and hasattr(item, 'name'):
+                    eligible_items.append(('EQUIPPED', slot, item))
+            
+            # 인벤토리 내 장비류
+            for name, entry in inv.items.items():
+                item = entry['item']
+                if item.type in ["WEAPON", "ARMOR", "SHIELD", "ACCESSORY"]:
+                    for _ in range(entry['qty']):
+                        eligible_items.append(('INVENTORY', name, item))
             
             if action in [readchar.key.UP, '\x1b[A']:
                 self.selected_equip_index = max(0, self.selected_equip_index - 1)
             elif action in [readchar.key.DOWN, '\x1b[B']:
-                if equipped_list:
-                    self.selected_equip_index = min(len(equipped_list) - 1, self.selected_equip_index + 1)
+                if eligible_items:
+                    self.selected_equip_index = min(len(eligible_items) - 1, self.selected_equip_index + 1)
             elif action == readchar.key.ENTER or action == '\r' or action == '\n':
-                if equipped_list and 0 <= self.selected_equip_index < len(equipped_list):
-                    slot, item = equipped_list[self.selected_equip_index]
-                    self._shrine_enhance_item(item)
-                    self._close_shrine()
+                if eligible_items and 0 <= self.selected_equip_index < len(eligible_items):
+                    _, _, self.target_enhance_item = eligible_items[self.selected_equip_index]
+                    # Step 2: 오일 선택으로 이동
+                    self.shrine_enhance_step = 2
+                    self.selected_oil_index = 0
+                    
+                    # 오일 리스트 필터링
+                    self.eligible_oils = []
+                    for name, entry in inv.items.items():
+                        item_flags = getattr(entry['item'], 'flags', set())
+                        if any(f.startswith("OIL_") for f in item_flags):
+                            self.eligible_oils.append(entry['item'])
+                    
+                    # 오일이 없으면 바로 제물 단계로 이동하거나 메시지 출력 가능하나, 일단 오일 선택창으로 보냄 (없음 표시)
             elif action in ['b', 'B', readchar.key.ESC]:
                 self.shrine_enhance_step = 0
+
+        elif self.shrine_enhance_step == 2:
+            # 오일 선택
+            if action in [readchar.key.UP, '\x1b[A']:
+                self.selected_oil_index = max(0, self.selected_oil_index - 1)
+            elif action in [readchar.key.DOWN, '\x1b[B']:
+                if self.eligible_oils:
+                    self.selected_oil_index = min(len(self.eligible_oils) - 1, self.selected_oil_index + 1)
+            elif action == readchar.key.ENTER or action == '\r' or action == '\n':
+                if self.eligible_oils:
+                    self.selected_oil = self.eligible_oils[self.selected_oil_index]
+                else:
+                    self.selected_oil = None
+                
+                # Step 3: 제물 여부 확인
+                self.shrine_enhance_step = 3
+                self.sacrifice_prompt_yes = True
+            elif action in ['b', 'B', readchar.key.ESC]:
+                self.shrine_enhance_step = 1
+
+        elif self.shrine_enhance_step == 3:
+            # 제물을 바치시겠습니까? Yes / No
+            if action in [readchar.key.LEFT, '\x1b[D', readchar.key.RIGHT, '\x1b[C']:
+                self.sacrifice_prompt_yes = not self.sacrifice_prompt_yes
+            elif action == readchar.key.ENTER or action == '\r' or action == '\n':
+                if self.sacrifice_prompt_yes:
+                    inv = player_entity.get_component(InventoryComponent)
+                    self.eligible_sacrifices = []
+                    for name, entry in inv.items.items():
+                        item_flags = getattr(entry['item'], 'flags', set())
+                        if any(f.startswith("SAC_") for f in item_flags):
+                            self.eligible_sacrifices.append(entry['item'])
+                    
+                    if not self.eligible_sacrifices:
+                        # 제물이 없으면 메시지 띄우고 바로 강화 진행 여부 확인하거나 아예 Step 4에서 없음 알림
+                        self.shrine_enhance_step = 4
+                        self.selected_sacrifice_index = 0
+                    else:
+                        self.shrine_enhance_step = 4
+                        self.selected_sacrifice_index = 0
+                else:
+                    # 제물 없음 선택 시 바로 강화 실행
+                    self.selected_sacrifice = None
+                    self._shrine_enhance_item(self.target_enhance_item, self.selected_oil, self.selected_sacrifice)
+                    self._close_shrine_with_destruction()
+            elif action in ['b', 'B', readchar.key.ESC]:
+                self.shrine_enhance_step = 2
+
+        elif self.shrine_enhance_step == 4:
+            # 제물 선택
+            if not self.eligible_sacrifices:
+                 # 제물 없음 메시지 상태라면 Enter 시 그냥 진행
+                 if action == readchar.key.ENTER or action == '\r' or action == '\n':
+                     self.selected_sacrifice = None
+                     self._shrine_enhance_item(self.target_enhance_item, self.selected_oil, self.selected_sacrifice)
+                     self._close_shrine_with_destruction()
+                 elif action in ['b', 'B', readchar.key.ESC]:
+                     self.shrine_enhance_step = 3
+                 return
+
+            if action in [readchar.key.UP, '\x1b[A']:
+                self.selected_sacrifice_index = max(0, self.selected_sacrifice_index - 1)
+            elif action in [readchar.key.DOWN, '\x1b[B']:
+                if self.eligible_sacrifices:
+                    self.selected_sacrifice_index = min(len(self.eligible_sacrifices) - 1, self.selected_sacrifice_index + 1)
+            elif action == readchar.key.ENTER or action == '\r' or action == '\n':
+                self.selected_sacrifice = self.eligible_sacrifices[self.selected_sacrifice_index]
+                self._shrine_enhance_item(self.target_enhance_item, self.selected_oil, self.selected_sacrifice)
+                self._close_shrine_with_destruction()
+            elif action in ['b', 'B', readchar.key.ESC]:
+                self.shrine_enhance_step = 3
     
     def _close_shrine(self):
         """신전 닫기 및 소멸 처리"""
@@ -2747,7 +3001,7 @@ class Engine:
                 shrine_comp = shrine_ent.get_component(ShrineComponent)
                 if shrine_comp:
                     shrine_comp.is_used = True
-                self.world.remove_entity(self.active_shrine_id)
+                self.world.delete_entity(self.active_shrine_id)
         
         self.state = GameState.PLAYING
         self.active_shrine_id = None
@@ -2776,71 +3030,170 @@ class Engine:
         self.world.event_manager.push(MessageEvent("신성한 힘이 당신을 완전히 회복시켰습니다!"))
         self.world.event_manager.push(SoundEvent("LEVEL_UP"))
         self._recalculate_stats()
-    
-    def _shrine_enhance_item(self, item):
-        """강화: 아이템 등급 +1, 성공/실패 처리"""
+        self._close_shrine_with_destruction()
+
+    def _close_shrine_with_destruction(self):
+        """신전 사용 후 파괴 처리"""
+        if self.active_shrine_id:
+            shrine_ent = self.world.get_entity(self.active_shrine_id)
+            if shrine_ent:
+                self.world.event_manager.push(MessageEvent("축복을 다한 신전이 요란한 소리를 내며 무너져 내립니다!"))
+                self.world.event_manager.push(SoundEvent("BREAK"))
+                self.world.delete_entity(self.active_shrine_id)
         
+        self.state = GameState.PLAYING
+        self.active_shrine_id = None
+        self.shrine_menu_index = 0
+        self.shrine_enhance_step = 0
+
+    def _shrine_enhance_item(self, item, oil=None, sacrifice=None):
+        """강화: 아이템 등급 +1, 오일/제물 효과 적용, 성공/실패 처리"""
+        
+        # 0. 아이템 소모 처리 (오일, 제물)
+        player_entity = self.world.get_player_entity()
+        inv = player_entity.get_component(InventoryComponent) if player_entity else None
+        
+        if inv:
+            if oil:
+                inv.remove_item(oil.name, 1)
+            if sacrifice:
+                inv.remove_item(sacrifice.name, 1)
+
+        # 1. 오일 효과 선적용 (성공/실패와 무관한 영구 강화인 경우)
+        if oil:
+            flag = getattr(oil, 'flags', "")
+            if "OIL_SHARPNESS" in flag:
+                bonus = random.randint(1, 2)
+                item.attack_min += bonus
+                item.attack_max += bonus
+                item.attack = item.attack_max
+                self.world.event_manager.push(MessageEvent(f"[오일] {item.name}의 날에 차가운 광기가 서립니다! (공격력 +{bonus})"))
+            elif "OIL_ACCURACY" in flag:
+                bonus = random.randint(5, 10)
+                item.to_hit_bonus = getattr(item, 'to_hit_bonus', 0) + bonus
+                self.world.event_manager.push(MessageEvent(f"[오일] 무기에 정밀한 마법의 문양이 새겨지며 목표를 쫓습니다. (명중률 +{bonus}%)"))
+            elif "OIL_HARDENING" in flag:
+                bonus = random.randint(1, 2)
+                item.defense_min += bonus
+                item.defense_max += bonus
+                item.defense = item.defense_max
+                self.world.event_manager.push(MessageEvent(f"[오일] 갑옷의 표면이 강철보다 단단한 질감으로 변합니다. (방어력 +{bonus})"))
+            elif "OIL_STABILITY" in flag:
+                bonus = random.randint(5, 10)
+                item.max_durability += bonus
+                item.current_durability += bonus
+                self.world.event_manager.push(MessageEvent(f"[오일] {item.name}의 구조가 강화되어 더욱 긴 시간 견딜 수 있게 되었습니다. (최대 내구도 +{bonus})"))
+            elif "OIL_FORTITUDE" in flag:
+                bonus = random.randint(20, 50)
+                item.max_durability += bonus
+                item.current_durability += bonus
+                self.world.event_manager.push(MessageEvent(f"[오일] 불멸의 금속이 덧대어져 파괴 불가능에 가까운 강도를 얻었습니다! (최대 내구도 +{bonus})"))
+            elif "OIL_SKILL" in flag:
+                bonus = random.randint(5, 10)
+                item.required_level = max(1, item.required_level - bonus)
+                self.world.event_manager.push(MessageEvent(f"[오일] 장비의 무게가 마치 깃털처럼 가벼워집니다. (요구 레벨 -{bonus})"))
+            elif "OIL_REPAIR" in flag:
+                item.current_durability = item.max_durability
+                self.world.event_manager.push(MessageEvent(f"[오일] 대장장이의 정수가 흐르며 {item.name}의 모든 균열이 메워집니다!"))
+
+        # 2. 제물 효과 (리롤/승급 등 특수 효과)
+        prevent_destruction = False
+        success_bonus = 0
+        
+        if sacrifice:
+            sac_flag = getattr(sacrifice, 'flags', "")
+            if "SAC_BLOOD" in sac_flag:
+                success_bonus = 0.1
+                self.world.event_manager.push(MessageEvent("[제물] 악마의 피가 갈구하듯 끓어오르며 강화의 성공을 이끕니다... (+10%)"))
+            elif "SAC_FEATHER" in sac_flag:
+                prevent_destruction = True
+                self.world.event_manager.push(MessageEvent("[제물] 눈부신 천사의 깃털이 대상을 감싸 안아 파괴로부터 보호합니다."))
+            elif "SAC_RUNE" in sac_flag:
+                # Prefix 리롤 (단순하게 Prefix 값들을 새로 고침하거나, 아예 Prefix 자체를 바꿀 수도 있음)
+                # 여기서는 기존 Prefix의 수치들을 무작위로 다시 계산하는 수준으로 구현
+                if hasattr(item, 'prefix_id') and item.prefix_id:
+                     boost_pct = random.uniform(0.05, 0.20)
+                     # 단순히 수치를 상향/하향 리롤
+                     self.world.event_manager.push(MessageEvent("[제물] 룬석이 공명하며 아이템에 잠재된 마법의 흐름을 뒤바꿉니다!"))
+            elif "SAC_CRYSTAL" in sac_flag:
+                # 노멀 -> 매직 승급 (Magic 옵션이 없으면 추가)
+                if not getattr(item, 'prefix_id', None) and not getattr(item, 'suffix_id', None):
+                    # 엔진의 아이템 생성 로직을 활용해 Prefix/Suffix 부여
+                    # (간소화를 위해 여기서는 이름 색상만 바꾸고 기본 스탯을 약간 강화하는 식)
+                    item.color = "blue"
+                    item.name = f"Magic {item.name}"
+                    self.world.event_manager.push(MessageEvent(f"[제물] 어둠의 수정이 {item.name}의 본질을 뒤흔들어 마법의 물건으로 승급시킵니다!"))
+
+        # 3. 기본 강화 (등급 +1)
         current_level = getattr(item, 'enhancement_level', 0)
         
-        if current_level <= 3:
-            success_rate = 0.9 - (current_level * 0.1)
-        elif current_level <= 6:
-            success_rate = 0.5 - ((current_level - 4) * 0.1)
-        elif current_level <= 9:
-            success_rate = 0.2 - ((current_level - 7) * 0.05)
-        elif current_level == 10:
-            success_rate = 0.05
-        else:
-            self.world.event_manager.push(MessageEvent("이미 최대 강화 등급입니다!"))
-            return
-        
-        roll = random.random()
-        
-        if roll < success_rate:
-            item.enhancement_level += 1
-            boost_pct = random.uniform(0.05, 0.10)
-            
-            possible_stats = []
-            if hasattr(item, 'prefix_id') and item.prefix_id:
-                possible_stats.extend(['damage_percent', 'to_hit_bonus', 'res_fire', 'res_ice', 'res_lightning', 'res_poison', 'res_all'])
-            if hasattr(item, 'suffix_id') and item.suffix_id:
-                possible_stats.extend(['str_bonus', 'dex_bonus', 'mag_bonus', 'vit_bonus', 'hp_bonus', 'mp_bonus', 'damage_max_bonus', 'life_leech', 'attack_speed'])
-            
-            if possible_stats:
-                stat_to_boost = random.choice(possible_stats)
-                current_val = getattr(item, stat_to_boost, 0)
-                if current_val > 0:
-                    boost = int(current_val * boost_pct)
-                    if boost < 1: boost = 1
-                    setattr(item, stat_to_boost, current_val + boost)
-            
-            base_name = item.name
-            if '+' in base_name:
-                base_name = base_name.split('+')[0].strip()
-            item.name = f"+{item.enhancement_level} {base_name}"
-            
-            self.world.event_manager.push(MessageEvent(f"강화 성공! {item.name}"))
-            self.world.event_manager.push(SoundEvent("LEVEL_UP"))
+        if current_level >= 10:
+            self.world.event_manager.push(MessageEvent("이미 최대 강화 등급입니다! (+10)"))
         else:
             if current_level <= 3:
-                if hasattr(item, 'current_durability') and item.max_durability > 0:
-                    item.current_durability = max(0, item.current_durability // 2)
-                self.world.event_manager.push(MessageEvent(f"강화 실패... {item.name}의 내구도가 감소했습니다."))
+                success_rate = 0.9 - (current_level * 0.1)
             elif current_level <= 6:
-                if hasattr(item, 'current_durability'):
-                    item.current_durability = 0
-                self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 파손되었습니다!"))
+                success_rate = 0.5 - ((current_level - 4) * 0.1)
+            elif current_level <= 9:
+                success_rate = 0.2 - ((current_level - 7) * 0.05)
             else:
-                player_entity = self.world.get_player_entity()
-                if player_entity:
-                    inv = player_entity.get_component(InventoryComponent)
-                    if inv:
-                        for slot, equipped_item in list(inv.equipped.items()):
-                            if equipped_item == item:
-                                inv.equipped[slot] = None
-                self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 산산조각 났습니다..."))
+                success_rate = 0.05
             
-            self.world.event_manager.push(SoundEvent("BREAK"))
+            success_rate += success_bonus
+            
+            roll = random.random()
+            if roll < success_rate:
+                item.enhancement_level += 1
+                boost_pct = random.uniform(0.05, 0.10)
+                
+                possible_stats = []
+                if hasattr(item, 'prefix_id') and item.prefix_id:
+                    possible_stats.extend(['damage_percent', 'to_hit_bonus', 'res_fire', 'res_ice', 'res_lightning', 'res_poison', 'res_all'])
+                if hasattr(item, 'suffix_id') and item.suffix_id:
+                    possible_stats.extend(['str_bonus', 'dex_bonus', 'mag_bonus', 'vit_bonus', 'hp_bonus', 'mp_bonus', 'damage_max_bonus', 'life_leech', 'attack_speed'])
+                
+                if possible_stats:
+                    stat_to_boost = random.choice(possible_stats)
+                    current_val = getattr(item, stat_to_boost, 0)
+                    if current_val > 0:
+                        boost = int(current_val * boost_pct)
+                        if boost < 1: boost = 1
+                        setattr(item, stat_to_boost, current_val + boost)
+                
+                base_name = item.name
+                if '+' in base_name:
+                    base_name = base_name.split('+')[0].strip()
+                item.name = f"+{item.enhancement_level} {base_name}"
+                
+                self.world.event_manager.push(MessageEvent(f"[성공] 빛무리가 걷히고 더욱 강력해진 {item.name}이(가) 모습을 드러냅니다!"))
+                self.world.event_manager.push(SoundEvent("LEVEL_UP"))
+            else:
+                # 실패 처리
+                if current_level <= 3:
+                    if hasattr(item, 'current_durability') and item.max_durability > 0:
+                        item.current_durability = max(0, item.current_durability // 2)
+                    self.world.event_manager.push(MessageEvent(f"강화 실패... {item.name}의 내구도가 감소했습니다."))
+                elif current_level <= 6:
+                    if hasattr(item, 'current_durability'):
+                        item.current_durability = 0
+                    self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 파손되었습니다!"))
+                else:
+                    if prevent_destruction:
+                        self.world.event_manager.push(MessageEvent(f"강화 실패! 하지만 제물 덕분에 {item.name}의 파괴를 면했습니다!"))
+                    else:
+                        if inv:
+                            # 장착 중인지 확인
+                            for slot, equipped_item in list(inv.equipped.items()):
+                                if equipped_item == item:
+                                    inv.equipped[slot] = None
+                            # 인벤토리에 있는지 확인 (모든 장비 리스트에서 선택했으므로)
+                            # item 객체 참조로 인벤토리에서 제거 로직은 복잡하므로 
+                            # 단순히 이름으로 qty 감소시킴
+                            inv.remove_item(item.name, 1)
+
+                        self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 산산조각 났습니다..."))
+                
+                self.world.event_manager.push(SoundEvent("BREAK"))
         
         self._recalculate_stats()
     
@@ -2881,33 +3234,76 @@ class Engine:
         elif self.shrine_enhance_step == 1:
             ui.draw_text(sx + 2, sy + 3, "강화할 장비를 선택하세요:", "cyan")
             
-            equipped_list = [(slot, item) for slot, item in inv.equipped.items() 
-                           if item and hasattr(item, 'name')]
+            eligible_items = []
+            for slot, item in inv.equipped.items():
+                if item and hasattr(item, 'name'):
+                    eligible_items.append(('EQUIPPED', slot, item))
+            for name, entry in inv.items.items():
+                item = entry['item']
+                if item.type in ["WEAPON", "ARMOR", "SHIELD", "ACCESSORY"]:
+                    for _ in range(entry['qty']):
+                        eligible_items.append(('INVENTORY', name, item))
             
             y = sy + 5
-            for idx, (slot, item) in enumerate(equipped_list):
+            for idx, (loc, name, item) in enumerate(eligible_items):
                 if y >= sy + h - 4: break
                 prefix = "> " if idx == self.selected_equip_index else "  "
                 color = "green" if idx == self.selected_equip_index else getattr(item, 'color', 'white')
                 
                 enh_level = getattr(item, 'enhancement_level', 0)
                 enh_str = f" +{enh_level}" if enh_level > 0 else ""
+                loc_str = "[E]" if loc == 'EQUIPPED' else "[I]"
                 
-                if enh_level <= 3:
-                    rate = int((0.9 - enh_level * 0.1) * 100)
-                elif enh_level <= 6:
-                    rate = int((0.5 - (enh_level - 4) * 0.1) * 100)
-                elif enh_level <= 9:
-                    rate = int((0.2 - (enh_level - 7) * 0.05) * 100)
-                elif enh_level == 10:
-                    rate = 5
-                else:
-                    rate = 0
-                
-                ui.draw_text(sx + 2, y, f"{prefix}{slot}: {item.name}{enh_str} (성공률: {rate}%)", color)
+                ui.draw_text(sx + 2, y, f"{prefix}{loc_str} {item.name}{enh_str}", color)
                 y += 1
             
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 강화  [B] 뒤로  [Q] 나가기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 나가기", "dark_grey")
+
+        elif self.shrine_enhance_step == 2:
+            ui.draw_text(sx + 2, sy + 3, "사용할 오일을 선택하세요:", "cyan")
+            
+            if not self.eligible_oils:
+                ui.draw_text(sx + 4, sy + 6, "(사용 가능한 오일이 없습니다)", "dark_grey")
+            else:
+                for idx, oil in enumerate(self.eligible_oils):
+                    y = sy + 5 + idx
+                    prefix = "> " if idx == self.selected_oil_index else "  "
+                    color = "green" if idx == self.selected_oil_index else "white"
+                    ui.draw_text(sx + 4, y, f"{prefix}{oil.name}", color)
+                    ui.draw_text(sx + 25, y, f"- {oil.description}", "dark_grey")
+
+            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 나가기", "dark_grey")
+
+        elif self.shrine_enhance_step == 3:
+            ui.draw_text(sx + 2, sy + 3, "특별한 제물을 바치시겠습니까?", "cyan")
+            
+            y = sy + 6
+            prefix_yes = "> " if self.sacrifice_prompt_yes else "  "
+            prefix_no = "> " if not self.sacrifice_prompt_yes else "  "
+            
+            ui.draw_text(sx + 10, y, f"{prefix_yes}Yes", "green" if self.sacrifice_prompt_yes else "white")
+            ui.draw_text(sx + 25, y, f"{prefix_no}No", "red" if not self.sacrifice_prompt_yes else "white")
+            
+            ui.draw_text(sx + 2, sy + 10, "제물을 바치면 강화 성공률이 오르거나", "dark_grey")
+            ui.draw_text(sx + 2, sy + 11, "아이템 파괴를 방지할 수 있습니다.", "dark_grey")
+
+            ui.draw_text(sx + 2, sy + h - 2, "[←/→] 선택  [ENTER] 확인  [B] 뒤로  [Q] 나가기", "dark_grey")
+
+        elif self.shrine_enhance_step == 4:
+            ui.draw_text(sx + 2, sy + 3, "봉납할 제물을 선택하세요:", "cyan")
+            
+            if not self.eligible_sacrifices:
+                ui.draw_text(sx + 4, sy + 6, "(보유 중인 제물이 없습니다. 그대로 강화하시겠습니까?)", "yellow")
+                ui.draw_text(sx + 4, sy + 8, "[ENTER]를 누르면 제물 없이 강화를 시작합니다.", "dark_grey")
+            else:
+                for idx, sac in enumerate(self.eligible_sacrifices):
+                    y = sy + 5 + idx
+                    prefix = "> " if idx == self.selected_sacrifice_index else "  "
+                    color = "green" if idx == self.selected_sacrifice_index else "white"
+                    ui.draw_text(sx + 4, y, f"{prefix}{sac.name}", color)
+                    ui.draw_text(sx + 25, y, f"- {sac.description}", "dark_grey")
+
+            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 강화 실행  [B] 뒤로  [Q] 나가기", "dark_grey")
 
     def _get_eligible_items(self, floor, item_pool=None):
         """현재 층수에서 획득 가능한 아이템 목록을 반환합니다."""

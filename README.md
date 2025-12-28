@@ -52,12 +52,35 @@ Diablo like real time rogue for terminal
 - **Shrine System** - appears every 2 floors with restoration or enhancement options
 
 ### Advanced Features
+- **Advanced Shrine System**: Multi-step enhancement using Oils and Sacrifices. One-time use and destruction mechanics.
+- **Hack & Slash Experience**: Increased monster density (Monster Nests) and loot explosions.
+- **Improved Identification**: 70% chance for unidentified magic drops, Identify Scrolls, and prefix/suffix support for accessories.
+- **UI Enhancements**: 
+  - Expanded inventory detail view (66x24) for complex item stats.
+  - Low durability warning UI.
+  - Standardized popup dimensions.
 - **Stamina System** - depletes with movement and skill usage
 - **Resource Management** - food, potions, and inventory limits
 - **Shop System** - buy/sell items and repair equipment
 - **Sound System** - audio feedback for actions
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
+
+## Recent Updates (2025-12-29)
+
+### 1. Advanced Shrine & Enhancement System
+- **Oil System**: Permanent stat boosts and utility (Sharpness, Accuracy, Hardening, Stability, Fortitude, Skill, Repair).
+- **Sacrifice System**: Risk mitigation and special upgrades (Blood for success rate, Feather for protection, Rune for reroll, Crystal for rarity upgrade).
+- **Destruction Mechanic**: Shrines are now powerful, single-use objects that are destroyed after one interaction.
+
+### 2. Hack & Slash Overhaul
+- **Monster Nests**: Increased spawn density and grouping for a more intense combat experience.
+- **Loot Explosion**: Defeating monsters now triggers satisfying item drops and visual feedback.
+
+### 3. Inventory & UI 2.0
+- **UI Expansion**: Re-engineered inventory popup (60x18 -> 66x24) to fit dual-affix item stats.
+- **Enhanced Detailed View**: Separated stat displays into multiple lines for clarity.
+- **Durability Warning**: Visual indicators when equipment is nearing breakage.
 
 ## TODO List
 

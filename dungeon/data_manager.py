@@ -165,8 +165,10 @@ class ItemDefinition:
         
         # Charges (Magic staffs)
         self.max_charges = int(kwargs.get('max_charges', 0))
-        if self.max_charges == 0 and self.skill_id and self.skill_id != "None":
-             self.max_charges = 20 # Default charges
+        if self.type == "SKILLBOOK":
+            self.max_charges = 0 # Skill books should never have charges
+        elif self.max_charges == 0 and self.skill_id and self.skill_id != "None":
+             self.max_charges = 20 # Default charges for magical items (staves etc)
              
         self.current_charges = int(kwargs.get('current_charges', self.max_charges))
         
@@ -202,6 +204,9 @@ class ItemDefinition:
         # Suffix Only
         self.life_leech = kwargs.get('life_leech', 0)
         self.attack_speed = kwargs.get('attack_speed', 0)
+        
+        # Identification Status
+        self.is_identified = kwargs.get('is_identified', True)
 
 
     def to_dict(self):
@@ -245,6 +250,8 @@ class ItemDefinition:
             "res_lightning": self.res_lightning,
             "res_poison": self.res_poison,
             "res_all": self.res_all,
+            
+            "is_identified": self.is_identified,
             
             "life_leech": self.life_leech,
             "attack_speed": self.attack_speed,

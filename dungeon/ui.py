@@ -170,6 +170,10 @@ class ConsoleUI:
         print("    아무 키나 눌러 메인 메뉴로 돌아갑니다.")
         self.get_key_input()
 
+    def show_death_screen(self):
+        """플레이어 사망 화면을 표시합니다."""
+        self.show_game_over_screen("장렬히 전사하셨습니다...")
+
     def show_confirmation_dialog(self, message):
         """사용자에게 예/아니오 확인을 받습니다."""
         selected_index = 0 # 0: No, 1: Yes

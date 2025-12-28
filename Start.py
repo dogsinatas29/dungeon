@@ -68,9 +68,7 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None, class
     if game_result == "DEATH":
         ui.show_death_screen()
         # 저장 파일 삭제
-        save_path = os.path.join(SAVE_DIR, f"{player_name}.json")
-        if os.path.exists(save_path):
-            os.remove(save_path)
+        delete_save_data(player_name)
     elif game_result == "MENU":
         # 메인 메뉴로 복귀 (게임 저장)
         return "MENU"

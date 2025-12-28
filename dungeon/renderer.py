@@ -16,6 +16,9 @@ COLOR_MAP = {
     "purple": "\033[35m",
     "invert": "\033[7m",
     "white_bg": "\033[47m\033[30m", # 흰 배경에 검은 글씨
+    "cyan_bg": "\033[46m\033[30m",  # 신전용: 청록 배경 + 검은 글씨
+    "gold_bg": "\033[43m\033[30m",  # 보물상자용: 노란 배경 + 검은 글씨
+    "red_bg": "\033[41m\033[97m",   # 위험/함정용: 빨간 배경 + 흰 글씨
     "reset": "\033[0m"
 }
 
@@ -74,6 +77,37 @@ class Renderer:
                         current_x += 2
                     else:
                         current_x += 1
+
+    def draw_box(self, x, y, width, height, title=None, color="white"):
+        """보조 창(박스)을 버퍼에 그립니다."""
+        # 모서리 및 선 기호
+        TL, TR = "╔", "╗"
+        BL, BR = "╚", "╝"
+        H, V = "═", "║"
+        T_L, T_R = "╠", "╣"
+
+        # 상단 테두리
+        self.draw_text(x, y, TL + H * (width - 2) + TR, color)
+        
+        # 타이틀이 있는 경우
+        if title:
+            # 타이틀을 중앙 정렬
+            title_text = f" {title} "
+            title_x = x + (width - len(title_text)) // 2
+            self.draw_text(title_x, y, title_text, "gold")
+            
+            # 구분선
+            # self.draw_text(x, y + 2, T_L + H * (width - 2) + T_R, color)
+
+        # 측면 테두리
+        for i in range(1, height - 1):
+            self.draw_char(x, y + i, V, color)
+            self.draw_char(x + width - 1, y + i, V, color)
+            # 배경 채우기 (투명 박스가 아니면 필요)
+            self.draw_text(x + 1, y + i, " " * (width - 2))
+
+        # 하단 테두리
+        self.draw_text(x, y + height - 1, BL + H * (width - 2) + BR, color)
 
     def render(self):
         """버퍼의 내용을 터미널에 출력"""

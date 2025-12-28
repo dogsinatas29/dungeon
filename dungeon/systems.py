@@ -371,6 +371,15 @@ class MonsterAISystem(System):
             
             # 맨해튼 거리 계산
             dist = abs(player_pos.x - pos.x) + abs(player_pos.y - pos.y)
+
+            # [Update] Check Rage Aura (Continuous Provocation)
+            player_auras = player_entity.get_components(SkillEffectComponent)
+            rage_aura = next((a for a in player_auras if a.name == "RAGE_AURA"), None)
+            
+            if rage_aura and dist <= rage_aura.radius:
+                if ai.behavior != AIComponent.CHASE:
+                    ai.behavior = AIComponent.CHASE
+                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}가 분노에 이끌려 달려옵니다!"))
             
             # 5. 행동 결정 (플래그 기반 확장)
             if "TELEPORT" in stats.flags and random.random() < 0.2:
@@ -385,8 +394,26 @@ class MonsterAISystem(System):
                         stats.last_action_time = current_time
                         continue
 
-            # 탐지 범위 밖이면 무시
-            if dist > ai.detection_range:
+            # [Hack & Slash] Swarm AI: Auto-chase within detection range
+            if dist <= ai.detection_range and ai.behavior not in [AIComponent.CHASE, AIComponent.FLEE]:
+                ai.behavior = AIComponent.CHASE
+            
+            # [Hack & Slash] Alert neighbors if chasing
+            if ai.behavior == AIComponent.CHASE:
+                # 30% chance per frame to alert nearby monsters (Prevents complete map-wide chain reaction in one frame)
+                if random.random() < 0.3:
+                    nearby_monsters = [
+                        m for m in monsters 
+                        if m.entity_id != monster.entity_id 
+                        and abs(m.get_component(PositionComponent).x - pos.x) + abs(m.get_component(PositionComponent).y - pos.y) <= 7
+                    ]
+                    for nm in nearby_monsters:
+                        nm_ai = nm.get_component(AIComponent)
+                        if nm_ai and nm_ai.behavior != AIComponent.CHASE:
+                            nm_ai.behavior = AIComponent.CHASE
+
+            # 탐지 범위 밖이면 무시 (단, 추적 중에는 거리 무시하고 계속 추적)
+            if dist > ai.detection_range and ai.behavior != AIComponent.CHASE:
                 continue
             
             dx, dy = 0, 0
@@ -933,9 +960,14 @@ class CombatSystem(System):
                                 and e.entity_id != target.entity_id   # 원본 타겟 중복 방지
                             ]
                             
-                            for s_target in splash_targets:
-                                # 스플래쉬 데미지는 50% (0.5), range=1, 스플래쉬 전파 X
-                                self._apply_damage(attacker, s_target, distance=1, skill=skill, damage_factor=0.5, allow_splash=False)
+                            if splash_targets:
+                                first = True
+                                for s_target in splash_targets:
+                                    # 스플래쉬 데미지는 50% (0.5), range=1, 스플래쉬 전파 X
+                                    self._apply_damage(attacker, s_target, distance=1, skill=skill, damage_factor=0.5, allow_splash=False)
+                                    if first and attacker.entity_id == player_entity.entity_id:
+                                        self.event_manager.push(MessageEvent("주변의 적들이 공격에 휘말립니다!", "cyan"))
+                                        first = False
         
 
         # 3.5 주변 동료 분노 (Angry AI)
@@ -1016,22 +1048,21 @@ class CombatSystem(System):
                         # Base: 60% (was 40%)
                         # Boss: 100% (Guaranteed)
                         
+                        # [Hack & Slash] Loot Explosion Logic
                         drop_chance = 0.6
-                        if m_def and 'BOSS' in m_def.flags:
+                        is_boss = m_def and 'BOSS' in m_def.flags
+                        if is_boss:
                             drop_chance = 1.0
                         
                         num_drops = 0
-                        # Try up to 3 times for multiple drops
-                        # 1st: base chance
-                        # 2nd: 30% chance if 1st succeeded
-                        # 3rd: 10% chance if 2nd succeeded
-                        
                         if eligible and random.random() < drop_chance:
-                            num_drops = 1
-                            if random.random() < 0.3:
-                                num_drops = 2
-                                if random.random() < 0.1:
-                                    num_drops = 3
+                            if is_boss:
+                                num_drops = random.randint(8, 15) # Bosses drop massive loot
+                            else:
+                                if random.random() < 0.2: # 20% chance for Loot Explosion
+                                    num_drops = random.randint(5, 8)
+                                else:
+                                    num_drops = random.randint(1, 3)
                         
                         for _ in range(num_drops):
                             item = random.choice(eligible)
@@ -1046,10 +1077,16 @@ class CombatSystem(System):
                                     if affixed:
                                         item = affixed
                                         
+                            # [Update] Even normal items can be unidentified sometimes (20% chance)
+                            # Identify scrolls and Currency should always be identified
+                            is_essential = "IDENTIFY" in item.flags or item.type == "CURRENCY"
+                            if not is_essential and getattr(item, 'is_identified', True) and random.random() < 0.2:
+                                item.is_identified = False
+
                             loot_items.append({'item': item, 'qty': 1})
                         
-                        # Gold is guaranteed 10-50
-                        target.add_component(LootComponent(items=loot_items, gold=random.randint(10, 50)))
+                        # [Hack & Slash] Increased Gold: 50-250
+                        target.add_component(LootComponent(items=loot_items, gold=random.randint(50, 250)))
                 # 더 이상 delete_entity를 하지 않음
 
     def _trigger_boss_summon(self, attacker: Entity, target: Entity):
@@ -1183,7 +1220,27 @@ class CombatSystem(System):
                         self.event_manager.push(MessageEvent(f"지팡이의 마력을 사용하여 정신력을 보존했습니다! (남은 충전: {staff.current_charges})"))
 
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
+        # [Check] 스킬 레벨 가져오기 (비용 계산을 위해 위로 이동)
+        inv = attacker.get_component(InventoryComponent)
+        skill_level = 1
+        if inv:
+            if skill.name in inv.skill_levels:
+                skill_level = inv.skill_levels[skill.name]
+            else:
+                # 베이스 네임으로 재시도 (LvX 제거된 이름)
+                import re
+                base_name = re.sub(r' Lv\d+', '', skill.name)
+                skill_level = inv.skill_levels.get(base_name, 1)
+
+        # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
         cost_val = skill.cost_value
+        
+        # [Update] MP Cost Scaling: +1.5 per level
+        # Goal: At Lv.255, Cost ~391 (Max MP ~812 naked Barb). 2 Uses -> Remainder ~30.
+        mp_scaling = ("COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"))
+        if mp_scaling:
+            cost_val += int((skill_level - 1) * 1.5)
+
         resource_used = ""
         
         if not used_charge:
@@ -1199,9 +1256,10 @@ class CombatSystem(System):
                     return
                 a_stats.current_stamina -= cost_val
                 resource_used = f"STM -{cost_val}"
-            elif "COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"):
+            elif mp_scaling: # Re-use check
                 if a_stats.current_mp < cost_val:
-                    self.event_manager.push(MessageEvent("마력이 부족합니다!"))
+                    # 상세 정보 제공 (현재/필요)
+                    self.event_manager.push(MessageEvent(f"마력이 부족합니다! (필요: {cost_val}, 현재: {int(a_stats.current_mp)})"))
                     return
                 a_stats.current_mp -= cost_val
                 resource_used = f"MP -{cost_val}"
@@ -1233,19 +1291,21 @@ class CombatSystem(System):
                 self.world.engine._recalculate_stats()
             self.event_manager.push(MessageEvent(f"{skill.name}의 효과로 능력이 향상되었습니다!"))
 
-        # 스킬 레벨 가져오기
-        inv = attacker.get_component(InventoryComponent)
-        skill_level = 1
-        if inv and skill.name in inv.skill_levels:
-            skill_level = inv.skill_levels[skill.name]
-        elif inv:
-            # 베이스 네임으로 재시도 (LvX 제거된 이름)
-            import re
-            base_name = re.sub(r' Lv\d+', '', skill.name)
-            skill_level = inv.skill_levels.get(base_name, 1)
-
-        # 레벨 기반 스케일링 (SCALABLE 플래그가 있는 경우에만 적용)
-        if "SCALABLE" in getattr(skill, 'flags', set()):
+        # [Clean] 스킬 레벨은 위에서 이미 계산됨 (skill_level)
+        # inv 변수도 위에서 이미 할당됨
+        
+        # 레벨 기반 스케일링
+        if "RAGE" == getattr(skill, 'id', '') or "레이지" == skill.name:
+            # [Adjust] Rage Flip-Flop Scaling
+            # Level 1 increment (Lv2): Range +1
+            # Level 2 increment (Lv3): Duration +0.5s
+            # Range: Base 15 + (Lv // 2)
+            scaled_range = skill.range + (skill_level // 2)
+            # Duration: Base 5.0 + ((Lv - 1) // 2) * 0.5
+            scaled_duration = getattr(skill, 'duration', 5.0) + ((skill_level - 1) // 2) * 0.5
+            scaled_damage = skill.damage # No damage scaling for Rage buff
+            
+        elif "SCALABLE" in getattr(skill, 'flags', set()):
             # 1. 데미지: 레벨당 +50% 복리 또는 합산 (여기선 합산)
             scaled_damage = int(skill.damage * (1 + 0.5 * (skill_level - 1)))
             # 2. 사거리: 레벨당 +1
@@ -1477,22 +1537,29 @@ class CombatSystem(System):
         
         elif skill.type == "BUFF":
             if skill.id == "RAGE":
-                # 1. Duration Calc (5 + Level - 1)
-                level_comp = attacker.get_component(LevelComponent)
-                level = level_comp.level if level_comp else 1
-                duration = 5 + (level - 1)
+                # 1. Duration (Already scaled by Skill Level in handle_skill_use_event)
+                duration = getattr(skill, 'duration', 5)
                 
-                # 2. Add Buff
+                # 2. Add Buff (Stat Modifier)
                 mod = StatModifierComponent(duration=duration, source=skill.name)
                 mod.attack_multiplier = 1.5
                 mod.defense_multiplier = 1.5
                 attacker.add_component(mod)
                 
                 name = self._get_entity_name(attacker)
-                self.event_manager.push(MessageEvent(f"'{name}'가 분노를 폭발시킵니다! (지속 {duration}턴)", "red"))
+                self.event_manager.push(MessageEvent(f"'{name}'가 분노를 폭발시킵니다! (지속 {int(duration)}초)", "red"))
                 self.event_manager.push(SoundEvent("ROAR"))
                 
                 # 3. Taunt (Angry Mode)
+                # Provocation Range (Already scaled: Base 15 + (Skill Level - 1))
+                provoke_range = getattr(skill, 'range', 15)
+                
+                # [Update] Add Aura Component for Continuous Taunt
+                # This ensures monsters entering range ARE provoked, and persistence is guaranteed.
+                aura = SkillEffectComponent(name="RAGE_AURA", duration=duration, damage=0, radius=provoke_range, effect_type="AURA")
+                attacker.add_component(aura)
+                
+                # Initial Taunt (Instant check)
                 pos = attacker.get_component(PositionComponent)
                 if pos:
                     targets = self.world.get_entities_with_components({MonsterComponent, AIComponent, PositionComponent})
@@ -1500,7 +1567,7 @@ class CombatSystem(System):
                     for t in targets:
                         if t.entity_id == attacker.entity_id: continue
                         t_pos = t.get_component(PositionComponent)
-                        if abs(pos.x - t_pos.x) + abs(pos.y - t_pos.y) <= 15:
+                        if abs(pos.x - t_pos.x) + abs(pos.y - t_pos.y) <= provoke_range:
                             ai = t.get_component(AIComponent)
                             if ai.behavior != AIComponent.CHASE:
                                 ai.behavior = AIComponent.CHASE
@@ -1844,8 +1911,24 @@ class TimeSystem(System):
         for entity in list(skill_entities):
             skill = entity.get_component(SkillEffectComponent)
             skill.duration -= dt
+            
+            # [Visual] Rage Aura Blink (User Request: Blue Blink on Character)
+            if skill.name == "RAGE_AURA":
+                skill.tick_count += dt
+                render = entity.get_component(RenderComponent)
+                if render:
+                    # Toggle every 0.5s
+                    if int(skill.tick_count * 2) % 2 == 0:
+                        render.color = 'blue'
+                    else:
+                        render.color = 'white'
+
             if skill.duration <= 0:
                 entity.remove_component(SkillEffectComponent)
+                # Reset Color
+                render = entity.get_component(RenderComponent)
+                if render: render.color = 'white'
+                
                 self.event_manager.push(MessageEvent(f"{skill.name} 효과가 끝났습니다."))
 
         # 4. 피격 피드백(HitFlash) 시간 감액
@@ -1859,15 +1942,21 @@ class TimeSystem(System):
         # 1-3. 능력치 버강/버프(StatModifier) 만료 체크
         needs_recalc = False
         current_time = time.time()
+        player_ent = self.world.get_player_entity()
+
         for entity in list(self.world._entities.values()):
             modifiers = entity.get_components(StatModifierComponent)
             if not modifiers: continue
             
             for mod in list(modifiers):
-                if current_time >= mod.expires_at:
+                # Duration based logic
+                mod.duration -= dt
+                
+                if mod.duration <= 0:
                     entity.remove_component_instance(mod)
                     needs_recalc = True
-                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 효과가 만료되었습니다."))
+                    if entity == player_ent:
+                        self.world.event_manager.push(MessageEvent(f"{mod.source} 효과가 만료되었습니다."))
         
         if needs_recalc and hasattr(self.world.engine, '_recalculate_stats'):
             self.world.engine._recalculate_stats()
@@ -1915,9 +2004,12 @@ class LevelSystem(System):
                     hp_gain = class_def.hp_gain
                     mp_gain = class_def.mp_gain
             
-            stats_comp.max_hp = int(stats_comp.max_hp + hp_gain)
+            stats_comp.base_max_hp = int(stats_comp.base_max_hp + hp_gain)
+            stats_comp.max_hp = stats_comp.base_max_hp
             stats_comp.current_hp = stats_comp.max_hp
-            stats_comp.max_mp = int(stats_comp.max_mp + mp_gain)
+            
+            stats_comp.base_max_mp = int(stats_comp.base_max_mp + mp_gain)
+            stats_comp.max_mp = stats_comp.base_max_mp
             stats_comp.current_mp = stats_comp.max_mp
             
             # 스탯 상승 (기본 +1씩, 주력 스탯 보너스 등도 고려 가능하나 현재는 평이하게 적용)

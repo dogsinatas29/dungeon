@@ -104,3 +104,12 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 수리 스킬북,SKILLBOOK,워리어의 장비 수리술 서적.,B,#C0C0C0,1,0,0,0,0,0,0,REPAIR,,0,0,0,0,0,0,1
 함정 해제 스킬북,SKILLBOOK,로그의 기술 서적.,B,#808080,1,0,0,0,0,0,0,DISARM,,0,0,0,0,0,0,1
 충전 스킬북,SKILLBOOK,소서러의 마력 충전 서적.,B,#ADD8E6,1,0,0,0,0,0,0,RECHARGE,,0,0,0,0,0,0,1
+안정성의 오일,CONSUMABLE,최대 내구도를 영구히 상승시킵니다.,!,#00FF7F,1,0,0,0,0,0,0,None,OIL_STABILITY,0,0,0,0,0,0,1
+요새의 오일,CONSUMABLE,최대 내구도를 대폭 상승시킵니다.,!,#2E8B57,1,0,0,0,0,0,0,None,OIL_FORTITUDE,0,0,0,0,0,0,1
+숙련의 오일,CONSUMABLE,아이템의 요구 레벨을 영구히 감소시킵니다.,!,#ADFF2F,1,0,0,0,0,0,0,None,OIL_SKILL,0,0,0,0,0,0,1
+대장장이의 오일,CONSUMABLE,아이템의 내구도를 완전히 수리합니다.,!,#708090,1,0,0,0,0,0,0,None,OIL_REPAIR,0,0,0,0,0,0,1
+녹슨 고철,SACRIFICE,일반적인 강화 제물 (기본 성공률).,%,#8B4513,1,0,0,0,0,0,0,None,SAC_SCRAP,0,0,0,0,0,0,1
+악마의 피,SACRIFICE,강화 성공 확률을 +10% 높이는 제물.,%,#8B0000,1,0,0,0,0,0,0,None,SAC_BLOOD,0,0,0,0,0,0,1
+천사의 깃털,SACRIFICE,강화 실패 시 아이템 파괴를 1회 막아주는 제물.,%,#FFF0F5,1,0,0,0,0,0,0,None,SAC_FEATHER,0,0,0,0,0,0,1
+룬석,SACRIFICE,아이템의 접두사(Prefix)를 무작위로 새로 고침합니다.,%,#4682B4,1,0,0,0,0,0,0,None,SAC_RUNE,0,0,0,0,0,0,1
+어둠의 수정,SACRIFICE,아이템 등급을 노멀에서 매직으로 승급시킵니다.,%,#4B0082,1,0,0,0,0,0,0,None,SAC_CRYSTAL,0,0,0,0,0,0,1

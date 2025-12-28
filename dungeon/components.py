@@ -162,6 +162,23 @@ class InventoryComponent(Component):
         # 스킬북 읽은 횟수 (Dict[skill_name, read_count])
         self.skill_books_read = skill_books_read if skill_books_read else {name: 0 for name in self.skills}
 
+    def add_item(self, item, qty: int = 1):
+        """인벤토리에 아이템 추가"""
+        if item.name in self.items:
+            self.items[item.name]['qty'] += qty
+        else:
+            self.items[item.name] = {'item': item, 'qty': qty}
+
+    def remove_item(self, item_name: str, qty: int = 1):
+        """인벤토리에서 아이템 제거"""
+        if item_name in self.items:
+            self.items[item_name]['qty'] -= qty
+            if self.items[item_name]['qty'] <= 0:
+                del self.items[item_name]
+                return True
+            return True
+        return False
+
     def to_dict(self):
         """JSON 저장을 위해 딕셔너리로 변환 (ItemDefinition 객체 처리)"""
         serialized_items = {}
