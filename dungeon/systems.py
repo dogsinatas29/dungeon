@@ -171,14 +171,25 @@ class InputSystem(System):
                         break
                 
                 # 2. 계단 확인 (시체가 없거나 시체 확인 후에도 계단 확인 가능)
-                from .constants import EXIT_NORMAL
+                from .constants import EXIT_NORMAL, START
                 map_entities = self.world.get_entities_with_components({MapComponent})
                 if map_entities:
                     map_comp = map_entities[0].get_component(MapComponent)
-                    if map_comp.tiles[player_pos.y][player_pos.x] == EXIT_NORMAL:
+                    tile = map_comp.tiles[player_pos.y][player_pos.x]
+                    
+                    if tile == EXIT_NORMAL:
                         target_level = getattr(self.world.engine, 'current_level', 1) + 1
                         self.event_manager.push(MapTransitionEvent(target_level=target_level))
-                        return True # 맵 이동 시 턴 소모 (또는 즉시 이동 처리)
+                        return True
+                    elif tile == START:
+                        current_level = getattr(self.world.engine, 'current_level', 1)
+                        if current_level > 1:
+                            target_level = current_level - 1
+                            self.event_manager.push(MapTransitionEvent(target_level=target_level))
+                            return True
+                        else:
+                             self.event_manager.push(MessageEvent("지상으로 나가는 출구는 막혀있습니다."))
+                             return True
                         
                 if found_corpse: return True
             return True
@@ -262,9 +273,12 @@ class MovementSystem(System):
 
                 # 4. 계단 확인 (플레이어만)
                 if entity.entity_id == self.world.get_player_entity().entity_id:
-                    from .constants import EXIT_NORMAL
-                    if map_component.tiles[new_y][new_x] == EXIT_NORMAL:
+                    from .constants import EXIT_NORMAL, START
+                    current_tile = map_component.tiles[new_y][new_x]
+                    if current_tile == EXIT_NORMAL:
                         self.event_manager.push(MessageEvent("다음 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 내려가시겠습니까?"))
+                    elif current_tile == START:
+                        self.event_manager.push(MessageEvent("이전 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 올라가시겠습니까?"))
 
             # 5. 숨겨진 아이템 발견 시 메시지
             if not is_collision:
@@ -699,6 +713,13 @@ class CombatSystem(System):
         is_critical = False
         crit_chance = 0.1 # 기본 크리 10%
         damage_multiplier = 1.0
+        
+        # [Modifier] Attacker Damage Bonus
+        if hasattr(attacker, 'components'):
+             for comp in attacker.components.values():
+                 if isinstance(comp, StatModifierComponent) and hasattr(comp, 'attack_multiplier'):
+                     damage_multiplier *= comp.attack_multiplier
+        
         advantage_msg = ""
         
         # 상성 체크
@@ -743,7 +764,15 @@ class CombatSystem(System):
                 is_magic = True
         
         if not is_magic:
-            target_ac = random.randint(getattr(t_stats, 'defense_min', t_stats.defense), getattr(t_stats, 'defense_max', t_stats.defense))
+            defense_mult = 1.0
+            if hasattr(target, 'components'):
+                 for comp in target.components.values():
+                     if isinstance(comp, StatModifierComponent) and hasattr(comp, 'defense_multiplier'):
+                         defense_mult *= comp.defense_multiplier
+            
+            d_min = getattr(t_stats, 'defense_min', t_stats.defense)
+            d_max = getattr(t_stats, 'defense_max', t_stats.defense)
+            target_ac = random.randint(d_min, d_max) * defense_mult
             to_hit = 50 + (a_stats.dex / 2) + (a_lv - t_lv) - target_ac
             # boundaries: 5% ~ 95%
             to_hit = max(5, min(95, to_hit))
@@ -972,32 +1001,55 @@ class CombatSystem(System):
                     target.add_component(CorpseComponent(original_name=m_type))
                     
                     # 6. 전리품 설정
+                    # 6. 전리품 설정
                     if not target.has_component(LootComponent):
                         loot_items = []
-                        item_defs = self.world.engine.item_defs if hasattr(self.world.engine, 'item_defs') else None
                         # 층수에 맞는 아이템 후보군 가져오기
+                        # floor 변수가 위에서 정의되어 있다고 가정 (CombatSystem._apply_damage 초기에 정의됨? 확인 필요)
+                        # 없다면 여기서 안전하게 가져옴
+                        dungeon = getattr(self.world.engine, 'dungeon', None)
+                        floor = dungeon.dungeon_level_tuple[0] if dungeon else 1
+                        
                         eligible = self.world.engine._get_eligible_items(floor)
-                        if eligible and random.random() < 0.2:
+                        
+                        # [Drop Rate Adjustment]
+                        # Base: 60% (was 40%)
+                        # Boss: 100% (Guaranteed)
+                        
+                        drop_chance = 0.6
+                        if m_def and 'BOSS' in m_def.flags:
+                            drop_chance = 1.0
+                        
+                        num_drops = 0
+                        # Try up to 3 times for multiple drops
+                        # 1st: base chance
+                        # 2nd: 30% chance if 1st succeeded
+                        # 3rd: 10% chance if 2nd succeeded
+                        
+                        if eligible and random.random() < drop_chance:
+                            num_drops = 1
+                            if random.random() < 0.3:
+                                num_drops = 2
+                                if random.random() < 0.1:
+                                    num_drops = 3
+                        
+                        for _ in range(num_drops):
                             item = random.choice(eligible)
                             
                             # [Rarity & Affix System] (Monster Drop)
-                            # 1. Get Floor
-                            dungeon = getattr(self.world.engine, 'dungeon', None)
-                            floor = dungeon.dungeon_level_tuple[0] if dungeon else 1
-                            
-                            # 2. Determine Rarity
                             rarity = self.world.engine._get_rarity(floor)
                             
                             if rarity == "MAGIC" or rarity == "UNIQUE":
                                 prefix_id, suffix_id = self.world.engine._roll_magic_affixes(item.type, floor)
                                 if prefix_id or suffix_id:
-                                    affixed = self.world.engine._create_item_with_affix(item.name, prefix_id, suffix_id)
+                                    affixed = self.world.engine._create_item_with_affix(item.name, prefix_id, suffix_id, floor)
                                     if affixed:
                                         item = affixed
                                         
                             loot_items.append({'item': item, 'qty': 1})
                         
-                        target.add_component(LootComponent(items=loot_items, gold=random.randint(5, 20)))
+                        # Gold is guaranteed 10-50
+                        target.add_component(LootComponent(items=loot_items, gold=random.randint(10, 50)))
                 # 더 이상 delete_entity를 하지 않음
 
     def _trigger_boss_summon(self, attacker: Entity, target: Entity):
@@ -1422,6 +1474,40 @@ class CombatSystem(System):
             stats.current_hp = min(stats.max_hp, stats.current_hp + heal_amount)
             recovered = stats.current_hp - old_hp
             self.event_manager.push(MessageEvent(f"체력을 {recovered} 회복했습니다!"))
+        
+        elif skill.type == "BUFF":
+            if skill.id == "RAGE":
+                # 1. Duration Calc (5 + Level - 1)
+                level_comp = attacker.get_component(LevelComponent)
+                level = level_comp.level if level_comp else 1
+                duration = 5 + (level - 1)
+                
+                # 2. Add Buff
+                mod = StatModifierComponent(duration=duration, source=skill.name)
+                mod.attack_multiplier = 1.5
+                mod.defense_multiplier = 1.5
+                attacker.add_component(mod)
+                
+                name = self._get_entity_name(attacker)
+                self.event_manager.push(MessageEvent(f"'{name}'가 분노를 폭발시킵니다! (지속 {duration}턴)", "red"))
+                self.event_manager.push(SoundEvent("ROAR"))
+                
+                # 3. Taunt (Angry Mode)
+                pos = attacker.get_component(PositionComponent)
+                if pos:
+                    targets = self.world.get_entities_with_components({MonsterComponent, AIComponent, PositionComponent})
+                    provoked = 0
+                    for t in targets:
+                        if t.entity_id == attacker.entity_id: continue
+                        t_pos = t.get_component(PositionComponent)
+                        if abs(pos.x - t_pos.x) + abs(pos.y - t_pos.y) <= 15:
+                            ai = t.get_component(AIComponent)
+                            if ai.behavior != AIComponent.CHASE:
+                                ai.behavior = AIComponent.CHASE
+                                provoked += 1
+                                t.add_component(EffectComponent(duration=1))
+                    if provoked > 0:
+                        self.event_manager.push(MessageEvent(f"주변 {provoked}마리의 적이 격분하여 달려듭니다!", "red"))
             
             # 시각 효과 (초록색 반짝임)
             pos = attacker.get_component(PositionComponent)
@@ -1574,7 +1660,7 @@ class RenderSystem(System):
         message_comp_list = self.world.get_entities_with_components({MessageComponent})
         if message_comp_list:
             message_comp = message_comp_list[0].get_component(MessageComponent)
-            message_comp.add_message(event.text)
+            message_comp.add_message(event.text, event.color)
 
     def handle_collision_event(self, event: CollisionEvent):
         """충돌 이벤트 발생 시 메시지 로그 업데이트"""
@@ -1719,6 +1805,16 @@ class TimeSystem(System):
             if poison.duration <= 0:
                 entity.remove_component(PoisonComponent)
                 self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 중독 상태가 해제되었습니다."))
+
+        # 1-3. StatModifier (Buff/Debuff) 시간 감액
+        stat_mod_entities = self.world.get_entities_with_components({StatModifierComponent})
+        for entity in list(stat_mod_entities):
+            mod = entity.get_component(StatModifierComponent)
+            mod.duration -= dt
+            if mod.duration <= 0:
+                entity.remove_component(StatModifierComponent)
+                name = self.world.engine._get_entity_name(entity)
+                self.world.event_manager.push(MessageEvent(f"{name}의 '{mod.source}' 효과가 끝났습니다.", "blue"))
 
         # 2. 횃불(VISION_UP) 시간 감액
         player_entity = self.world.get_player_entity()

@@ -115,6 +115,7 @@ class DungeonMap:
                 
                 if len(self.rooms) == 1:
                     self.start_x, self.start_y = new_room.center
+                    self.map_data[self.start_y][self.start_x] = START_CHAR
                 else:
                     prev_room_center_x, prev_room_center_y = self.rooms[-2].center
                     new_room_center_x, new_room_center_y = new_room.center

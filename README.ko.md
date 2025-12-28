@@ -6,6 +6,8 @@ Diablo like real time rogue for terminal
 
 ![Gameplay Screenshot](screenshots/gameplay_test.png)
 
+### [게임플레이 영상 보기](https://youtu.be/o8M7aBofsvQ)
+
 **참고**: 이 프로젝트는 Gemini를 페어 프로그래밍 도우미로 사용하여 개발되었습니다.
 
 **상태**: 현재 밸런스 테스트 진행 중...

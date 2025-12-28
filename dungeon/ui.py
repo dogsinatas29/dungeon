@@ -170,6 +170,54 @@ class ConsoleUI:
         print("    아무 키나 눌러 메인 메뉴로 돌아갑니다.")
         self.get_key_input()
 
+    def show_confirmation_dialog(self, message):
+        """사용자에게 예/아니오 확인을 받습니다."""
+        selected_index = 0 # 0: No, 1: Yes
+        
+        while True:
+            self._clear_screen()
+            terminal_width = shutil.get_terminal_size().columns
+            
+            # Message Box
+            lines = [
+                "╔═════════════════════════════════════╗",
+                "║               확  인               ║",
+                "╠═════════════════════════════════════╣",
+                f"║ {message:^35} ║",
+                "╚═════════════════════════════════════╝",
+                ""
+            ]
+            
+            for line in lines:
+                padding = (terminal_width - len(line)) // 2
+                print(f"{' ' * padding}{line}")
+                
+            options = ["아니오 (No)", "예 (Yes)"]
+            
+            for i, option in enumerate(options):
+                prefix = "> " if i == selected_index else "  "
+                color = COLOR_MAP['green'] if i == selected_index else COLOR_MAP['white']
+                line = f"{prefix}{option}"
+                line_padding = (terminal_width - len(line)) // 2
+                print(f"{color}{' ' * line_padding}{line}{COLOR_MAP['reset']}")
+                
+            controls = "[↑/↓] 이동 | [ENTER] 선택"
+            controls_padding = (terminal_width - len(controls)) // 2
+            print(f"\n{COLOR_MAP['yellow']}{' ' * controls_padding}{controls}{COLOR_MAP['reset']}")
+            
+            key = self.get_key_input()
+            
+            if key == readchar.key.UP:
+                selected_index = 0
+            elif key == readchar.key.DOWN:
+                selected_index = 1
+            elif key in [readchar.key.ENTER, '\r', '\n']:
+                return selected_index == 1 # Returns True for Yes
+            elif key.lower() == 'y':
+                return True
+            elif key.lower() == 'n':
+                return False
+
     def show_class_selection(self, class_defs: dict):
         """직업 선택 메뉴를 표시하고 선택된 직업 정의를 반환합니다."""
         selected_index = 0

@@ -215,8 +215,8 @@ class MessageComponent(Component):
         self.messages = []
         self.max_messages = max_messages
 
-    def add_message(self, text: str):
-        self.messages.append(text)
+    def add_message(self, text: str, color: str = None):
+        self.messages.append({'text': text, 'color': color})
         if len(self.messages) > self.max_messages:
             self.messages.pop(0) # 가장 오래된 메시지 제거
 

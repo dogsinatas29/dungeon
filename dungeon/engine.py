@@ -98,7 +98,7 @@ class Engine:
         self._initialize_world(game_data)
         self._initialize_systems()
 
-    def _initialize_world(self, game_data=None, preserve_player=None):
+    def _initialize_world(self, game_data=None, preserve_player=None, spawn_at="START"):
         """맵, 플레이어, 몬스터 등 초기 엔티티 생성"""
         # 0. 맵 설정 가져오기 (floor는 1부터 시작하므로 문자열 변환 시 1, 2, ... 확인)
         map_config = self.map_defs.get(str(self.current_level))
@@ -116,12 +116,16 @@ class Engine:
             map_type = "BOSS" if self.current_level % 5 == 0 else "NORMAL"
         
         # DungeonMap 인스턴스 생성
-        dungeon_map = DungeonMap(width, height, random, map_type=map_type)
+        dungeon_map = DungeonMap(width, height, random, dungeon_level_tuple=(self.current_level, 0), map_type=map_type)
         self.dungeon_map = dungeon_map
         map_data = dungeon_map.map_data
         
         # 1. 플레이어 엔티티 생성 (ID=1)
-        player_x, player_y = dungeon_map.start_x, dungeon_map.start_y
+        if spawn_at == "EXIT":
+             player_x, player_y = dungeon_map.exit_x, dungeon_map.exit_y
+        else:
+             player_x, player_y = dungeon_map.start_x, dungeon_map.start_y
+             
         player_entity = self.world.create_entity() 
         self.world.add_component(player_entity.entity_id, PositionComponent(x=player_x, y=player_y))
         self.world.add_component(player_entity.entity_id, RenderComponent(char='@', color='yellow'))
@@ -149,8 +153,15 @@ class Engine:
                     self.world.add_component(player_entity.entity_id, LevelComponent(**l_data))
             else:
                 # StatsComponent가 없으면 (새 게임용 초기 데이터 등) 직업 기반 초기화
-                class_id = game_data.get("selected_class", "WARRIOR") if game_data else "WARRIOR"
+                class_id = game_data.get("selected_class")
+                if not class_id:
+                    class_id = "WARRIOR"
+                
                 class_def = self.class_defs.get(class_id)
+                if not class_def:
+                    print(f"Warning: Class {class_id} not found. Defaulting to WARRIOR.")
+                    class_def = self.class_defs.get("WARRIOR") # Fallback
+                
                 if class_def:
                     self.world.add_component(player_entity.entity_id, StatsComponent(
                         max_hp=class_def.hp, current_hp=class_def.hp, 
@@ -1112,8 +1123,15 @@ class Engine:
                 
     def handle_map_transition_event(self, event: MapTransitionEvent):
         """맵 이동 이벤트 처리: 새로운 층 생성"""
+        old_level = self.current_level
         self.current_level = event.target_level
-        self.world.event_manager.push(MessageEvent(f"깊은 곳으로 내려갑니다... (던전 {self.current_level}층)"))
+        
+        # 방향 결정 (1 -> 2 : Down, 2 -> 1 : Up)
+        going_up = event.target_level < old_level
+        spawn_at = "EXIT" if going_up else "START"
+
+        direction_str = "위로 올라갑니다" if going_up else "깊은 곳으로 내려갑니다"
+        self.world.event_manager.push(MessageEvent(f"{direction_str}... (던전 {self.current_level}층)"))
         
         # 1. 플레이어 데이터 보존
         player_entity = self.world.get_player_entity()
@@ -1124,9 +1142,11 @@ class Engine:
         inv = player_entity.get_component(InventoryComponent)
         level_comp = player_entity.get_component(LevelComponent)
         
-        # 2. 월드 초기화 (플레이어 제외 엔티티 삭제 및 시스템 재구성)
-        # 단순히 _initialize_world를 다시 호출하는 게 아니라, 맵과 몬스터만 갱신
-        self._initialize_world(preserve_player=(stats, inv, level_comp))
+        # 2. 월드 초기화 (모든 엔티티 삭제)
+        self.world.clear_all_entities()
+
+        # 3. 새로운 층 생성 (플레이어 복원 포함)
+        self._initialize_world(preserve_player=(stats, inv, level_comp), spawn_at=spawn_at)
 
     def handle_shop_open_event(self, event: ShopOpenEvent):
         """플레이어가 상인과 충돌 시 상점 모드로 전환"""
@@ -1446,6 +1466,33 @@ class Engine:
                 self.world.event_manager.push(MessageEvent(f"이 책은 가르침이 없습니다: {item.name}"))
                 return
             
+            # [Class Restriction] 직업 전용 스킬 체크
+            class_restrictions = {
+                "RAGE": "바바리안",
+                "REPAIR": "워리어",
+                "DISARM": "로그",
+                "RECHARGE": "소서러"
+            }
+            if item.skill_id in class_restrictions:
+                 req_job = class_restrictions[item.skill_id]
+                 job_name = "Adventurer"
+                 if level_comp: job_name = level_comp.job
+                 
+                 if job_name != req_job:
+                      self.world.event_manager.push(MessageEvent(f"이 서적의 내용은 {req_job}만이 이해할 수 있습니다.", "red"))
+                      # 아이템 소모 방지?
+                      # 현재 구조상 함수 종료 시 True 반환하면 턴/아이템 소모됨?
+                      # Engine 내 logic임. Engine에서 return하면 소모 안되나?
+                      # 이 함수는 `_use_item`? 
+                      # 호출부 `use_item`은 return value 사용 안함? 
+                      # `_use_item`은 로직 실행만 함.
+                      # 만약 여기서 return하면, `inv.remove_item`이 호출되는지 확인 필요.
+                      # 시스템에서 호출함. 
+                      # 보통 return False 하면 소모 안함.
+                      # 하지만 보여진 `_use_item` (추정) 코드는 return type 불명확.
+                      # 일단 return 함.
+                      return
+            
             skill_def = self.skill_defs.get(item.skill_id)
             if not skill_def:
                 # [Fix] skill_defs가 '이름'(한글)으로 인덱싱되어 있을 경우 대비하여 ID로 재검색
@@ -1459,15 +1506,14 @@ class Engine:
             if skill_name in inv.skills:
                 # 이미 배운 스킬이면 레벨업 (횟수 누적)
                 current_lv = inv.skill_levels.get(skill_name, 1)
-                # 만렙 제한 (예: 10)
-                if current_lv >= 10:
+                # 만렙 제한 (30)
+                if current_lv >= 30:
                     msg = f"'{skill_name}' 스킬은 이미 극의에 도달했습니다!"
                 else:
-                    # 필요 권수: 3^(current_lv - 1)
-                    # Lv1->2: 1권, Lv2->3: 3권, Lv3->4: 9권, Lv4->5: 27권
-                    books_needed = 3 ** (current_lv - 1)
+                    # 필요 권수: 1권 (D1 Classic: 1 book = 1 level)
+                    books_needed = 1
                     
-                    # 읽은 횟수 증가
+                    # 읽은 횟수 증가 (사실상 즉시 레벨업)
                     inv.skill_books_read[skill_name] = inv.skill_books_read.get(skill_name, 0) + 1
                     current_reads = inv.skill_books_read[skill_name]
                     
@@ -2053,54 +2099,100 @@ class Engine:
             if stats:
                 # Name
                 self.renderer.draw_text(2, current_y, f"NAME: {self.player_name}", "gold")
+                current_y += 1
                 
-                # HP, MP, STM Bar 스타일
-                hp_str = f"HP  : {stats.current_hp:3}/{stats.max_hp:3}"
-                mp_str = f"MP  : {stats.current_mp:3}/{stats.max_mp:3}"
-                stm_str = f"STM : {int(stats.current_stamina):3}/{int(stats.max_stamina):3}"
-                
-                self.renderer.draw_text(20, current_y, hp_str, "red")
-                self.renderer.draw_text(40, current_y, mp_str, "blue")
-                self.renderer.draw_text(60, current_y, stm_str, "green")
+                # HP Bar
+                hp_per = max(0, min(1, stats.current_hp / stats.max_hp)) if stats.max_hp > 0 else 0
+                hp_filled = int(hp_per * 15)
+                self.renderer.draw_text(2, current_y, "HP  :", "white")
+                self.renderer.draw_text(8, current_y, "[", "white")
+                self.renderer.draw_text(9, current_y, "=" * hp_filled, "red")
+                self.renderer.draw_text(9 + hp_filled, current_y, "-" * (15 - hp_filled), "dark_grey")
+                self.renderer.draw_text(9 + 15, current_y, "]", "white")
+                self.renderer.draw_text(26, current_y, f"{int(stats.current_hp)}/{int(stats.max_hp)}", "white")
+                current_y += 1
+
+                # MP Bar
+                mp_per = max(0, min(1, stats.current_mp / stats.max_mp)) if stats.max_mp > 0 else 0
+                mp_filled = int(mp_per * 15)
+                self.renderer.draw_text(2, current_y, "MP  :", "white")
+                self.renderer.draw_text(8, current_y, "[", "white")
+                self.renderer.draw_text(9, current_y, "=" * mp_filled, "blue")
+                self.renderer.draw_text(9 + mp_filled, current_y, "-" * (15 - mp_filled), "dark_grey")
+                self.renderer.draw_text(9 + 15, current_y, "]", "white")
+                self.renderer.draw_text(26, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
+                current_y += 1
+
+                # STM Bar
+                stm_per = max(0, min(1, stats.current_stamina / stats.max_stamina)) if stats.max_stamina > 0 else 0
+                stm_filled = int(stm_per * 15)
+                self.renderer.draw_text(2, current_y, "STM :", "white")
+                self.renderer.draw_text(8, current_y, "[", "white")
+                self.renderer.draw_text(9, current_y, "=" * stm_filled, "green")
+                self.renderer.draw_text(9 + stm_filled, current_y, "-" * (15 - stm_filled), "dark_grey")
+                self.renderer.draw_text(9 + 15, current_y, "]", "white")
+                self.renderer.draw_text(26, current_y, f"{int(stats.current_stamina)}/{int(stats.max_stamina)}", "white")
                 current_y += 1
                 
                 # Level info
                 if level_comp:
-                    lv_str = f"LV  : {level_comp.level}"
-                    exp_str = f"EXP : {level_comp.exp}/{level_comp.exp_to_next}"
-                    job_str = f"JOB : {level_comp.job}"
-                    self.renderer.draw_text(2, current_y, f"{lv_str:<10} {job_str:<15} {exp_str}", "white")
-                current_y += 1
+                    # Line 1: LV, JOB, FLOOR
+                    lv_str = f"LV: {level_comp.level}"
+                    job_str = f"JOB: {level_comp.job}"
+                    floor_str = f"FLOOR: {self.current_level}"
+                    self.renderer.draw_text(2, current_y, f"{lv_str:<8} {job_str:<15} {floor_str:<12}", "white")
+                    current_y += 1
+
+                    # Line 2: EXP Bar
+                    exp_per = max(0, min(1, level_comp.exp / level_comp.exp_to_next)) if level_comp.exp_to_next > 0 else 0
+                    exp_filled = int(exp_per * 15)
+                    self.renderer.draw_text(2, current_y, "EXP :", "white")
+                    self.renderer.draw_text(8, current_y, "[", "white")
+                    self.renderer.draw_text(9, current_y, "=" * exp_filled, "gold")
+                    self.renderer.draw_text(9 + exp_filled, current_y, "-" * (15 - exp_filled), "dark_grey")
+                    self.renderer.draw_text(9 + 15, current_y, "]", "white")
+                    self.renderer.draw_text(26, current_y, f"{int(level_comp.exp)}/{int(level_comp.exp_to_next)}", "white")
+                    current_y += 1
                 
                 # Stats
-                atk_str = f"ATK : {stats.attack}"
-                def_str = f"DEF : {stats.defense}"
-                rng_str = f"RNG : {stats.weapon_range} (LINE)"
+                atk_str = f"ATK: {stats.attack}"
+                def_str = f"DEF: {stats.defense}"
+                rng_str = f"RNG: {stats.weapon_range} (LINE)"
                 self.renderer.draw_text(2, current_y, f"{atk_str:<10} {def_str:<10} {rng_str}", "white")
 
-
-        # 4. 오른쪽 사이드바 (Right Sidebar)
-        # 4-1. 로그 (Logs)
-        log_start_y = 0
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y, "[ LOGS ]", "gold")
+                # 로그 타이틀 위치 조정 (사이드바)
+                # 4. 오른쪽 사이드바 (Right Sidebar)
+                # 4-1. 로그 (Logs)
+                log_start_y = 0
+                self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y, "[ LOGS ]", "gold")
         
         message_comp_list = self.world.get_entities_with_components({MessageComponent})
         if message_comp_list:
             message_comp = message_comp_list[0].get_component(MessageComponent)
             # 최근 10개 메시지 표시 (영역 확장)
             recent_messages = message_comp.messages[-10:]
-            for i, msg in enumerate(recent_messages):
+            for i, msg_data in enumerate(recent_messages):
+                # Handle both str and dict (legacy support + new colored msgs)
+                msg_text = msg_data
+                msg_color_override = None
+
+                if isinstance(msg_data, dict):
+                     msg_text = msg_data.get('text', '')
+                     msg_color_override = msg_data.get('color')
+                
                 # 너비 제한으로 자르기 (한글 너비 고려하여 보수적으로)
                 wrap_width = SIDEBAR_WIDTH - 6
-                truncated_msg = (msg[:wrap_width] + '..') if len(msg) > wrap_width else msg
+                truncated_msg = (msg_text[:wrap_width] + '..') if len(msg_text) > wrap_width else msg_text
                 
                 # 메시지 내용에 따른 색상 구분
                 msg_color = "white"
-                if "데미지를 입었다" in msg:
+                if msg_color_override:
+                    msg_color = msg_color_override
+                elif "데미지를 입었다" in msg_text:
                     msg_color = "red"
-                elif "쓰러졌습니다" in msg:
+                elif "쓰러졌습니다" in msg_text:
                     msg_color = "gold"
-                elif "만났습니다" in msg:
+                elif "만났습니다" in msg_text:
                     msg_color = "yellow"
                 
                 self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y + 1 + i, f"> {truncated_msg}", msg_color)
@@ -2148,12 +2240,28 @@ class Engine:
         self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y, "[ SKILLS ]", "gold")
         sk_y = skill_start_y + 1
         if player_entity:
+            # 1. 활성화된 버프 확인 및 Duration 매핑
+            active_buffs = {}
+            if hasattr(player_entity, 'components'):
+                 for comp in player_entity.components.values():
+                     if isinstance(comp, StatModifierComponent):
+                         active_buffs[comp.source] = comp.duration
+
             inv_comp = player_entity.get_component(InventoryComponent)
             if inv_comp and hasattr(inv_comp, 'skill_slots'):
                 for i, item in enumerate(inv_comp.skill_slots):
                     item_name = item if item else "----"
                     num = 0 if i == 4 else i + 6
-                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, sk_y + i, f"{num}: {item_name}", "white")
+                    
+                    display_text = f"{num}: {item_name}"
+                    
+                    # 2. 카운트다운 표시
+                    if item_name in active_buffs:
+                         seconds = int(active_buffs[item_name])
+                         if seconds > 0:
+                             display_text += f" ({seconds}s)"
+                    
+                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, sk_y + i, display_text, "white")
 
         # 5. 입력 가이드 (Bottom fixed)
         guide_y = self.renderer.height - 1

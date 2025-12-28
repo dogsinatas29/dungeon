@@ -22,8 +22,9 @@ class CollisionEvent(Event):
 
 class MessageEvent(Event):
     """일반 메시지 로그에 표시될 텍스트"""
-    def __init__(self, text: str):
+    def __init__(self, text: str, color: str = None):
         self.text = text
+        self.color = color
 
 class MapTransitionEvent(Event):
     """플레이어가 계단 등을 통해 맵을 이동할 때 발생"""

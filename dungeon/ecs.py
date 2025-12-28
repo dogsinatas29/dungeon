@@ -141,6 +141,11 @@ class World:
         if entity_id in self._entities:
             del self._entities[entity_id]
 
+    def clear_all_entities(self):
+        """모든 엔티티를 제거합니다 (시스템/데이터 초기화용)"""
+        self._entities.clear()
+        self._next_entity_id = 1
+
     def add_component(self, entity_id: int, component: Component, overwrite: bool = False):
         if entity_id in self._entities:
             self._entities[entity_id].add_component(component, overwrite)
@@ -174,6 +179,13 @@ class World:
     def add_system(self, system: System):
         """시스템을 등록하고 이벤트 리스너로 등록"""
         self._systems.append(system)
+        
+    def get_system(self, system_type: Type[System]) -> System | None:
+        """해당 타입의 시스템을 반환합니다."""
+        for system in self._systems:
+            if isinstance(system, system_type):
+                return system
+        return None
         
         # 시스템이 처리할 이벤트 타입을 EventManager에 등록
         for event_type in self.event_manager.listeners.keys():

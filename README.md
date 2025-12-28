@@ -6,6 +6,8 @@ Diablo like real time rogue for terminal
 
 ![Gameplay Screenshot](screenshots/gameplay_test.png)
 
+### [Watch Gameplay Video](https://youtu.be/o8M7aBofsvQ)
+
 **Note**: This project was developed using Gemini as a pair programming assistant.
 
 **Status**: Currently undergoing balance testing.
@@ -226,3 +228,21 @@ This project is open source and available for educational purposes.
 **참고**: 이 프로젝트는 Gemini를 페어 프로그래밍 도우미로 사용하여 개발되었습니다.
 
 **상태**: 현재 밸런스 테스트 진행 중...
+
+### Unimplemented Skills (Known Issues)
+Currently, definitions exist in `skills.csv`, but the following skills lack full system logic implementation:
+
+1. **REPAIR** (Warrior Trait): Operates as HP Recovery; equipment durability repair logic missing.
+2. **DISARM** (Rogue Trait): Operates as HP Recovery; trap removal logic missing.
+3. **RECHARGE** (Sorcerer Trait): Operates as HP Recovery; staff charge restoration logic missing.
+4. **MANA_SHIELD** (Sorcerer): Mana damage absorption formula missing.
+5. **PHASING**: Random teleportation logic missing.
+6. **TELEPORT**: Targeted teleportation logic missing.
+7. **GOLEM**: Summon AI and entity creation logic missing.
+8. **GUARDIAN** (Hydra): Turret summoning and attack logic missing.
+9. **INFERNO**: Continuous damage projectile logic missing.
+10. **FLASH**: Area of Effect damage logic missing (visual only).
+11. **NOVA**: Expanding wave damage logic missing.
+12. **CHAIN_LIGHTNING**: Chain hit logic missing.
+13. **FLAME_WAVE**: Moving wall projectile logic missing.
+14. **APOCALYPSE**: Screen-wide attack logic missing.

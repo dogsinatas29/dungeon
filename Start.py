@@ -93,16 +93,28 @@ def main_menu():
             if not selected_class:
                 continue  # 취소 시 메인 메뉴로
             
-            # 이름 입력
-            player_name = ui.get_player_name()
-            if not player_name:
-                continue  # 취소 시 메인 메뉴로
+            # 이름 입력 루프
+            while True:
+                player_name = ui.get_player_name()
+                if not player_name:
+                    break  # 취소 시 메인 메뉴로 (inner loop break -> outer loop continue)
+                
+                # [Check Overwrite]
+                from dungeon.data_manager import list_save_files
+                existing_saves = list_save_files()
+                if player_name in existing_saves:
+                    confirm = ui.show_confirmation_dialog(f"'{player_name}' 파일이 이미 존재합니다. 덮어쓰시겠습니까?")
+                    if not confirm:
+                        continue # 다시 이름 입력 받음
+                
+                result = start_game(ui, player_name, new_game=True, class_data=selected_class)
+                if result == "QUIT":
+                    return # 프로그램 종료 (or set a flag to break outer)
+                
+                break # 메인 메뉴로 복귀 (start_game returned MENU or DEATH handled inside)
             
-            result = start_game(ui, player_name, new_game=True, class_data=selected_class)
-            if result == "MENU":
-                continue  # 메인 메뉴로 복귀
-            elif result == "QUIT":
-                break  # 게임 종료
+            if 'result' in locals() and result == "QUIT":
+                 break
         
         elif choice == 1:  # 이어하기
             from dungeon.data_manager import list_save_files
