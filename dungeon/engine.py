@@ -514,13 +514,19 @@ class Engine:
             for _ in range(num):
                 mx = random.randint(room.x1 + 1, room.x2 - 1)
                 my = random.randint(room.y1 + 1, room.y2 - 1)
+                
+                # [Fix] Safe zone check - don't spawn too close to start
+                dist_to_start = (mx - dungeon_map.start_x)**2 + (my - dungeon_map.start_y)**2
+                if dist_to_start < 400:  # 20 tile radius
+                    continue
+                    
                 self._spawn_monster_at(mx, my, pool=pool)
 
         # [Hack & Slash] Increase corridor spawn (15% chance, was 5%)
         for cx, cy in dungeon_map.corridors:
             if random.random() < 0.15:
-                # 시작 지점 근처(반경 15칸)는 스폰 제외
-                if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 225:
+                # [Fix] 시작 지점 근처(반경 20칸)는 스폰 제외 - 안전 구역 확대
+                if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 400:  # 20^2 = 400
                     continue
                 self._spawn_monster_at(cx, cy, pool=pool)
 
@@ -792,43 +798,35 @@ class Engine:
         except:
             return None
             
-    def _get_rarity(self, floor: int) -> str:
-        """층수에 따른 아이템 등급 결정 (NORMAL, MAGIC, UNIQUE)"""
-        # 기본 확률 (Floor 1~4)
-        base_magic = 0.145
-        base_unique = 0.005
+    def _get_rarity(self, floor: int, magic_find: int = 0) -> str:
+        """층수와 Magic Find에 따른 아이템 등급 결정 (Top-Down: UNIQUE -> MAGIC -> NORMAL)"""
+        # Base Probabilities (User Logic: Normal 85%, Magic 14.5%, Unique 0.5%)
+        # MF는 Unique, Magic 확률을 증가시킴 (Diminishing Returns 없이 단순 % 증가 적용)
         
-        # 심층부 확률 (Floor 13~16)
-        deep_magic = 0.33
-        deep_unique = 0.02
+        base_unique = 0.005 # 0.5%
+        base_magic = 0.145  # 14.5%
         
-        # [Endgame] 95층 이상: Unique 및 Magic 확률 대폭 증가
+        # [Endgame] 95층 이상: 보스런 느낌으로 확률 보정
         if floor >= 95:
-             base_magic = 0.80 # 80% Magic
-             base_unique = 0.15 # 15% Unique
-             deep_magic = 0.80
-             deep_unique = 0.15
+             base_unique = 0.05 # 5%
+             base_magic = 0.50  # 50%
         
-        # 확률 보간
-        if floor <= 4:
-            p_magic = base_magic
-            p_unique = base_unique
-        elif floor >= 13:
-            p_magic = deep_magic
-            p_unique = deep_unique
-        else:
-            # 5층 ~ 12층: 선형 보간
-            progress = (floor - 4) / (13 - 4)
-            p_magic = base_magic + (deep_magic - base_magic) * progress
-            p_unique = base_unique + (deep_unique - base_unique) * progress
+        # MF 적용 (Ex: MF 100 -> 확률 2배)
+        mf_factor = 1.0 + (magic_find / 100.0)
+        
+        p_unique = min(1.0, base_unique * mf_factor)
+        p_magic = min(1.0, base_magic * mf_factor)
+        
+        # 1. Check Unique
+        if random.random() < p_unique:
+            return "UNIQUE" # 실제 데이터가 없으면 아래에서 MAGIC으로 처리될 수 있음 (시스템에 따라)
             
-        roll = random.random()
-        if roll < p_unique:
-            return "UNIQUE" # 아직 구현 안됨 -> MAGIC 처리 or 추후 구현
-        elif roll < p_unique + p_magic:
+        # 2. Check Magic (Failed Unique)
+        if random.random() < p_magic:
             return "MAGIC"
-        else:
-            return "NORMAL"
+            
+        # 3. Else Normal
+        return "NORMAL"
 
     def _roll_magic_affixes(self, item_type: str, floor: int) -> tuple:
         """Magic 아이템의 접두사/접미사 결정"""
@@ -841,9 +839,9 @@ class Engine:
         want_prefix = False
         want_suffix = False
         
-        if roll < 0.40:
+        if roll < 0.25:
             want_prefix = True
-        elif roll < 0.80:
+        elif roll < 0.50:
             want_suffix = True
         else:
             want_prefix = True
@@ -1009,7 +1007,7 @@ class Engine:
                 
                 if action:
                     # [DEBUG] 로그에 입력된 키를 남김 (피드백용)
-                    self.world.event_manager.push(MessageEvent(f"Debug Key: {repr(action)}"))
+                    # self.world.event_manager.push(MessageEvent(f"Debug Key: {repr(action)}"))
                     
                     # Ctrl+C 처리 (\x03)
                     if action == '\x03':
@@ -1869,6 +1867,9 @@ class Engine:
         inv = player_entity.get_component(InventoryComponent)
         if not stats or not inv: return
         
+        # Get level component early (needed for class-specific bonuses)
+        level_comp = player_entity.get_component(LevelComponent)
+        
         # 1. 기본 능력치로 초기화 (base_XX 사용)
         stats.attack_min = stats.base_attack_min
         stats.attack_max = stats.base_attack_max
@@ -1952,8 +1953,6 @@ class Engine:
                 if slot == "손1":
                     stats.weapon_range = item.attack_range
                     
-                    # [Class Bonus] Rogue Bow Bonus
-                    level_comp = player_entity.get_component(LevelComponent)
                     if level_comp and level_comp.job in ["로그", "ROGUE"] and "RANGED" in getattr(item, 'flags', []):
                         # 사거리 보정: +2~4 중 중간값인 3 적용
                         stats.weapon_range += 3
@@ -2001,12 +2000,36 @@ class Engine:
         stats.attack = int(stats.attack * at_mult)
         stats.defense = int(stats.defense * df_mult)
         
-        # [Update] Mag Stat affects Max MP (Common Logic)
-        # Factor: 2.0 (User Request)
-        # Note: stats.mag includes Base + Equip + Buffs
-        stats.max_mp += int(stats.mag * 2)
-
-        # [참고] VIT 증가에 따른 최대 HP 보정 등이 필요할 수 있음
+        # [Derived Stats Calculation] (New Implementation)
+        hp_ratio = 2.0
+        mp_ratio = 1.0
+        
+        # level_comp already initialized at the beginning of the method
+        if hasattr(self, 'class_defs') and level_comp and level_comp.job:
+            class_def = self.class_defs.get(level_comp.job)
+            if class_def:
+                hp_ratio = getattr(class_def, 'vit_to_hp', 2.0)
+                mp_ratio = getattr(class_def, 'mag_to_mp', 1.0)
+        
+        # 1. HP/MP from Stats (VIT, MAG)
+        stats.max_hp += int(stats.vit * hp_ratio)
+        stats.max_mp += int(stats.mag * mp_ratio)
+        
+        # 2. Defense (AC) from DEX (Every 5 DEX = +1 AC)
+        dex_ac_bonus = (stats.dex // 5)
+        stats.defense += dex_ac_bonus
+        stats.defense_min += dex_ac_bonus
+        stats.defense_max += dex_ac_bonus
+        
+        # 3. Attack (Damage) from STR (Every 2 STR = +1 Min/Max Damage)
+        str_dmg_bonus = stats.str // 2
+        stats.attack_min += str_dmg_bonus
+        stats.attack_max += str_dmg_bonus
+        stats.attack = stats.attack_max
+        
+        # Ensure current doesn't exceed max
+        stats.current_hp = min(stats.current_hp, stats.max_hp)
+        stats.current_mp = min(stats.current_mp, stats.max_mp)
 
     def _get_map_theme(self):
         """현재 층수에 따른 던전 테마 정보를 반환합니다."""
@@ -2243,16 +2266,94 @@ class Engine:
 
                 self.renderer.draw_char(screen_x, screen_y, char, color)
 
-                # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘)
-                # 수면(Sleep) 표시: zZ
-                if entity.has_component(SleepComponent):
-                    # 0.5초 주기로 z와 Z를 번갈아 표시하거나 깜빡임
-                    sleep_char = "z" if int(time.time() * 2) % 2 == 0 else "Z"
-                    self.renderer.draw_char(screen_x, screen_y - 1, sleep_char, "light_cyan")
+                # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘) - 우선순위 순서로 표시
+                # Priority: Petrified > Stun > Sleep > Poison > Bleeding > Mana Shield
+                from .components import (PetrifiedComponent, StunComponent, SleepComponent, 
+                                        PoisonComponent, BleedingComponent, ManaShieldComponent)
                 
-                # 중독(Poison) 표시: P (보라색/Magenta)
+                status_icon = None
+                status_color = "white"
+                status_duration = 0
+                
+                # 석화 (Petrified): 최우선 - 회색 돌 아이콘
+                if entity.has_component(PetrifiedComponent):
+                    comp = entity.get_component(PetrifiedComponent)
+                    status_icon = "◆"  # Diamond shape for stone
+                    status_color = "dark_grey"
+                    status_duration = comp.duration
+                
+                # 기절 (Stun): 별 아이콘
+                elif entity.has_component(StunComponent):
+                    comp = entity.get_component(StunComponent)
+                    status_icon = "*"  # Star for stun
+                    status_color = "yellow"
+                    status_duration = comp.duration
+                
+                # 수면 (Sleep): zZ 번갈아 표시
+                elif entity.has_component(SleepComponent):
+                    comp = entity.get_component(SleepComponent)
+                    status_icon = "z" if int(time.time() * 2) % 2 == 0 else "Z"
+                    status_color = "light_cyan"
+                    status_duration = comp.duration
+                
+                # 중독 (Poison): P (보라색)
                 elif entity.has_component(PoisonComponent):
-                    self.renderer.draw_char(screen_x, screen_y - 1, "P", "magenta")
+                    comp = entity.get_component(PoisonComponent)
+                    status_icon = "P"
+                    status_color = "magenta"
+                    status_duration = comp.duration
+                
+                # 출혈 (Bleeding): 물방울 아이콘
+                elif entity.has_component(BleedingComponent):
+                    comp = entity.get_component(BleedingComponent)
+                    status_icon = "~"  # Wave for bleeding
+                    status_color = "red"
+                    status_duration = comp.duration
+                
+                # 마나 쉴드 (Mana Shield): 방패 아이콘
+                elif entity.has_component(ManaShieldComponent):
+                    comp = entity.get_component(ManaShieldComponent)
+                    status_icon = "◇"  # Shield diamond
+                    status_color = "light_cyan"
+                    status_duration = comp.duration
+                
+                # 상태 아이콘 및 지속시간 표시
+                if status_icon:
+                    # 아이콘 표시
+                    self.renderer.draw_char(screen_x, screen_y - 1, status_icon, status_color)
+                    
+                    # 지속시간 표시 (초 단위, 아이콘 오른쪽)
+                    if status_duration > 0:
+                        duration_text = str(int(status_duration))
+                        self.renderer.draw_text(screen_x + 1, screen_y - 1, duration_text, status_color)
+                
+                # [Monster HP Bar] 전투 중인 몬스터 HP 표시
+                from .components import CombatTrackerComponent, MonsterComponent
+                if entity.has_component(MonsterComponent) and entity.has_component(CombatTrackerComponent):
+                    stats = entity.get_component(StatsComponent)
+                    if stats and stats.max_hp > 0:
+                        hp_ratio = max(0, min(1, stats.current_hp / stats.max_hp))
+                        bar_width = 8
+                        filled = int(hp_ratio * bar_width)
+                        
+                        # HP bar color based on health
+                        if hp_ratio > 0.5:
+                            bar_color = "green"
+                        elif hp_ratio > 0.25:
+                            bar_color = "yellow"
+                        else:
+                            bar_color = "red"
+                        
+                        # Draw HP bar above monster (y-1)
+                        hp_bar_y = screen_y - 1
+                        if hp_bar_y >= 0:  # Ensure it's on screen
+                            self.renderer.draw_char(screen_x - 4, hp_bar_y, "[", "white")
+                            for i in range(bar_width):
+                                if i < filled:
+                                    self.renderer.draw_char(screen_x - 3 + i, hp_bar_y, "=", bar_color)
+                                else:
+                                    self.renderer.draw_char(screen_x - 3 + i, hp_bar_y, "-", "dark_grey")
+                            self.renderer.draw_char(screen_x + 5, hp_bar_y, "]", "white")
         
         # 2-1. 오라/특수 효과 렌더링 (휘몰아치는 연출)
         aura_entities = self.world.get_entities_with_components([PositionComponent, SkillEffectComponent])
@@ -2421,18 +2522,34 @@ class Engine:
                     if eq_y >= 21: break # 사이드바 높이 제한 (스크롤/스킬 영역 확보)
                     item = inv_comp.equipped.get(slot)
                     
+                    # Initialize color to white by default
+                    color = "white"
+                    
                     # 아이템이 ItemDefinition 객체이면 이름을 가져오고, 아니면 그대로 사용 (---- 혹은 양손점유)
                     from .data_manager import ItemDefinition
                     if isinstance(item, ItemDefinition):
                         item_display = item.name
-                        # [Enhancement] Low Durability Warning (10% or below)
+                        
+                        # [Durability] Display and Warning
                         if hasattr(item, 'max_durability') and item.max_durability > 0:
-                            if item.current_durability <= (item.max_durability * 0.1):
-                                item_display += f" ({item.current_durability}/{item.max_durability})"
+                            durability_ratio = item.current_durability / item.max_durability
+                            
+                            # Always show durability if item has it
+                            item_display += f" ({item.current_durability}/{item.max_durability})"
+                            
+                            # Color warning based on durability
+                            if durability_ratio <= 0.1:  # 10% or below - Critical (Red)
+                                color = "red"
+                            elif durability_ratio <= 0.5:  # 50% or below - Warning (Yellow + Blink)
+                                # Blink effect: alternate between yellow and white every 0.5s
+                                import time
+                                if int(time.time() * 2) % 2 == 0:
+                                    color = "yellow"
+                                else:
+                                    color = "white"
                     else:
                         item_display = item if item else "----"
                         
-                    color = "white"
                     if item_display == "(양손 점유)":
                         color = "dark_grey"
                     

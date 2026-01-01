@@ -9,11 +9,12 @@ from .components import (
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
     HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent,
     StatModifierComponent, ShrineComponent, ManaShieldComponent, SummonComponent,
-    PetrifiedComponent
+    PetrifiedComponent, BleedingComponent
 )
 import readchar
 import random
 import time
+from .ui import COLOR_MAP
 from .events import (
     MoveSuccessEvent, CollisionEvent, MessageEvent, MapTransitionEvent,
     ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent
@@ -150,6 +151,12 @@ class InputSystem(System):
             player_entity.add_component(DesiredPositionComponent(dx=dx, dy=dy))
             return True # 턴 소모
         
+        # Character Sheet (C)
+        if action in ['c', 'C']:
+            if hasattr(self.world.engine, 'ui'):
+                self.world.engine.ui.show_character_sheet(player_entity)
+            return False
+
         # 퀵슬롯 (1~0)
         if action_clean and action_clean in "1234567890":
             return self.world.engine._trigger_quick_slot(action_clean)
@@ -434,8 +441,31 @@ class MonsterAISystem(System):
                         stats.last_action_time = current_time
                         continue
 
+            # [BUTCHER] "Fresh Meat" Encounter Trigger
+            if "BUTCHER" in stats.flags and dist <= 10:
+                if ai.behavior != AIComponent.CHASE:
+                    ai.behavior = AIComponent.CHASE
+                    # Play "Ah... Fresh Meat!" sound/msg only once (use detection_range as flag or add state)
+                    # For simplicity, we assume encountering triggers CHASE and that's it.
+                    self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자: \"Ah... Fresh Meat!\"{COLOR_MAP['reset']}", "red"))
+            
+            # [Fix] Detection Range - Monsters should only engage when player is nearby
+            # This prevents invisible monsters from attacking from across the map
+            detection_range = getattr(ai, 'detection_range', 10)  # Default 10 tiles
+            max_chase_range = 15  # Maximum distance to chase (even in CHASE mode)
+            
+            # If monster is too far away (beyond max chase range), reset to STATIONARY
+            if dist > max_chase_range:
+                if ai.behavior == AIComponent.CHASE:
+                    ai.behavior = AIComponent.STATIONARY  # Stop chasing if too far
+                continue  # Skip this monster entirely
+            
+            # If monster is not in CHASE mode and target is out of detection range, skip
+            if ai.behavior != AIComponent.CHASE and dist > detection_range:
+                continue
+
             # [Hack & Slash] Swarm AI: Auto-chase within detection range
-            if dist <= ai.detection_range and ai.behavior not in [AIComponent.CHASE, AIComponent.FLEE]:
+            if dist <= detection_range and ai.behavior not in [AIComponent.CHASE, AIComponent.FLEE]:
                 ai.behavior = AIComponent.CHASE
             
             # [Hack & Slash] Alert neighbors if chasing
@@ -517,14 +547,54 @@ class MonsterAISystem(System):
             if "BOSS" in stats.flags and stats.current_hp < stats.max_hp * 0.5:
                 if not hasattr(ai, 'has_summoned') or not ai.has_summoned:
                     ai.has_summoned = True
-                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}가 지원군을 부릅니다!"))
-                    # 주변에 미니언 소환 (2-3마리)
-                    for _ in range(random.randint(2, 3)):
-                        mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
-                        # 단순화: 엔진의 몬스터 생성 로직 일부 재사용 또는 소환 비호출
-                        # 여기서는 엔진에 소환 요청을 보내는 이벤트를 만들거나 직접 엔진 메서드 호출
-                        if hasattr(self.world.engine, '_spawn_minion'):
-                            self.world.engine._spawn_minion(mx, my, "GOBLIN")
+                    
+                    if "BUTCHER" in stats.flags:
+                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자가 분노하여 지원군을 부릅니다!{COLOR_MAP['reset']}", "red"))
+                        # Summon Goblins as "Small Demons"
+                        for _ in range(3):
+                            mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
+                            if hasattr(self.world.engine, '_spawn_minion'):
+                                self.world.engine._spawn_minion(mx, my, "GOBLIN")
+                    elif "LEORIC" in stats.flags:
+                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}해골 왕이 영원한 충성을 요구합니다!{COLOR_MAP['reset']}", "red"))
+                        # Summon Skeletons
+                        for _ in range(4):
+                            mx, my = pos.x + random.randint(-2, 2), pos.y + random.randint(-2, 2)
+                            if hasattr(self.world.engine, '_spawn_minion'):
+                                self.world.engine._spawn_minion(mx, my, "SKELETON")
+                    else:
+                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 지원군을 부릅니다!"))
+                        # 주변에 미니언 소환 (2-3마리)
+                        for _ in range(random.randint(2, 3)):
+                            mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
+                            if hasattr(self.world.engine, '_spawn_minion'):
+                                self.world.engine._spawn_minion(mx, my, "GOBLIN")
+
+            # [LEORIC] Resurrect Dead Skeletons (Every 3 seconds chance)
+            if "RESURRECT" in stats.flags and random.random() < 0.1:
+                # Find corpses nearby
+                corpses = [e for e in self.world.get_entities_with_components({CorpseComponent, PositionComponent}) 
+                           if abs(e.get_component(PositionComponent).x - pos.x) + abs(e.get_component(PositionComponent).y - pos.y) <= 5]
+                if corpses:
+                    corpse = random.choice(corpses)
+                    c_pos = corpse.get_component(PositionComponent)
+                    self.world.delete_entity(corpse.entity_id)
+                    if hasattr(self.world.engine, '_spawn_minion'):
+                        self.world.engine._spawn_minion(c_pos.x, c_pos.y, "SKELETON")
+                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}해골 왕이 죽은 자를 다시 일으켜 세웁니다!{COLOR_MAP['reset']}", "red"))
+
+            # [DIABLO] Apocalypse (Map-wide Fire Damage)
+            if "APOCALYPSE" in stats.flags:
+                if random.random() < 0.05: # 5% chance per tick
+                    self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}디아블로가 파멸의 화염(Apocalypse)을 시전합니다!{COLOR_MAP['reset']}", "red"))
+                    self.world.engine.ui.trigger_shake(5)
+                    # Damage all non-Diablo entities
+                for target in self.world.get_entities_with_components({StatsComponent, PositionComponent}):
+                     if target.entity_id != entity.entity_id and "DIABLO" not in getattr(target.get_component(StatsComponent), 'flags', []):
+                         t_stats = target.get_component(StatsComponent)
+                         damage = random.randint(10, 20)
+                         t_stats.current_hp -= damage
+                         self.event_manager.push(MessageEvent(f"화염이 {self.world.engine._get_entity_name(target)}을 덮쳐 {damage}의 피해를 입혔습니다!", "red"))
 
 
 class CombatSystem(System):
@@ -917,6 +987,24 @@ class CombatSystem(System):
                 msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
             self.event_manager.push(MessageEvent(msg))
             
+            # [BUTCHER] Screen Shake & Bleeding Effect on Hit
+            # Only if damage > 0
+            if final_damage > 0:
+                attacker_is_butcher = "BUTCHER" in getattr(a_stats, 'flags', "")
+                if attacker_is_butcher:
+                     self.world.engine.ui.trigger_shake(2)
+                     # Apply Bleeding (High chance)
+                     if not target.has_component(BleedingComponent):
+                         target.add_component(BleedingComponent(damage=3, duration=10, attacker_id=attacker.entity_id))
+                         self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자의 식칼에 베여 과다출혈이 발생합니다!{COLOR_MAP['reset']}", "red"))
+                
+                # [Check Weapon Flags] e.g. BLEEDING on Items (Player or Monster)
+                # If attacker has BLEEDING flag (from Weapon or Monster stats)
+                if "BLEEDING" in getattr(a_stats, 'flags', ""):
+                     if not target.has_component(BleedingComponent):
+                         target.add_component(BleedingComponent(damage=2, duration=5, attacker_id=attacker.entity_id))
+                         self.event_manager.push(MessageEvent(f"{target_name}이(가) 출혈 상태가 되었습니다!", "red"))
+
             # [Mana Shield Absorption]
             ms_comp = target.get_component(ManaShieldComponent)
             if ms_comp and t_stats.current_mp > 0:
@@ -933,6 +1021,18 @@ class CombatSystem(System):
             else:
                 t_stats.current_hp -= final_damage
             
+            # [HP Bar Display] Track combat for monsters
+            if target.has_component(MonsterComponent) and final_damage > 0:
+                import time
+                from .components import CombatTrackerComponent
+                
+                # Add or update combat tracker
+                tracker = target.get_component(CombatTrackerComponent)
+                if tracker:
+                    tracker.last_damaged_time = time.time()
+                else:
+                    target.add_component(CombatTrackerComponent(last_damaged_time=time.time()))
+            
             # [Boss Overhaul] 지원군 소환 트리거 (체력 50% 이하)
             if target.has_component(MonsterComponent):
                 m_comp = target.get_component(MonsterComponent)
@@ -942,8 +1042,18 @@ class CombatSystem(System):
                         self._trigger_boss_summon(attacker, target)
 
             # [Affix] Life Leech (생명력 흡수)
-            if hasattr(a_stats, 'life_leech') and a_stats.life_leech > 0 and final_damage > 0:
-                leech_amount = int(final_damage * a_stats.life_leech / 100)
+            leech_percent = getattr(a_stats, 'life_leech', 0)
+            
+            # [Flag Check] LIFE_STEAL (from Items or Monster Stats)
+            if "LIFE_STEAL" in getattr(a_stats, 'flags', set()):
+                leech_percent = max(leech_percent, 5) # Default 5% for LIFE_STEAL flag
+            
+            # Debug Print (Only if testing or needed)
+            # Debug Print (Only if testing or needed)
+            # print(f"DEBUG: Life Steal Check: Damage={final_damage}, Leech%={leech_percent}, Flags={getattr(a_stats, 'flags', set())}")
+
+            if leech_percent > 0 and final_damage > 0:
+                leech_amount = int(final_damage * leech_percent / 100)
                 if leech_amount > 0:
                     old_hp = a_stats.current_hp
                     a_stats.current_hp = min(a_stats.max_hp, a_stats.current_hp + leech_amount)
@@ -1095,6 +1205,8 @@ class CombatSystem(System):
                     # 1. 전리품 및 경험치 계산을 위해 몬스터 정의 가져오기
                     m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
                     m_def = m_defs.get(m_type)
+                    m_def = m_defs.get(m_type)
+                    # print(f"DEBUG: m_type={m_type}, m_def flags={getattr(m_def, 'flags', 'None')}")
                     
                     # 2. 경험치 보상 (플레이어에게)
                     if player_entity and attacker.entity_id == player_entity.entity_id:
@@ -1103,6 +1215,15 @@ class CombatSystem(System):
                             level_sys = self.world.get_system(LevelSystem)
                             if level_sys:
                                 level_sys.gain_exp(player_entity, m_def.xp_value)
+                                
+                                # [Bonus Points] Boss Reward
+                                if "BOSS" in getattr(m_def, 'flags', []):
+                                    points = 1
+                                    if "DIABLO" in getattr(m_def, 'flags', []):
+                                        points = 2
+                                    
+                                    boss_name = getattr(m_def, 'name', 'Boss')
+                                    level_sys.grant_stat_points(player_entity, points, reason=f"{boss_name} 처치")
                     
                     # 3. 컴포넌트 정리
                     target.remove_component(AIComponent)
@@ -1130,18 +1251,33 @@ class CombatSystem(System):
                         
                         eligible = self.world.engine._get_eligible_items(floor)
                         
-                        # [Drop Rate Adjustment]
-                        # Base: 60% (was 40%)
-                        # Boss: 100% (Guaranteed)
-                        
                         # [Hack & Slash] Loot Explosion Logic
                         drop_chance = 0.6
                         is_boss = m_def and 'BOSS' in m_def.flags
+                        is_butcher = m_def and 'BUTCHER' in m_def.flags
                         if is_boss:
                             drop_chance = 1.0
                         
                         num_drops = 0
-                        if eligible and random.random() < drop_chance:
+                        
+                        # [BUTCHER] 100% Drop: The Butcher's Cleaver
+                        if is_butcher:
+                            loot_items.append("도살자의 식칼")
+                            self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자의 식칼이 바닥에 떨어졌습니다!{COLOR_MAP['reset']}", "red"))
+
+                        # [SKELETON_KING] 100% Drop: Undead Crown
+                        is_leoric = m_def and 'LEORIC' in m_def.flags
+                        if is_leoric:
+                            loot_items.append("언데드 왕관")
+                            self.event_manager.push(MessageEvent(f"{COLOR_MAP['gold']}언데드 왕관이 바닥에 떨어졌습니다!{COLOR_MAP['reset']}", "gold"))
+                        
+                        # [DIABLO] 100% Drop: Soulstone
+                        is_diablo = m_def and 'DIABLO' in m_def.flags
+                        if is_diablo:
+                            loot_items.append("영혼석")
+                            self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}디아블로의 영혼석이 바닥에 떨어졌습니다!{COLOR_MAP['reset']}", "red"))
+                        
+                        if eligible and random.random() < drop_chance and not is_butcher and not is_leoric and not is_diablo:
                             if is_boss:
                                 num_drops = random.randint(8, 15) # Bosses drop massive loot
                             else:
@@ -1153,8 +1289,27 @@ class CombatSystem(System):
                         for _ in range(num_drops):
                             item = random.choice(eligible)
                             
+                            # Skip if item is None
+                            if not item:
+                                continue
+                            
                             # [Rarity & Affix System] (Monster Drop)
-                            rarity = self.world.engine._get_rarity(floor)
+                            # 1. Calculate Player's Magic Find
+                            player_mf = 0
+                            if player_entity:
+                                p_stats = player_entity.get_component(StatsComponent)
+                                if p_stats:
+                                    player_mf += p_stats.magic_find
+                                
+                                # Check Equipment for added MF (if not already integrated into p_stats)
+                                # (Assuming stats might not be auto-recalculated every frame, or MF is a special stat)
+                                p_inv = player_entity.get_component(InventoryComponent)
+                                if p_inv:
+                                    for eq_item in p_inv.equipped.values():
+                                        if eq_item:
+                                            player_mf += getattr(eq_item, 'magic_find', 0)
+                            
+                            rarity = self.world.engine._get_rarity(floor, magic_find=player_mf)
                             
                             if rarity == "MAGIC" or rarity == "UNIQUE":
                                 prefix_id, suffix_id = self.world.engine._roll_magic_affixes(item.type, floor)
@@ -1165,7 +1320,7 @@ class CombatSystem(System):
                                         
                             # [Update] Even normal items can be unidentified sometimes (20% chance)
                             # Identify scrolls and Currency should always be identified
-                            is_essential = "IDENTIFY" in item.flags or item.type == "CURRENCY"
+                            is_essential = "IDENTIFY" in getattr(item, 'flags', []) or getattr(item, 'type', '') == "CURRENCY"
                             if not is_essential and getattr(item, 'is_identified', True) and random.random() < 0.2:
                                 item.is_identified = False
 
@@ -1173,6 +1328,7 @@ class CombatSystem(System):
                         
                         # [Hack & Slash] Increased Gold: 50-250
                         target.add_component(LootComponent(items=loot_items, gold=random.randint(50, 250)))
+                        # print(f"DEBUG: Added LootComponent to {target.entity_id}. items={loot_items}")
                 # 더 이상 delete_entity를 하지 않음
 
     def _trigger_boss_summon(self, attacker: Entity, target: Entity):
@@ -1289,6 +1445,18 @@ class CombatSystem(System):
         # 스킬 플래그 가져오기
         s_flags = getattr(skill, 'flags', set())
 
+        # [Check] 스킬 레벨 가져오기 (비용 및 효율 계산을 위해 위로 이동)
+        inv = attacker.get_component(InventoryComponent)
+        skill_level = 1
+        if inv:
+            if skill.name in inv.skill_levels:
+                skill_level = inv.skill_levels[skill.name]
+            else:
+                # 베이스 네임으로 재시도 (LvX 제거된 이름)
+                import re
+                base_name = re.sub(r' Lv\d+', '', skill.name)
+                skill_level = inv.skill_levels.get(base_name, 1)
+
         # [Class Bonus] Sorcerer Staff Charge System
         # 소서러가 지팡이를 장착하고 있고, 해당 지팡이에 차지가 남아있다면 자원 소모 대신 차지 소모
         used_charge = False
@@ -1300,23 +1468,23 @@ class CombatSystem(System):
                 if isinstance(staff, ItemDefinition) and getattr(staff, 'current_charges', 0) > 0:
                     # 지팡이 자체 스킬이거나, 마법 계열 스킬인 경우 차지 사용 (여기서는 단순화하여 모든 MP 소모 스킬에 적용)
                     if skill.cost_type == "MP" or "COST_MP" in s_flags:
-                        staff.current_charges -= 1
-                        used_charge = True
-                        resource_used = f"STAFF CHARGE -1 ({staff.current_charges}/{staff.max_charges})"
-                        self.event_manager.push(MessageEvent(f"지팡이의 마력을 사용하여 정신력을 보존했습니다! (남은 충전: {staff.current_charges})"))
+                        # [Class Bonus] Sorcerer Efficiency: Higher skill level = Chance to save charge
+                        # Chance: 2% per skill level (Max 50% at Lv.25)
+                        savings_chance = min(0.50, skill_level * 0.02)
+                        
+                        if random.random() < savings_chance:
+                            # Charge Saved!
+                            used_charge = True
+                            resource_used = f"STAFF CHARGE SAVED ({staff.current_charges}/{staff.max_charges})"
+                            self.event_manager.push(MessageEvent(f"숙련된 마법 시전으로 지팡이 마력을 보존했습니다! (확률: {int(savings_chance*100)}%)", "light_blue"))
+                        else:
+                            # Charge Consumed
+                            staff.current_charges -= 1
+                            used_charge = True
+                            resource_used = f"STAFF CHARGE -1 ({staff.current_charges}/{staff.max_charges})"
+                            self.event_manager.push(MessageEvent(f"지팡이의 마력을 사용하여 정신력을 보존했습니다! (남은 충전: {staff.current_charges})"))
 
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
-        # [Check] 스킬 레벨 가져오기 (비용 계산을 위해 위로 이동)
-        inv = attacker.get_component(InventoryComponent)
-        skill_level = 1
-        if inv:
-            if skill.name in inv.skill_levels:
-                skill_level = inv.skill_levels[skill.name]
-            else:
-                # 베이스 네임으로 재시도 (LvX 제거된 이름)
-                import re
-                base_name = re.sub(r' Lv\d+', '', skill.name)
-                skill_level = inv.skill_levels.get(base_name, 1)
 
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
         cost_val = skill.cost_value
@@ -2167,7 +2335,8 @@ class RenderSystem(System):
             message_comp = message_comp_list[0].get_component(MessageComponent)
             
             if event.collision_type == "WALL":
-                 message_comp.add_message("벽에 막혔습니다.")
+                 # [Fix] Don't spam wall messages - too noisy when AI bumps into walls
+                 pass  # message_comp.add_message("벽에 막혔습니다.")
             elif event.collision_type == "MONSTER":
                  entity_id = event.target_entity_id
                  target_entity = self.world.get_entity(entity_id)
@@ -2313,6 +2482,39 @@ class TimeSystem(System):
                 entity.remove_component(PoisonComponent)
                 self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 중독 상태가 해제되었습니다."))
 
+        # 1-3. 출혈(Bleeding) 시간 감액 및 데미지 처리
+        bleeding_entities = self.world.get_entities_with_components({BleedingComponent})
+        for entity in list(bleeding_entities):
+            bleed = entity.get_component(BleedingComponent)
+            bleed.duration -= dt
+            
+            # 출혈은 매 1초마다 데미지를 입힘 (Tick Timer 단순화: 매 프레임 확률적 처리보다는 Time accumulation 방식 권장)
+            # 여기서는 편의상 Poison과 달리 1초마다 정기적으로 처리하기 위해 tick_timer를 추가하거나
+            # 단순히 duration이 감소할 때마다 데미지를 입히는 방식을 사용할 수 있음.
+            # Poison 코드를 참조하여 tick_timer를 동적으로 관리하는 것이 좋음. BleedingComponent에 tick_timer가 없으므로 추가 필요할 수 있음.
+            # 하지만 Component 구조 변경 없이 하려면, duration의 정수부가 바뀔 때마다 데미지를 입히는 trick 사용.
+            
+            # [Fix] BleedingComponent should track tick. For now, assume simplified 1 dmg per sec roughly?
+            # Or assume dt ~ 0.016. Let's rely on adding tick_timer attribute strictly, 
+            # BUT since modifying Component __init__ affects existing pickles/instantiations potentially (though unlikely here),
+            # I will dynamically add attribute if missing or use random chance scaled by dt.
+            
+            # Deterministic approach: store last_tick_time in component or engine? No.
+            # Probabilistic approach: Expectation 1 dmg/sec -> prob = dt.
+            if random.random() < dt: # 1 damage per second on average check
+                stats = entity.get_component(StatsComponent)
+                if stats:
+                    stats.current_hp -= bleed.damage
+                    if not entity.has_component(HitFlashComponent):
+                        entity.add_component(HitFlashComponent(duration=0.1))
+                    if stats.current_hp <= 0:
+                        stats.current_hp = 0
+                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}이(가) 과다출혈로 사망했습니다!", "red"))
+            
+            if bleed.duration <= 0:
+                entity.remove_component(BleedingComponent)
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 출혈이 멈췄습니다."))
+
         # 1-3. StatModifier (Buff/Debuff) 시간 감액
         stat_mod_entities = self.world.get_entities_with_components({StatModifierComponent})
         for entity in list(stat_mod_entities):
@@ -2450,13 +2652,16 @@ class LevelSystem(System):
         stats_comp = entity.get_component(StatsComponent)
         
         level_comp.level += 1
-        # 다음 레벨까지 필요한 경험치 증가 (1.25배)
-        level_comp.exp_to_next = int(level_comp.exp_to_next * 1.25)
+        # [Diablo Curve] 1.5x Multiplier for steeper curve
+        level_comp.exp_to_next = int(level_comp.exp_to_next * 1.5)
+        
+        # [Stat Points] 5 points per level
+        level_comp.stat_points += 5
         
         if stats_comp:
-            # [Diablo 1] 직업별 성장치 반영
-            hp_gain = 10.0  # 기본값
-            mp_gain = 5.0   # 기본값
+            # [Fixed Gain] Class specific fixed HP/MP gain
+            hp_gain = 2.0
+            mp_gain = 1.0
             
             if hasattr(self.world.engine, 'class_defs') and level_comp.job:
                 class_def = self.world.engine.class_defs.get(level_comp.job)
@@ -2465,22 +2670,32 @@ class LevelSystem(System):
                     mp_gain = class_def.mp_gain
             
             stats_comp.base_max_hp = int(stats_comp.base_max_hp + hp_gain)
-            stats_comp.max_hp = stats_comp.base_max_hp
-            stats_comp.current_hp = stats_comp.max_hp
-            
             stats_comp.base_max_mp = int(stats_comp.base_max_mp + mp_gain)
-            stats_comp.max_mp = stats_comp.base_max_mp
-            stats_comp.current_mp = stats_comp.max_mp
             
-            # 스탯 상승 (기본 +1씩, 주력 스탯 보너스 등도 고려 가능하나 현재는 평이하게 적용)
-            stats_comp.base_str += 1
-            stats_comp.base_mag += 1
-            stats_comp.base_dex += 1
-            stats_comp.base_vit += 1
-            
-            # 엔진 레벨 보정 스탯 재계산 호출 (장착 아이템 등 반영)
+            # [Full Recovery] & Recalculate
+            # 엔진 레벨 보정 스탯 재계산 호출
             if hasattr(self.world.engine, '_recalculate_stats'):
                 self.world.engine._recalculate_stats()
+                
+            # Recalculate 후 최대 체력으로 회복
+            stats_comp.current_hp = stats_comp.max_hp
+            stats_comp.current_mp = stats_comp.max_mp
+            
+            self.event_manager.push(MessageEvent(f"체력과 마력이 모두 회복되었습니다!", "green"))
+
+    def grant_stat_points(self, entity: Entity, amount: int, reason: str = ""):
+        """외부 요인(퀘스트, 보스 처치 등)으로 스탯 포인트를 지급"""
+        level_comp = entity.get_component(LevelComponent)
+        if level_comp:
+            level_comp.stat_points += amount
+            
+            msg = f"보너스 스탯 포인트 +{amount} 획득!"
+            if reason:
+                 msg += f" ({reason})"
+            
+            self.event_manager.push(MessageEvent(msg, "gold"))
+            # 레벨업 사운드 재사용 (또는 별도 사운드)
+            self.event_manager.push(SoundEvent("LEVEL_UP", "보너스 포인트!"))
 
 class TrapSystem(System):
     """함정 발동 및 처리를 담당하는 시스템"""

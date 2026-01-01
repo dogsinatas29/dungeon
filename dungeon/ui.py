@@ -26,6 +26,16 @@ class ConsoleUI:
         # 화면을 지우는 명령 설정 ('nt'는 윈도우, 나머지는 유닉스 계열)
         self.clear_command = 'cls' if os.name == 'nt' else 'clear'
         self.messages = [] # 메시지 로그를 저장할 리스트
+        self.shake_duration = 0 # 쉐이크 효과 남은 프레임
+        self.import_random()
+
+    def import_random(self):
+        import random
+        self.random = random
+
+    def trigger_shake(self, frames=5):
+        """화면 흔들림 효과를 트리거합니다."""
+        self.shake_duration = frames
 
     def _clear_screen(self):
         """화면을 깨끗하게 지웁니다. (ANSI 이스케이프 코드 사용으로 깜빡임 최소화)"""
@@ -378,33 +388,62 @@ class ConsoleUI:
         # \033[H: 커서를 맨 위(0,0)로 이동 (화면을 지우는 것보다 훨씬 빠름)
         buffer.append("\033[H")
         
+        # [Screen Shake] Apply random offset
+        shake_x = 0
+        shake_y = 0
+        if self.shake_duration > 0:
+            self.shake_duration -= 1
+            shake_x = self.random.randint(-1, 1)
+            shake_y = self.random.randint(0, 1) # Y는 아래로만 (위로 가면 짤림)
+            
+        # Y Offset (Newline at start)
+        if shake_y > 0:
+            buffer.append("\n" * shake_y)
+        
+        # X Offset helper
+        def add_line(content):
+            if shake_x > 0:
+                buffer.append(" " * shake_x + content)
+            elif shake_x < 0:
+                # 왼쪽으로 밀기 (하지만 0 이하로는 못 감, 단순히 공백 제거는 어려우므로 생략하거나 패딩으로 처리)
+                # 터미널에서 왼쪽 이동은 어려우므로 우측 이동만 구현하거나, 
+                # 단순히 X축 쉐이크는 positive padding만 사용
+                pass 
+                buffer.append(content) # Negative shake ignored for simplicity or assume only positive jitter
+            else:
+                buffer.append(content)
+
         # 1. 맵 렌더링
-        buffer.append(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}\n")
+        add_line(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}\n")
 
         for y_idx, row in enumerate(map_data):
             rendered_row = []
             for x_idx, (char, color) in enumerate(row):
                 rendered_row.append(f"{COLOR_MAP[color]}{char}")
+            
+            # Row 자체에 Shake X 적용
+            if shake_x != 0:
+                buffer.append(" " * abs(shake_x))
             buffer.append("".join(rendered_row) + f"{COLOR_MAP['reset']}\n")
         
         # 2. 플레이어 상태
-        buffer.append(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}\n")
-        buffer.append(f" 이름: {player_stats.get('name', 'N/A'):<10} | 레벨: {player_stats.get('level', 1)}\n")
-        buffer.append(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<10} | MP: {player_stats.get('mp', 0)} | 골드: {player_stats.get('gold', 0)}G\n")
+        add_line(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}\n")
+        add_line(f" 이름: {player_stats.get('name', 'N/A'):<10} | 레벨: {player_stats.get('level', 1)}\n")
+        add_line(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<10} | MP: {player_stats.get('mp', 0)} | 골드: {player_stats.get('gold', 0)}G\n")
         
         # 3. 메시지 로그
-        buffer.append(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}\n")
+        add_line(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}\n")
         msgs = self.messages[-5:]
         for msg in msgs:
-            buffer.append(f"> {msg:<60}\n")
+            add_line(f"> {msg:<60}\n")
         # 로그가 5줄 미만일 때 줄 맞춤
         for _ in range(5 - len(msgs)):
             buffer.append("\n")
         
         # 4. 입력 가이드
-        buffer.append(f"\n{COLOR_MAP['green']}[이동] 방향키 | [5/.] 대기 | [I] 인벤토리 | [1-0] 퀵슬롯{COLOR_MAP['reset']}\n")
+        add_line(f"\n{COLOR_MAP['green']}[이동] 방향키 | [5/.] 대기 | [I] 인벤토리 | [1-0] 퀵슬롯{COLOR_MAP['reset']}\n")
         
-        # \033[J: 커서 아래의 남은 잔상들을 지움 (맵 크기가 줄어들거나 할 때 유용)
+        # \033[J: 커서 아래의 남은 잔상들을 지움
         buffer.append("\033[J")
         
         # 한 번에 출력하여 원자성 확보
@@ -436,3 +475,64 @@ class ConsoleUI:
 
         print(f"\n{COLOR_MAP['green']}[I] 닫기{COLOR_MAP['reset']}")
         sys.stdout.flush()
+
+    def show_character_sheet(self, player_entity):
+        """캐릭터 정보창 표시 및 스탯 포인트 배분"""
+        from .components import StatsComponent, LevelComponent
+        
+        selected_stat = 0 # 0:STR, 1:MAG, 2:DEX, 3:VIT
+        stat_names = ["STR (힘)", "MAG (마력)", "DEX (민첩)", "VIT (활력)"]
+        
+        while True:
+            self._clear_screen()
+            
+            stats = player_entity.get_component(StatsComponent)
+            level_comp = player_entity.get_component(LevelComponent)
+            if not stats or not level_comp: return
+            
+            # --- Header ---
+            print(f"\n  [ {level_comp.job or 'Adventurer'} - Level {level_comp.level} ]")
+            print("="*60)
+            print(f"  Experience: {level_comp.exp} / {level_comp.exp_to_next}")
+            print(f"  Stat Points: {level_comp.stat_points}")
+            print("-" * 60)
+            
+            # --- Stats Rows ---
+            def get_row(idx, name, value, desc):
+                prefix = " >" if idx == selected_stat else "  "
+                color = "\033[93m" if idx == selected_stat else "\033[97m" # Yellow if selected
+                reset = "\033[0m"
+                return f"{color}{prefix} {name:<15}: {value:<4}  | {desc}{reset}"
+
+            print(get_row(0, stat_names[0], stats.base_str, "공격력/장비착용"))
+            print(get_row(1, stat_names[1], stats.base_mag, "최대 마력(MP)"))
+            print(get_row(2, stat_names[2], stats.base_dex, "방어력(AC)/명중"))
+            print(get_row(3, stat_names[3], stats.base_vit, "최대 체력(HP)"))
+            
+            print("-" * 60)
+            print(f"  HP: {stats.current_hp}/{stats.max_hp}  MP: {stats.current_mp}/{stats.max_mp}")
+            print(f"  Attack: {stats.attack_min}-{stats.attack_max}  Defense: {stats.defense}")
+            print("="*60)
+            print("\n  [UP/DOWN]: Select  [RIGHT/ENTER]: Add Point  [ESC/Q]: Close")
+
+            key = self.get_key_input()
+            
+            if key in [readchar.key.UP, 'w', 'W', '\x1b[A']:
+                selected_stat = max(0, selected_stat - 1)
+            elif key in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
+                selected_stat = min(3, selected_stat + 1)
+            elif key in [readchar.key.RIGHT, 'd', 'D', '\x1b[C', '+', '=', '\r', '\n']:
+                if level_comp.stat_points > 0:
+                    level_comp.stat_points -= 1
+                    if selected_stat == 0: stats.base_str += 1
+                    elif selected_stat == 1: stats.base_mag += 1
+                    elif selected_stat == 2: stats.base_dex += 1
+                    elif selected_stat == 3: stats.base_vit += 1
+                    
+                    # Recalculate Logic
+                    if hasattr(player_entity.world, 'engine') and hasattr(player_entity.world.engine, '_recalculate_stats'):
+                        player_entity.world.engine._recalculate_stats()
+                else:
+                    pass 
+            elif key in [readchar.key.ESC, 'q', 'Q', 'c', 'C']:
+                break

@@ -329,6 +329,10 @@ class ClassDefinition:
         # [Diablo 1] 성장치
         self.hp_gain = float(kwargs.get('hp_gain', 2.0))
         self.mp_gain = float(kwargs.get('mp_gain', 1.0))
+        
+        # [New] 스탯 변환 비율
+        self.vit_to_hp = float(kwargs.get('vit_to_hp', 2.0))
+        self.mag_to_mp = float(kwargs.get('mag_to_mp', 1.0))
 
         # [New] 초기 지급 아이템 파싱 (Format: "Item1:1|Item2:5|Gold:100")
         self.starting_items = []

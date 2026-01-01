@@ -97,7 +97,17 @@ class SandboxEngine(engine.Engine):
             
             if stats:
                 stats.base_str = 100
-                stats.base_mag = 100
+                stats.base_dex = 100
+                stats.base_vit = 100
+                stats._recalculate()
+                stats.current_hp = stats.max_hp
+                stats.current_mp = stats.max_mp
+
+        # 5. Spawn The Butcher near the player
+        if starting_room:
+             bx, by = starting_room.x1 + 3, starting_room.y1 + 3
+             self._spawn_boss(bx, by, "BUTCHER")
+             print(f"[Sandbox] Spawned The Butcher at ({bx}, {by})")
                 stats.base_dex = 100
                 stats.base_vit = 100
                 stats.base_max_hp = 5000

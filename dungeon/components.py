@@ -87,6 +87,7 @@ class StatsComponent(Component):
         self.to_hit_bonus = 0   # 명중률 % 증가
         self.life_leech = 0     # 생명력 흡수 (%)
         self.attack_speed = 0   # 공격 속도 (단계)
+        self.magic_find = 0     # 아이템 발견 확률 증가 (%)
 
         # 실시간 액션 관련 (초 단위)
         self.last_action_time = 0.0
@@ -130,6 +131,13 @@ class StatsComponent(Component):
         if 'base_flags' in data and isinstance(data['base_flags'], set):
             data['base_flags'] = list(data['base_flags'])
         return data
+
+class MockComponent(Component):
+    pass
+
+class PlayerComponent(Component):
+    """플레이어 태그 컴포넌트"""
+    pass
 
 class MonsterComponent(Component):
     """몬스터 유형 식별자"""
@@ -204,11 +212,12 @@ class InventoryComponent(Component):
 
 class LevelComponent(Component):
     """레벨, 경험치, 직업 데이터"""
-    def __init__(self, level: int = 1, exp: int = 0, exp_to_next: int = 100, job: str = "Adventurer"):
+    def __init__(self, level: int = 1, exp: int = 0, exp_to_next: int = 100, job: str = "Adventurer", stat_points: int = 0):
         self.level = level
         self.exp = exp
         self.exp_to_next = exp_to_next
         self.job = job
+        self.stat_points = stat_points  # 남은 스탯 포인트
 
 # --- 시스템 데이터 ---
 class DesiredPositionComponent(Component):
@@ -368,6 +377,13 @@ class ManaShieldComponent(Component):
     def __init__(self, duration: float = 60.0):
         self.duration = duration
 
+class BleedingComponent(Component):
+    """지속 출혈 상태 (DoT)"""
+    def __init__(self, damage: int, duration: int, attacker_id: int = None):
+        self.damage = damage
+        self.duration = duration
+        self.attacker_id = attacker_id
+        
 class SummonComponent(Component):
     """소환수 상태: 주인 정보와 남은 수명 관리"""
     def __init__(self, owner_id: int, duration: float = 30.0):
@@ -378,3 +394,9 @@ class PetrifiedComponent(Component):
     """석화 상태: 행동 불가 및 방어력 약화 (외형 변경용)"""
     def __init__(self, duration: float = 5.0):
         self.duration = duration
+
+class CombatTrackerComponent(Component):
+    """전투 추적 컴포넌트 - HP 바 표시용"""
+    def __init__(self, last_damaged_time: float = 0.0, show_hp_duration: float = 3.0):
+        self.last_damaged_time = last_damaged_time
+        self.show_hp_duration = show_hp_duration
