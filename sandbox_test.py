@@ -99,26 +99,21 @@ class SandboxEngine(engine.Engine):
                 stats.base_str = 100
                 stats.base_dex = 100
                 stats.base_vit = 100
-                stats._recalculate()
-                stats.current_hp = stats.max_hp
-                stats.current_mp = stats.max_mp
-
-        # 5. Spawn The Butcher near the player
-        if starting_room:
-             bx, by = starting_room.x1 + 3, starting_room.y1 + 3
-             self._spawn_boss(bx, by, "BUTCHER")
-             print(f"[Sandbox] Spawned The Butcher at ({bx}, {by})")
-                stats.base_dex = 100
-                stats.base_vit = 100
-                stats.base_max_hp = 5000
-                stats.base_max_mp = 1000
+                stats.base_mag = 100
                 
                 # Recalculate and fill
                 self._recalculate_stats()
                 stats.current_hp = stats.max_hp
                 stats.current_mp = stats.max_mp
-                stats.current_stamina = stats.max_stamina
-            
+
+        # 5. Spawn The Butcher near the player
+        if starting_room:
+            bx, by = starting_room.x1 + 3, starting_room.y1 + 3
+            self._spawn_boss(bx, by, "BUTCHER")
+            print(f"[Sandbox] Spawned The Butcher at ({bx}, {by})")
+        
+        # 6. Ensure player equipment is at full durability
+        if player:
             inv = player.get_component(InventoryComponent)
             if inv:
                 # Ensure all equipped items are at full durability
@@ -161,6 +156,54 @@ class SandboxEngine(engine.Engine):
                 if stats:
                     stats.gold += 1000
                     self.world.event_manager.push(MessageEvent("[Sandbox] 골드 1000을 획득했습니다!"))
+            return True
+        
+        # 'L': 레벨 설정 (입력 받기)
+        if action == 'L':
+            import termios, tty
+            fd = sys.stdin.fileno()
+            # 터미널 설정 일시 복구
+            termios.tcsetattr(fd, termios.TCSADRAIN, self.old_settings)
+            sys.stdout.write("\033[?25h")  # 커서 보이기
+            sys.stdout.write("\n[Set Level] Enter level (1-99): ")
+            sys.stdout.flush()
+            
+            try:
+                line = sys.stdin.readline().strip()
+                if line.isdigit():
+                    target_level = max(1, min(99, int(line)))
+                    player = self.world.get_player_entity()
+                    if player:
+                        level_comp = player.get_component(LevelComponent)
+                        if level_comp:
+                            old_level = level_comp.level
+                            level_comp.level = target_level
+                            level_comp.exp = 0
+                            level_comp.exp_to_next = int(100 * (1.5 ** (level_comp.level - 1)))
+                            
+                            # Grant stat points based on level difference
+                            if target_level > old_level:
+                                points_gained = (target_level - old_level) * 5
+                                level_comp.stat_points += points_gained
+                                self.world.event_manager.push(MessageEvent(
+                                    f"[Sandbox] 레벨 {target_level}로 설정! 스탯 포인트 +{points_gained}"
+                                ))
+                            else:
+                                self.world.event_manager.push(MessageEvent(
+                                    f"[Sandbox] 레벨 {target_level}로 설정!"
+                                ))
+                            
+                            self._recalculate_stats()
+                else:
+                    self.world.event_manager.push(MessageEvent("[Sandbox] 올바른 레벨을 입력해주세요."))
+            except Exception:
+                pass
+            
+            # cbreak 모드 재진입
+            tty.setcbreak(fd)
+            sys.stdout.write("\033[?25l")  # 커서 숨기기
+            sys.stdout.flush()
+            self._render()
             return True
 
         # 'J': 특정 층으로 이동 (입력 받기)

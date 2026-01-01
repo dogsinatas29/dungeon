@@ -536,3 +536,94 @@ class ConsoleUI:
                     pass 
             elif key in [readchar.key.ESC, 'q', 'Q', 'c', 'C']:
                 break
+    
+    def show_identify_menu(self, unidentified_items, game_renderer=None):
+        """미감정 아이템 선택 메뉴 표시 (게임 화면 위 오버레이)
+        
+        Args:
+            unidentified_items: [(name, data), ...] 형식의 미감정 아이템 목록
+            game_renderer: 게임 화면을 다시 그리는 함수 (선택사항)
+            
+        Returns:
+            선택된 (name, data) 튜플 또는 None (취소 시)
+        """
+        if not unidentified_items:
+            self.add_message("감정할 아이템이 없습니다!")
+            return None
+        
+        selected_idx = 0
+        
+        while True:
+            # Redraw game screen first (if renderer provided)
+            if game_renderer:
+                game_renderer()
+            
+            # Calculate popup position (center of screen)
+            menu_width = 50
+            menu_height = len(unidentified_items) + 5
+            start_y = 5
+            start_x = 15
+            
+            # Draw semi-transparent background box
+            print(f"\033[{start_y};{start_x}H", end="")
+            print("┌" + "─" * (menu_width - 2) + "┐")
+            
+            # Header
+            header = f" 감정할 아이템 선택 ({len(unidentified_items)}개) "
+            padding = (menu_width - len(header) - 2) // 2
+            print(f"\033[{start_y + 1};{start_x}H", end="")
+            print("│" + " " * padding + header + " " * (menu_width - len(header) - padding - 2) + "│")
+            
+            print(f"\033[{start_y + 2};{start_x}H", end="")
+            print("├" + "─" * (menu_width - 2) + "┤")
+            
+            # Item list
+            for i, (name, data) in enumerate(unidentified_items):
+                item = data['item']
+                qty = data.get('qty', 1)
+                
+                # Display format: ? [TYPE] xQTY
+                item_type = getattr(item, 'type', 'UNKNOWN')
+                display = f"? [{item_type}]"
+                if qty > 1:
+                    display += f" x{qty}"
+                
+                # Highlight selected
+                prefix = " >" if i == selected_idx else "  "
+                if i == selected_idx:
+                    color = "\033[93m"  # Yellow
+                    reset = "\033[0m"
+                else:
+                    color = ""
+                    reset = ""
+                
+                line_y = start_y + 3 + i
+                print(f"\033[{line_y};{start_x}H", end="")
+                print("│" + color + prefix + " " + display + reset + " " * (menu_width - len(display) - 5) + "│")
+            
+            # Footer
+            footer_y = start_y + 3 + len(unidentified_items)
+            print(f"\033[{footer_y};{start_x}H", end="")
+            print("├" + "─" * (menu_width - 2) + "┤")
+            
+            help_text = f" [↑/↓] 선택  [ENTER] 감정  [ESC] 취소 ({selected_idx}/{len(unidentified_items)-1}) "
+            padding = (menu_width - len(help_text) - 2) // 2
+            print(f"\033[{footer_y + 1};{start_x}H", end="")
+            print("│" + " " * padding + help_text + " " * (menu_width - len(help_text) - padding - 2) + "│")
+            
+            print(f"\033[{footer_y + 2};{start_x}H", end="")
+            print("└" + "─" * (menu_width - 2) + "┘")
+            
+            sys.stdout.flush()
+            
+            # Input handling
+            key = self.get_key_input()
+            
+            if key in [readchar.key.UP, 'w', 'W', '\x1b[A']:
+                selected_idx = max(0, selected_idx - 1)
+            elif key in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
+                selected_idx = min(len(unidentified_items) - 1, selected_idx + 1)
+            elif key in ['\r', '\n', readchar.key.ENTER]:
+                return unidentified_items[selected_idx]
+            elif key in [readchar.key.ESC, 'q', 'Q']:
+                return None

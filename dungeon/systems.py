@@ -1230,6 +1230,21 @@ class CombatSystem(System):
                     target.remove_component(MonsterComponent)
                     target.remove_component(StatsComponent)
                     
+                    # [Fix] Remove all status effect components to prevent ghost events
+                    from dungeon.components import (
+                        StunComponent, FrozenComponent, BurningComponent, 
+                        PoisonedComponent, BleedingComponent, PetrifiedComponent,
+                        WeakenedComponent, SlowedComponent, BlindedComponent
+                    )
+                    status_components = [
+                        StunComponent, FrozenComponent, BurningComponent,
+                        PoisonedComponent, BleedingComponent, PetrifiedComponent,
+                        WeakenedComponent, SlowedComponent, BlindedComponent
+                    ]
+                    for comp_type in status_components:
+                        if target.has_component(comp_type):
+                            target.remove_component(comp_type)
+                    
                     # 4. 시각 효과 변경
                     render = target.get_component(RenderComponent)
                     if render:

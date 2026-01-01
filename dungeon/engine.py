@@ -976,8 +976,14 @@ class Engine:
 
         return item
 
-    def run(self) -> str:
+    def run(self, ui=None) -> str:
         """메인 게임 루프. 종료 시 결과를 문자열로 반환합니다."""
+        # Store UI reference for use in other methods
+        self.ui = ui
+        
+        if not ui:
+            raise ValueError("UI instance is required to run the game.")
+        
         self.is_running = True
         game_result = "QUIT"
         
@@ -1352,7 +1358,9 @@ class Engine:
         if self.inventory_category_index == 0: # 아이템 (소모품/스킬북)
             filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
         elif self.inventory_category_index == 1: # 장비
-            filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type in ['WEAPON', 'ARMOR']]
+            # Include all equippable items: WEAPON, ARMOR, SHIELD, ACCESSORY
+            filtered_items = [(id, data) for id, data in inv.items.items() 
+                            if data['item'].type in ['WEAPON', 'ARMOR', 'SHIELD', 'ACCESSORY']]
         elif self.inventory_category_index == 2: # 스크롤
             filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type == 'SCROLL']
         elif self.inventory_category_index == 3: # 스킬
@@ -1361,11 +1369,13 @@ class Engine:
         item_count = len(filtered_items)
 
         # 2. 내비게이션 처리
-        if action in [readchar.key.UP, '\x1b[A']:
+        if action in ['w', 'W', readchar.key.UP, '\x1b[A']:
              self.selected_item_index = max(0, self.selected_item_index - 1)
-        elif action in [readchar.key.DOWN, '\x1b[B']:
-             if item_count > 0:
-                 self.selected_item_index = min(item_count - 1, self.selected_item_index + 1)
+        elif action in ['s', 'S', readchar.key.DOWN, '\x1b[B']:
+            # Use filtered_items length for accurate count
+            item_count = len(filtered_items)
+            if item_count > 0:
+                self.selected_item_index = min(item_count - 1, self.selected_item_index + 1)
         elif action in [readchar.key.LEFT, '\x1b[D']:
              self.inventory_category_index = max(0, self.inventory_category_index - 1)
              self.selected_item_index = 0
@@ -1643,19 +1653,34 @@ class Engine:
 
             # [IDENTIFY] 
             if "IDENTIFY" in item.flags:
-                count = 0
+                # Collect unidentified items
+                unidentified = []
                 for item_key, item_val in inv.items.items():
                     target_item = item_val['item']
                     if not getattr(target_item, 'is_identified', True):
-                        target_item.is_identified = True
-                        count += 1
+                        unidentified.append((item_key, item_val))
                 
-                if count > 0:
-                    msg = f"확인 스크롤을 사용하여 {count}개의 아이템을 식별했습니다!"
-                    # Proceed to consume
-                else:
+                if not unidentified:
                     self.world.event_manager.push(MessageEvent("식별할 미확인 아이템이 없습니다."))
-                    return # Do not consume scroll if nothing to identify
+                    return  # Do not consume scroll
+                
+                # Show selection menu (with game screen overlay)
+                selected = self.ui.show_identify_menu(unidentified, game_renderer=self._render)
+                
+                if selected is None:
+                    # User cancelled
+                    return  # Do not consume scroll
+                
+                # Identify the selected item
+                item_key, item_val = selected
+                target_item = item_val['item']
+                target_item.is_identified = True
+                
+                # Show identified item name
+                item_name = getattr(target_item, 'name', '알 수 없는 아이템')
+                msg = f"확인 스크롤을 사용하여 '{item_name}'을(를) 식별했습니다!"
+                self.world.event_manager.push(MessageEvent(msg, "gold"))
+                # Proceed to consume scroll (1 scroll per 1 item)
             
             # [OIL]
             oil_type = next((f for f in item.flags if f.startswith("OIL_")), None)
@@ -2799,6 +2824,14 @@ class Engine:
                          self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + POPUP_HEIGHT - 6, page_info, "cyan")
 
                  # 4.1 선택된 아이템/스킬 상세 정보 표시 (하단 영역)
+                 # 하단 정보 표시
+                 info_y = start_y + max_visible_items + 3
+                 self.renderer.draw_text(start_x, info_y, "─" * (POPUP_WIDTH - 2), "white")
+                 
+                 # Debug: Show selection info
+                 debug_info = f"선택: {self.selected_item_index + 1}/{total_items} (총 {len(filtered_items)}개)"
+                 self.renderer.draw_text(start_x + 2, start_y + POPUP_HEIGHT - 12, debug_info, "yellow")
+                 
                  if 0 <= self.selected_item_index < total_items:
                      sel_id, sel_data = filtered_items[self.selected_item_index]
                      sel_item = sel_data['item']

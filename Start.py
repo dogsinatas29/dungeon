@@ -62,8 +62,7 @@ def start_game(ui, player_name: str, new_game=False, game_state_data=None, class
     # Engine 인스턴스 생성 및 실행
     # game_state_data를 전달하여 로드된 데이터(또는 초기 데이터)로 시작
     game_engine = engine.Engine(player_name, game_state_data)
-    
-    game_result = game_engine.run()
+    game_result = game_engine.run(ui)
     
     if game_result == "DEATH":
         ui.show_death_screen()
