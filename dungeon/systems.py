@@ -8,7 +8,7 @@ from .components import (
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
     HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent,
-    StatModifierComponent, ShrineComponent
+    StatModifierComponent, ShrineComponent, ManaShieldComponent
 )
 import readchar
 import random
@@ -695,7 +695,7 @@ class CombatSystem(System):
         a_stats = attacker.get_component(StatsComponent)
         t_stats = target.get_component(StatsComponent)
         player_entity = self.world.get_player_entity()
-        
+
         if not a_stats or not t_stats:
             return
 
@@ -843,7 +843,21 @@ class CombatSystem(System):
                 msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
             self.event_manager.push(MessageEvent(msg))
             
-            t_stats.current_hp -= final_damage
+            # [Mana Shield Absorption]
+            ms_comp = target.get_component(ManaShieldComponent)
+            if ms_comp and t_stats.current_mp > 0:
+                # MP로 흡수 (1:1 비율)
+                absorb_amount = min(final_damage, int(t_stats.current_mp))
+                t_stats.current_mp -= absorb_amount
+                remaining_damage = final_damage - absorb_amount
+                
+                if absorb_amount > 0:
+                    self.event_manager.push(MessageEvent(f"마법 장막이 {absorb_amount}의 피해를 흡수했습니다! (남은 MP: {int(t_stats.current_mp)})", "light_cyan"))
+                
+                if remaining_damage > 0:
+                    t_stats.current_hp -= remaining_damage
+            else:
+                t_stats.current_hp -= final_damage
             
             # [Boss Overhaul] 지원군 소환 트리거 (체력 50% 이하)
             if target.has_component(MonsterComponent):
@@ -1348,6 +1362,10 @@ class CombatSystem(System):
                 radius=effective_skill.range,
                 flags=effective_skill.flags
             ))
+        elif effective_skill.id == "MANA_SHIELD" or effective_skill.name == "마나 실드":
+            # 마나 실드 컴포넌트 추가/갱신
+            attacker.add_component(ManaShieldComponent(duration=effective_skill.duration))
+            self.event_manager.push(MessageEvent(f"마법 장막이 생겨나 데미지를 마나로 흡수합니다! (지속 {int(effective_skill.duration)}초)", "light_cyan"))
         else:
             self._handle_self_skill(attacker, effective_skill)
 
@@ -1525,7 +1543,67 @@ class CombatSystem(System):
 
     def _handle_self_skill(self, attacker, skill):
         """회복 등 자신에게 거는 스킬"""
-        if skill.type == "RECOVERY":
+        if skill.id == "REPAIR" or skill.name == "수리":
+            # 무기 및 방어구 내구도 회복
+            inv = attacker.get_component(InventoryComponent)
+            if inv:
+                repaired = False
+                for part in ["손1", "손2", "머리", "몸통", "신발", "장갑"]:
+                    item = inv.equipped.get(part)
+                    if item and hasattr(item, 'current_durability') and hasattr(item, 'max_durability'):
+                        if item.current_durability < item.max_durability:
+                            # 레벨당 더 많이 회복? (기본 20% 회복으로 가정)
+                            recovery = int(item.max_durability * 0.2)
+                            old_dur = item.current_durability
+                            item.current_durability = min(item.max_durability, item.current_durability + recovery)
+                            if item.current_durability > old_dur:
+                                repaired = True
+                                self.event_manager.push(MessageEvent(f"[{item.name}]의 내구도를 {item.current_durability - old_dur} 회복했습니다."))
+                if not repaired:
+                    self.event_manager.push(MessageEvent("수리할 장비가 없습니다."))
+                else:
+                    self.event_manager.push(SoundEvent("REPAIR"))
+
+        elif skill.id == "DISARM" or skill.name == "함정 해제":
+            # 주변 함정 제거
+            pos = attacker.get_component(PositionComponent)
+            if pos:
+                trap_entities = self.world.get_entities_with_components({TrapComponent, PositionComponent})
+                removed_count = 0
+                for trap in trap_entities:
+                    t_pos = trap.get_component(PositionComponent)
+                    if abs(t_pos.x - pos.x) <= 3 and abs(t_pos.y - pos.y) <= 3:
+                        # 함정 제거 (엔티티 삭제 또는 컴포넌트 제거)
+                        # 여기서는 함정 엔티티 자체를 삭제 (대부분 함정은 맵 장식 엔티티)
+                        self.world.delete_entity(trap.entity_id)
+                        removed_count += 1
+                
+                if removed_count > 0:
+                    self.event_manager.push(MessageEvent(f"주변의 함정 {removed_count}개를 안전하게 제거했습니다!", "yellow"))
+                    self.event_manager.push(SoundEvent("UNLOCK"))
+                else:
+                    self.event_manager.push(MessageEvent("주변에 함정이 발견되지 않았습니다."))
+
+        elif skill.id == "RECHARGE" or skill.name == "충전":
+            # 지팡이 차지 회복
+            inv = attacker.get_component(InventoryComponent)
+            if inv:
+                staff = inv.equipped.get("손1")
+                from .data_manager import ItemDefinition
+                if staff and isinstance(staff, ItemDefinition) and hasattr(staff, 'current_charges'):
+                    if staff.current_charges < staff.max_charges:
+                        # 지팡이 차지 회복 (최대치의 30% 또는 3회)
+                        recovery = max(3, int(staff.max_charges * 0.3))
+                        old_chg = staff.current_charges
+                        staff.current_charges = min(staff.max_charges, staff.current_charges + recovery)
+                        self.event_manager.push(MessageEvent(f"지팡이에 마력을 {staff.current_charges - old_chg}회 충전했습니다! ({staff.current_charges}/{staff.max_charges})", "blue"))
+                        self.event_manager.push(SoundEvent("CHARGE"))
+                    else:
+                        self.event_manager.push(MessageEvent("지팡이의 마력이 이미 가득 차 있습니다."))
+                else:
+                    self.event_manager.push(MessageEvent("차를 충전할 지팡이를 들고 있지 않습니다."))
+        
+        elif skill.type == "RECOVERY":
             stats = attacker.get_component(StatsComponent)
             old_hp = stats.current_hp
             heal_amount = getattr(skill, 'damage', 10)
@@ -1879,7 +1957,18 @@ class TimeSystem(System):
             if mod.duration <= 0:
                 entity.remove_component(StatModifierComponent)
                 name = self.world.engine._get_entity_name(entity)
-                self.world.event_manager.push(MessageEvent(f"{name}의 '{mod.source}' 효과가 끝났습니다.", "blue"))
+                self.event_manager.push(MessageEvent(f"{name}의 '{mod.source}' 효과가 끝났습니다.", "blue"))
+                if hasattr(self.world.engine, '_recalculate_stats'):
+                    self.world.engine._recalculate_stats()
+
+        # 1-4. ManaShield 시간 감액
+        ms_entities = self.world.get_entities_with_components({ManaShieldComponent})
+        for entity in list(ms_entities):
+            ms = entity.get_component(ManaShieldComponent)
+            ms.duration -= dt
+            if ms.duration <= 0:
+                entity.remove_component(ManaShieldComponent)
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 마법 장막이 사라졌습니다.", "cyan"))
 
         # 2. 횃불(VISION_UP) 시간 감액
         player_entity = self.world.get_player_entity()

@@ -360,3 +360,8 @@ class PoisonComponent(Component):
         self.damage = damage
         self.duration = duration
         self.tick_timer = 1.0 # 1초마다 데미지
+
+class ManaShieldComponent(Component):
+    """마나 실드 상태: 데미지를 HP 대신 MP로 흡수"""
+    def __init__(self, duration: float = 60.0):
+        self.duration = duration
