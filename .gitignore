@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.gemini/
+game_data/
+*.log
+*.mp4

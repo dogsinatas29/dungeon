@@ -1,0 +1,16 @@
+[미구현 스킬 리스트]
+
+1. REPAIR (워리어): 장비 수리 로직 부재 (현재 HP 회복으로 작동)
+2. DISARM (로그): 함정 해제 로직 부재 (현재 HP 회복으로 작동)
+3. RECHARGE (소서러): 지팡이 충전 로직 부재 (현재 HP 회복으로 작동)
+4. MANA_SHIELD (소서러): 마나로 데미지 흡수하는 공식 부재
+5. PHASING: 무작위 텔레포트 이동 로직 부재
+6. TELEPORT: 지정 텔레포트 이동 로직 부재
+7. GOLEM: 소환수 AI 및 엔티티 생성 로직 부재
+8. GUARDIAN: 터렛(히드라) 소환 및 공격 로직 부재
+9. INFERNO: 지속 피해(Continuous) 투사체 로직 부재
+10. FLASH: 주변 범위 데미지 처리 로직 부재 (시각 효과만 존재 가능성 있음)
+11. NOVA: 퍼져나가는 파동 데미지 처리 로직 부재
+12. CHAIN_LIGHTNING: 연쇄(Chain) 타격 로직 부재
+13. FLAME_WAVE: 전진하는 벽(Moving Wall) 투사체 로직 부재
+14. APOCALYPSE: 전체 화면 공격 판정 로직 부재

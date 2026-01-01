@@ -1,0 +1,3 @@
+# data/player_stats.csv
+name,hp,max_hp,attack,defense,mp,max_mp
+Hero,100,100,15,5,10,10

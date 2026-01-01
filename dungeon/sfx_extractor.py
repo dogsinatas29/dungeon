@@ -1,0 +1,81 @@
+import subprocess
+import os
+import sys
+
+def extract_sfx(input_video, start_time, duration, output_name):
+    """영상에서 특정 구간의 소리만 추출하여 .wav로 저장"""
+    # sounds 디렉토리 확인 및 생성
+    sounds_dir = os.path.join(os.path.dirname(__file__), "sounds")
+    if not os.path.exists(sounds_dir):
+        os.makedirs(sounds_dir)
+        print(f"📁 디렉토리 생성: {sounds_dir}")
+
+    output_path = os.path.join(sounds_dir, f"{output_name}.wav")
+    
+    # ffmpeg 경로 설정: 로컬 정적 빌드 우선 사용
+    local_ffmpeg = os.path.join(os.path.dirname(__file__), "dungeon/ffmpeg-7.0.2-amd64-static/ffmpeg")
+    ffmpeg_cmd = local_ffmpeg if os.path.exists(local_ffmpeg) else 'ffmpeg'
+
+    command = [
+        ffmpeg_cmd, '-i', input_video,
+        '-ss', str(start_time), '-t', str(duration),
+        '-vn', '-acodec', 'pcm_s16le', '-ar', '44100', '-ac', '2',
+        output_path, '-y'
+    ]
+    
+    result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    if result.returncode == 0:
+        print(f"✅ 추출 완료: {output_name}.wav ({start_time}s ~ {start_time+duration}s)")
+        return True
+    else:
+        print(f"❌ 추출 실패: {output_name}.wav (ffmpeg 에러)")
+        return False
+
+def run_pack_extraction(video_file, pack_type="default"):
+    """미리 정의된 팩 구성에 따라 일괄 추출"""
+    
+    # 예시 팩 구성 (필요에 따라 수정 가능)
+    packs = {
+        "battle": [
+            (0.5, 1.5, 'swing'),
+            (2.5, 1.5, 'hit'),
+            (4.5, 2.0, 'crit')
+        ],
+        "magic": [
+            (0.5, 2.0, 'fire'),
+            (3.0, 2.0, 'ice'),
+            (5.5, 3.0, 'explosion')
+        ],
+        "system": [
+            (1.0, 1.5, 'coin'),
+            (3.0, 1.5, 'levelup'),
+            (5.0, 1.0, 'step')
+        ]
+    }
+    
+    target_pack = packs.get(pack_type, [])
+    if not target_pack:
+        print(f"❓ 알 수 없는 팩 타입: {pack_type}")
+        return
+
+    print(f"🎬 '{video_file}'에서 '{pack_type}' 사운드 추출 시작...")
+    success_count = 0
+    for start, dur, name in target_pack:
+        if extract_sfx(video_file, start, dur, name):
+            success_count += 1
+            
+    print(f"\n✨ 작업 완료: {success_count}/{len(target_pack)}개 성공")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("사용법: python3 sfx_extractor.py <영상파일명> [팩이름(battle/magic)]")
+        print("예시: python3 sfx_extractor.py battle_pack.mp4 battle")
+    else:
+        video = sys.argv[1]
+        pack = sys.argv[2] if len(sys.argv) > 2 else "battle"
+        
+        if not os.path.exists(video):
+            print(f"❌ 파일을 찾을 수 없습니다: {video}")
+        else:
+            run_pack_extraction(video, pack)
