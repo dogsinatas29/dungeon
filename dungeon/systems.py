@@ -8,7 +8,8 @@ from .components import (
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
     HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent,
-    StatModifierComponent, ShrineComponent, ManaShieldComponent
+    StatModifierComponent, ShrineComponent, ManaShieldComponent, SummonComponent,
+    PetrifiedComponent
 )
 import readchar
 import random
@@ -346,20 +347,21 @@ class MonsterAISystem(System):
         player_pos = player_entity.get_component(PositionComponent)
         if not player_pos: return
 
-        monsters = self.world.get_entities_with_components(self._required_components)
+        # 모든 AI 엔티티와 전투 가능 엔티티 미리 수집
+        all_ai_entities = self.world.get_entities_with_components({AIComponent, PositionComponent, StatsComponent})
+        all_combat_entities = self.world.get_entities_with_components({PositionComponent, StatsComponent})
         
-        for monster in monsters:
+        for entity in all_ai_entities:
             # 안전장치: 플레이어는 제외
-            if monster.entity_id == player_entity.entity_id: continue
+            if entity.entity_id == player_entity.entity_id: continue
 
-            # 스턴/수면 상태 확인 (TimeSystem에서 시간 감액 처리함)
-            if monster.has_component(StunComponent) or monster.has_component(SleepComponent):
+            # 스턴/수면/석화 상태 확인 (TimeSystem에서 시간 감액 처리함)
+            if entity.has_component(StunComponent) or entity.has_component(SleepComponent) or entity.has_component(PetrifiedComponent):
                 continue
- # 스턴 중에는 행동 불가
             
-            ai = monster.get_component(AIComponent)
-            pos = monster.get_component(PositionComponent)
-            stats = monster.get_component(StatsComponent)
+            ai = entity.get_component(AIComponent)
+            pos = entity.get_component(PositionComponent)
+            stats = entity.get_component(StatsComponent)
             if not ai or not pos or not stats: continue
 
             # 실시간 행동 지연(Cooldown) 확인
@@ -369,28 +371,66 @@ class MonsterAISystem(System):
             if current_time - stats.last_action_time < monster_delay:
                 continue
             
-            # 맨해튼 거리 계산
-            dist = abs(player_pos.x - pos.x) + abs(player_pos.y - pos.y)
-
-            # [Update] Check Rage Aura (Continuous Provocation)
-            player_auras = player_entity.get_components(SkillEffectComponent)
-            rage_aura = next((a for a in player_auras if a.name == "RAGE_AURA"), None)
+            # --- 타겟 선정 로직 ---
+            target = None
+            target_pos = None
             
-            if rage_aura and dist <= rage_aura.radius:
-                if ai.behavior != AIComponent.CHASE:
-                    ai.behavior = AIComponent.CHASE
-                    self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}가 분노에 이끌려 달려옵니다!"))
+            if ai.faction == "MONSTER":
+                # 기본 몬스터: 플레이어 또는 PLAYER 진영 소환수 타겟팅
+                # 여기서는 일단 플레이어를 우선 순위로 둠
+                target = player_entity
+                target_pos = player_pos
+                
+                # 주변에 더 가까운 PLAYER 진영 소환수가 있다면 타겟 변경 고려 (옵션)
+            else:
+                # 소환수 (PLAYER 진영): 가장 가까운 MONSTER 진영 엔티티 타겟팅
+                enemies = [e for e in all_combat_entities if e.entity_id != entity.entity_id]
+                closest_enemy = None
+                min_dist = 999
+                
+                for e in enemies:
+                    # 몬스터 컴포넌트가 있거나 AI가 MONSTER 진영인 대상
+                    e_ai = e.get_component(AIComponent)
+                    if (e.has_component(MonsterComponent) and (not e_ai or e_ai.faction == "MONSTER")):
+                        e_pos = e.get_component(PositionComponent)
+                        d = abs(e_pos.x - pos.x) + abs(e_pos.y - pos.y)
+                        if d < min_dist:
+                            min_dist = d
+                            closest_enemy = e
+                
+                if closest_enemy:
+                    target = closest_enemy
+                    target_pos = closest_enemy.get_component(PositionComponent)
+                else:
+                    # 적이 없으면 플레이어를 따라다님
+                    target = player_entity
+                    target_pos = player_pos
+
+            if not target or not target_pos: continue
+            
+            # 맨해튼 거리 계산
+            dist = abs(target_pos.x - pos.x) + abs(target_pos.y - pos.y)
+
+            # [Update] Check Rage Aura (Continuous Provocation) - Only for Monsters VS Player
+            if ai.faction == "MONSTER" and target == player_entity:
+                player_auras = player_entity.get_components(SkillEffectComponent)
+                rage_aura = next((a for a in player_auras if a.name == "RAGE_AURA"), None)
+                
+                if rage_aura and dist <= rage_aura.radius:
+                    if ai.behavior != AIComponent.CHASE:
+                        ai.behavior = AIComponent.CHASE
+                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 분노에 이끌려 달려옵니다!"))
             
             # 5. 행동 결정 (플래그 기반 확장)
             if "TELEPORT" in stats.flags and random.random() < 0.2:
-                # 30% 확률로 플레이어 근처로 순간이동
+                # 30% 확률로 타겟 근처로 순간이동
                 map_ent = self.world.get_entities_with_components({MapComponent})
                 if map_ent:
                     mc = map_ent[0].get_component(MapComponent)
-                    tx, ty = player_pos.x + random.randint(-2, 2), player_pos.y + random.randint(-2, 2)
+                    tx, ty = target_pos.x + random.randint(-1, 1), target_pos.y + random.randint(-1, 1)
                     if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
                         pos.x, pos.y = tx, ty
-                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(monster)}가 갑자기 뒤로 나타났습니다!"))
+                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 갑자기 이동했습니다!"))
                         stats.last_action_time = current_time
                         continue
 
@@ -399,12 +439,13 @@ class MonsterAISystem(System):
                 ai.behavior = AIComponent.CHASE
             
             # [Hack & Slash] Alert neighbors if chasing
-            if ai.behavior == AIComponent.CHASE:
-                # 30% chance per frame to alert nearby monsters (Prevents complete map-wide chain reaction in one frame)
+            if ai.behavior == AIComponent.CHASE and ai.faction == "MONSTER":
+                # 30% chance per frame to alert nearby monsters
                 if random.random() < 0.3:
                     nearby_monsters = [
-                        m for m in monsters 
-                        if m.entity_id != monster.entity_id 
+                        m for m in all_ai_entities 
+                        if m.entity_id != entity.entity_id 
+                        and m.get_component(AIComponent).faction == "MONSTER"
                         and abs(m.get_component(PositionComponent).x - pos.x) + abs(m.get_component(PositionComponent).y - pos.y) <= 7
                     ]
                     for nm in nearby_monsters:
@@ -413,29 +454,62 @@ class MonsterAISystem(System):
                             nm_ai.behavior = AIComponent.CHASE
 
             # 탐지 범위 밖이면 무시 (단, 추적 중에는 거리 무시하고 계속 추적)
-            if dist > ai.detection_range and ai.behavior != AIComponent.CHASE:
+            # 소환수는 플레이어를 따라다녀야 하므로 예외
+            if dist > ai.detection_range and ai.behavior != AIComponent.CHASE and ai.faction == "MONSTER":
                 continue
+            
+            # 만약 소환수가 타겟이 없거나 너무 멀면 플레이어 옆으로 CHASE
+            if ai.faction == "PLAYER" and target == player_entity and dist > 2:
+                 ai.behavior = AIComponent.CHASE
             
             dx, dy = 0, 0
             
+            # 공격 시야 확보 (가디언 등을 위해 distance 1 이상에서도 공격 트리거 가능하게 설계)
+            if dist == 1 and ai.behavior == AIComponent.CHASE:
+                # 인접한 경우 공격 시도 (이동 대신)
+                combat_sys = self.world.get_system(CombatSystem)
+                if combat_sys:
+                    combat_sys._apply_damage(entity, target, dist)
+                    stats.last_action_time = current_time
+                    continue
+            
+            # [NEW] 원거리 공격 (가디언 또는 RANGED 플래그가 있고 사거리 내인 경우)
+            if dist > 1 and dist <= ai.detection_range and ("RANGED" in stats.flags or "가디언" in getattr(entity.get_component(MonsterComponent), 'type_name', "")):
+                combat_sys = self.world.get_system(CombatSystem)
+                if combat_sys:
+                    # 가상의 파이어볼트 발사 (이벤트 푸쉬)
+                    dx = 1 if target_pos.x > pos.x else (-1 if target_pos.x < pos.x else 0)
+                    dy = 1 if target_pos.y > pos.y else (-1 if target_pos.y < pos.y else 0)
+                    if dx != 0 and dy != 0: dx = 0 # 일직선 공격 우선
+                    
+                    from .data_manager import SkillDefinition
+                    # SkillDefinition(ID, 이름, 분류, 필요레벨, 속성, 소모타입, 소모값, 필요장비, 효과_설명, 데미지, 스킬타입, 스킬서브타입, 사거리, 적중효과="없음", flags="", ...)
+                    mock_firebolt = SkillDefinition(
+                        "FIREBOLT", "화염구(소환수)", "공격", 1, "불", "MP", 0, "없음", "화염구 발사", 
+                        str(stats.attack), "ATTACK", "PROJECTILE", 7, "없음", "PROJECTILE,MAGIC"
+                    )
+                    self.event_manager.push(SkillUseEvent(attacker_id=entity.entity_id, skill_name="FIREBOLT", dx=dx, dy=dy))
+                    stats.last_action_time = current_time
+                    continue
+
             if ai.behavior == AIComponent.CHASE:
-                # 플레이어 방향으로 이동 결정
-                if player_pos.x > pos.x: dx = 1
-                elif player_pos.x < pos.x: dx = -1
-                elif player_pos.y > pos.y: dy = 1
-                elif player_pos.y < pos.y: dy = -1
+                # 타겟 방향으로 이동 결정
+                if target_pos.x > pos.x: dx = 1
+                elif target_pos.x < pos.x: dx = -1
+                elif target_pos.y > pos.y: dy = 1
+                elif target_pos.y < pos.y: dy = -1
                 
             elif ai.behavior == AIComponent.FLEE:
-                # 플레이어 반대 방향으로 이동 결정
-                if player_pos.x > pos.x: dx = -1
-                elif player_pos.x < pos.x: dx = 1
-                elif player_pos.y > pos.y: dy = -1
-                elif player_pos.y < pos.y: dy = 1
+                # 타겟 반대 방향으로 이동 결정
+                if target_pos.x > pos.x: dx = -1
+                elif target_pos.x < pos.x: dx = 1
+                elif target_pos.y > pos.y: dy = -1
+                elif target_pos.y < pos.y: dy = 1
             
             if dx != 0 or dy != 0:
-                if monster.has_component(DesiredPositionComponent):
-                    monster.remove_component(DesiredPositionComponent)
-                monster.add_component(DesiredPositionComponent(dx=dx, dy=dy))
+                if entity.has_component(DesiredPositionComponent):
+                    entity.remove_component(DesiredPositionComponent)
+                entity.add_component(DesiredPositionComponent(dx=dx, dy=dy))
                 # 행동 수행 시간 기록
                 stats.last_action_time = current_time
 
@@ -1429,6 +1503,17 @@ class CombatSystem(System):
                 self.world.add_component(e_id, EffectComponent(duration=0.2))
                 effect_ids.append(e_id)
 
+                # [NEW] Inferno: 투사체가 지나간 자리에 지속 화염 장판 생성
+                if skill.id == "INFERNO" or skill.name == "인페르노":
+                    # 해당 위치에 5초 동안 지속되는 화염 오라 생성
+                    fire_aura = self.world.create_entity()
+                    self.world.add_component(fire_aura.entity_id, PositionComponent(x=px, y=py))
+                    self.world.add_component(fire_aura.entity_id, SkillEffectComponent(
+                        name="FIRE_TRAIL", duration=5.0, damage=skill.damage // 2, radius=0
+                    ))
+                    self.world.add_component(fire_aura.entity_id, RenderComponent(char='*', color='red'))
+                    self.world.add_component(fire_aura.entity_id, EffectComponent(duration=5.0))
+
             # 애니메이션 렌더링
             if hasattr(self.world, 'engine'):
                 self.world.engine._render()
@@ -1455,17 +1540,29 @@ class CombatSystem(System):
                         self._handle_explosion(attacker, px, py, skill)
                         hit_target = True
                         break # 폭발 후 소멸
-                    else:
-                        for target in targets:
-                            # 관통이면 데미지 감소 (히트 수에 따라? 여기선 단순화하여 100%->80%->64% 등 구현은 복잡하므로 고정 20% 감쇄 로직 대신 factor 전달)
-                            # 현재 구조상 히트 카운트를 추적하기 어려우므로, 관통 무조건 100% 데미지 혹은 거리별 감쇄 등을 적용해야 함.
-                            # 여기서는 관통 시 데미지 유지하고 계속 진행하도록 함.
+                    
+                    for target in targets:
+                        # [NEW] Holy Bolt: 언데드만 타격
+                        if skill.id == "HOLY_BOLT" or skill.name == "홀리 볼트":
+                            sc = target.get_component(StatsComponent)
+                            if not sc or "UNDEAD" not in getattr(sc, 'flags', []):
+                                continue # 언데드가 아니면 무시 (통과)
+
+                        # [NEW] Stone Curse: 석화 효과 부여
+                        if skill.id == "STONE_CURSE" or skill.name == "석화 저주":
+                            self._handle_status_effect(target, "STONE_CURSE", duration=skill.duration)
+                            # 석화는 데미지를 주지 않을 수도 있음 (기획에 따라 다름)
+                            # 일단 데미지 팩터를 0으로 주거나 정해진 데미지 적용
+                            if skill.damage > 0:
+                                self._apply_skill_damage(attacker, target, skill, dx, dy, damage_factor=1.0)
+                        else:
                             self._apply_skill_damage(attacker, target, skill, dx, dy, damage_factor=1.0)
-                            hit_target = True
                             
-                            # [NEW] 체인 라이트닝 처리
-                            if "CHAIN" in skill.flags:
-                                self._handle_chain_lightning(attacker, target, skill, depth=1, hit_targets={target.entity_id})
+                        hit_target = True
+                        
+                        # [NEW] 체인 라이트닝 처리
+                        if "CHAIN" in skill.flags:
+                            self._handle_chain_lightning(attacker, target, skill, depth=1, hit_targets={target.entity_id})
                     
                     if not is_piercing: # 관통이 아니면 첫 타격 후 소멸
                         break
@@ -1760,6 +1857,42 @@ class CombatSystem(System):
                 self.event_manager.push(SoundEvent("MAGIC_BOLT"))
                 self._handle_explosion(attacker, pos.x, pos.y, skill)
 
+        elif skill.id == "APOCALYPSE" or skill.name == "아포칼립스":
+            self.event_manager.push(MessageEvent(f"'{skill.name}'!!! 종말의 불꽃이 모든 것을 뒤덮습니다!", "red"))
+            self.event_manager.push(SoundEvent("MAGIC_BOLT"))
+            
+            # 화면 내 모든 적군 타격 (거리 15 이내)
+            p_pos = attacker.get_component(PositionComponent)
+            all_combat_entities = self.world.get_entities_with_components({PositionComponent, StatsComponent})
+            
+            for entity in all_combat_entities:
+                if entity.entity_id == attacker.entity_id: continue
+                ai = entity.get_component(AIComponent)
+                if entity.has_component(MonsterComponent) or (ai and ai.faction == "MONSTER"):
+                    e_pos = entity.get_component(PositionComponent)
+                    dist = abs(e_pos.x - p_pos.x) + abs(e_pos.y - p_pos.y)
+                    if dist <= 15:
+                        self._apply_damage(attacker, entity, distance=dist, skill=skill)
+                        # 폭발 연출
+                        e_id = self.world.create_entity().entity_id
+                        self.world.add_component(e_id, PositionComponent(x=e_pos.x, y=e_pos.y))
+                        self.world.add_component(e_id, RenderComponent(char='*', color='red'))
+                        self.world.add_component(e_id, EffectComponent(duration=0.3))
+
+        elif skill.id == "GUARDIAN" or skill.name == "가디언":
+            self.event_manager.push(MessageEvent(f"'{skill.name}'!! 수호자 포탑을 소환합니다!", "green"))
+            self.event_manager.push(SoundEvent("MAGIC_BOLT"))
+            p_pos = attacker.get_component(PositionComponent)
+            # 플레이어 바로 옆(오른쪽)에 소환 시도
+            self._spawn_summon(attacker, "가디언", p_pos.x + 1, p_pos.y, skill, behavior=AIComponent.STATIONARY)
+
+        elif skill.id == "GOLEM" or skill.name == "골렘":
+            self.event_manager.push(MessageEvent(f"'{skill.name}'!! 강력한 진흙 골렘을 소환합니다!", "gray"))
+            self.event_manager.push(SoundEvent("MAGIC_BOLT"))
+            p_pos = attacker.get_component(PositionComponent)
+            # 플레이어 바로 옆(왼쪽)에 소환 시도
+            self._spawn_summon(attacker, "골렘", p_pos.x - 1, p_pos.y, skill, behavior=AIComponent.CHASE)
+
         elif skill.id == "NOVA" or skill.name == "노바" or "NOVA" in getattr(skill, 'flags', set()):
             # 시전자 중심 원형 파동 공격
             pos = attacker.get_component(PositionComponent)
@@ -1937,6 +2070,79 @@ class CombatSystem(System):
         return f"Entity {entity.entity_id}"
 
 
+    def _spawn_summon(self, owner, name, x, y, skill, behavior=AIComponent.CHASE):
+        """소환수 에티티 생성 및 설정"""
+        map_ent = self.world.get_entities_with_components({MapComponent})
+        if not map_ent: return
+        mc = map_ent[0].get_component(MapComponent)
+        
+        # 유효 위치 확인 (벽이 아니고 다른 엔티티가 없는 곳)
+        if not (0 <= x < mc.width and 0 <= y < mc.height) or mc.tiles[y][x] != '.':
+            # 주변 빈칸 검색 (단순화: 일단 안되면 소환 실패 또는 주인 위치)
+            found = False
+            for dy in range(-1, 2):
+                for dx in range(-1, 2):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < mc.width and 0 <= ny < mc.height and mc.tiles[ny][nx] == '.':
+                        x, y = nx, ny
+                        found = True
+                        break
+                if found: break
+        
+        summon = self.world.create_entity()
+        self.world.add_component(summon.entity_id, PositionComponent(x=x, y=y))
+        
+        char = 'G' if "가디언" in name else 'M'
+        color = 'green' if "가디언" in name else 'gray'
+        self.world.add_component(summon.entity_id, RenderComponent(char=char, color=color))
+        
+        hp = 50 + (skill.level * 20)
+        attack = 5 + (skill.level * 3)
+        self.world.add_component(summon.entity_id, StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=5))
+        
+        # AI 설정 (PLAYER 진영)
+        self.world.add_component(summon.entity_id, AIComponent(behavior=behavior, detection_range=10, faction="PLAYER"))
+        # 소환수 컴포넌트 (수명 관리)
+        self.world.add_component(summon.entity_id, SummonComponent(owner_id=owner.entity_id, duration=skill.duration))
+        # 몬스터 컴포넌트 (AISystem에서 인식하기 위함)
+        self.world.add_component(summon.entity_id, MonsterComponent(type_name=name, level=skill.level))
+        
+        # 가디언인 경우 원거리 공격 플래그 추가 (가상)
+        if "가디언" in name:
+            summon.get_component(StatsComponent).flags.add("RANGED")
+            
+        return summon
+
+    def _handle_status_effect(self, target, effect_type, duration=5.0):
+        """개별 엔티티에 상태 이상 부여"""
+        if effect_type == "STONE_CURSE":
+            if not target.has_component(PetrifiedComponent):
+                target.add_component(PetrifiedComponent(duration=duration))
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}이(가) 돌로 변했습니다!"))
+                # 시각 효과
+                render = target.get_component(RenderComponent)
+                if render:
+                    render.color = 'gray'
+        elif effect_type == "STUN":
+            if not target.has_component(StunComponent):
+                target.add_component(StunComponent(duration=duration))
+        elif effect_type == "SLEEP":
+            if not target.has_component(SleepComponent):
+                target.add_component(SleepComponent(duration=duration))
+
+    def _handle_area_status_effect(self, attacker, skill, radius, effect_type):
+        """범위 내 모든 적에게 상태 이상 부여"""
+        pos = attacker.get_component(PositionComponent)
+        if not pos: return
+        
+        all_combat_entities = self.world.get_entities_with_components({PositionComponent, StatsComponent})
+        for entity in all_combat_entities:
+            if entity.entity_id == attacker.entity_id: continue
+            
+            e_pos = entity.get_component(PositionComponent)
+            if abs(e_pos.x - pos.x) <= radius and abs(e_pos.y - pos.y) <= radius:
+                self._handle_status_effect(entity, effect_type, duration=skill.duration)
+
 class RenderSystem(System):
     """
     ConsoleUI 모듈과 연동하여 최종 렌더링을 준비하고 이벤트를 처리합니다.
@@ -2066,6 +2272,15 @@ class TimeSystem(System):
                 entity.remove_component(SleepComponent)
                 self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 잠에서 깨어났습니다!"))
 
+        # 1-2. 석화(Petrified) 시간 감액
+        petrified_entities = self.world.get_entities_with_components({PetrifiedComponent})
+        for entity in list(petrified_entities):
+            petrified = entity.get_component(PetrifiedComponent)
+            petrified.duration -= dt
+            if petrified.duration <= 0:
+                entity.remove_component(PetrifiedComponent)
+                self.world.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 석화가 해제되었습니다!"))
+
         # 1-2. 중독(Poison) 시간 감액 및 데미지 처리
         poison_entities = self.world.get_entities_with_components({PoisonComponent})
         for entity in list(poison_entities):
@@ -2118,6 +2333,15 @@ class TimeSystem(System):
             if ms.duration <= 0:
                 entity.remove_component(ManaShieldComponent)
                 self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 마법 장막이 사라졌습니다.", "cyan"))
+
+        # 1-5. 소환수(Summon) 시간 감액 및 소멸 처리
+        summon_entities = self.world.get_entities_with_components({SummonComponent})
+        for entity in list(summon_entities):
+            summon = entity.get_component(SummonComponent)
+            summon.duration -= dt
+            if summon.duration <= 0:
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 소환 시간이 만료되어 사라집니다.", "gray"))
+                self.world.delete_entity(entity.entity_id)
 
         # 2. 횃불(VISION_UP) 시간 감액
         player_entity = self.world.get_player_entity()

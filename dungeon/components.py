@@ -145,9 +145,11 @@ class AIComponent(Component):
     FLEE = 1       # 도망형
     CHASE = 2      # 추적형
     
-    def __init__(self, behavior: int = STATIONARY, detection_range: int = 5):
+    def __init__(self, behavior: int = STATIONARY, detection_range: int = 5, faction: str = "MONSTER"):
         self.behavior = behavior
         self.detection_range = detection_range
+        self.faction = faction # "MONSTER", "PLAYER" (소환수용)
+        self.target_id = None  # 현재 타겟 엔티티 ID
 
 class InventoryComponent(Component):
     """아이템 및 장비 데이터를 저장"""
@@ -364,4 +366,15 @@ class PoisonComponent(Component):
 class ManaShieldComponent(Component):
     """마나 실드 상태: 데미지를 HP 대신 MP로 흡수"""
     def __init__(self, duration: float = 60.0):
+        self.duration = duration
+
+class SummonComponent(Component):
+    """소환수 상태: 주인 정보와 남은 수명 관리"""
+    def __init__(self, owner_id: int, duration: float = 30.0):
+        self.owner_id = owner_id
+        self.duration = duration
+
+class PetrifiedComponent(Component):
+    """석화 상태: 행동 불가 및 방어력 약화 (외형 변경용)"""
+    def __init__(self, duration: float = 5.0):
         self.duration = duration

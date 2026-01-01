@@ -84,6 +84,16 @@ Diablo like real time rogue for terminal
 - **Visuals**: Added particle effects for different dungeon themes (Caves, Hell).
 - **Sandbox**: Added floor jumping (F/B/J) and gold cheat (G) commands for testing.
 
+### 4. Skill System Completion (Phase 4 & Final) (2026-01-01)
+- **Summoning System**: Implemented `SummonComponent` and faction-based AI for friendly minions.
+- **Guardian**: Summonable turret that automatically attacks nearby enemies.
+- **Golem**: Mobile melee minion that fights alongside the player.
+- **Apocalypse**: Screen-wide ultimate spell dealing massive damage to all enemies.
+- **Utility & Crowd Control**:
+    - **Holy Bolt**: Bonus damage against Undead enemies.
+    - **Inferno**: Creates burning ground zones that deal damage over time.
+    - **Stone Curse**: Petrifies enemies, rendering them unable to act.
+
 ### 2. Hack & Slash Overhaul
 - **Monster Nests**: Increased spawn density and grouping for a more intense combat experience.
 - **Loot Explosion**: Defeating monsters now triggers satisfying item drops and visual feedback.
@@ -108,10 +118,10 @@ Diablo like real time rogue for terminal
     - [x] Utility skills (Repair, Disarm, Recharge)
     - [x] Survival skills (Mana Shield, Phasing, Teleport)
     - [x] Combat magic (Flash, Nova, Chain Lightning, Flame Wave)
-- [ ] **Skill System Implementation (Phase 4)**:
-    - [ ] Guardian (Hydra) - summon turret
-    - [ ] Golem - summon golem
-    - [ ] Apocalypse - screen-wide attack
+- [x] **Skill System Implementation (Phase 4)**:
+    - [x] Guardian (Hydra) - summon turret
+    - [x] Golem - summon golem
+    - [x] Apocalypse - screen-wide attack
 
 ### Medium Priority
 - [ ] **Item Drop System Overhaul**:
@@ -273,11 +283,4 @@ This project is open source and available for educational purposes.
 **상태**: 현재 밸런스 테스트 진행 중...
 
 ### Unimplemented Skills (Known Issues)
-Currently, definitions exist in `skills.csv`, but the following skills lack full system logic implementation:
-
-1. **GUARDIAN** (Hydra): Turret summoning and attack logic missing.
-2. **GOLEM**: Summon AI and entity creation logic missing.
-3. **APOCALYPSE**: Screen-wide attack logic missing.
-4. **INFERNO**: Continuous damage projectile logic missing.
-5. **HOLY BOLT**: Bonus damage vs undead logic missing.
-6. **STONE CURSE**: Petrification effect logic missing.
+All original Diablo 1 spells are now fully implemented with system logic!
