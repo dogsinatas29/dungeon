@@ -94,14 +94,19 @@ Diablo like real time rogue for terminal
     - **Inferno**: Creates burning ground zones that deal damage over time.
     - **Stone Curse**: Petrifies enemies, rendering them unable to act.
 
-### 2. Hack & Slash Overhaul
-- **Monster Nests**: Increased spawn density and grouping for a more intense combat experience.
-- **Loot Explosion**: Defeating monsters now triggers satisfying item drops and visual feedback.
+### 5. Identification & Inventory System Improvements (2026-01-01)
+- **Interactive Identification**: Identify scrolls now trigger a dedicated overlay popup.
+- **Overlay UI**: Selection menu appears on top of the game screen using ANSI box characters.
+- **Filtered Navigation**: Fixed bugs where Shield and Accessory items were excluded from the equipment tab.
+- **Navigation Keys**: Added `W/S` key support for inventory and menu navigation.
 
-### 3. Inventory & UI 2.0
-- **UI Expansion**: Re-engineered inventory popup (60x18 -> 66x24) to fit dual-affix item stats.
-- **Enhanced Detailed View**: Separated stat displays into multiple lines for clarity.
-- **Durability Warning**: Visual indicators when equipment is nearing breakage.
+### 6. Stability & Bug Fixes (2026-01-01)
+- **Combat Fixes**: Resolved "Invisible monster combat" by implementing proper detection (10 tiles) and chase (15 tiles) ranges.
+- **Experience Fix**: Fixed a bug where experience wasn't granted due to early corpse checks.
+- **Ghost Events**: Implemented status effect cleanup on death to prevent "ghost" messages and screen shaking.
+- **Safe Zones**: Enhanced monster spawning to ensure a 20-tile safe zone around the player's starting position.
+- **Sandbox Features**: Added interactive Level Setting (`L`) and Floor Jumping (`J`) with terminal input handling.
+
 
 ## TODO List
 
