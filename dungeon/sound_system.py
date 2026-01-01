@@ -1,5 +1,6 @@
 import subprocess
 import os
+import platform
 from .ecs import System
 from .events import Event, MessageEvent, SkillUseEvent, SoundEvent
 
@@ -93,7 +94,16 @@ class SoundSystem(System):
             file_path = os.path.join(self.sound_dir, file_name)
             if os.path.exists(file_path):
                 try:
-                    # subprocess.DEVNULL을 사용하여 터미널 출력을 방해하지 않음
-                    subprocess.Popen(["aplay", "-q", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    # 운영체제별 재생 명령어 분기
+                    system_os = platform.system()
+                    if system_os == "Linux":
+                        subprocess.Popen(["aplay", "-q", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif system_os == "Darwin": # macOS
+                        subprocess.Popen(["afplay", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif system_os == "Windows":
+                        # Windows에서는 PowerShell의 MediaPlayer나 winsound 사용 가능
+                        # 여기서는 별도 프로세스로 비동기 실행하기 위해 PowerShell 호출
+                        ps_command = f"powershell -c \"(New-Object Media.SoundPlayer '{file_path}').PlaySync()\""
+                        subprocess.Popen(ps_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 except Exception:
-                    pass # aplay가 없거나 오류 시 무시
+                    pass # 명령어 부재나 오류 시 무시

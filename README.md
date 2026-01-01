@@ -189,6 +189,12 @@ python3 sandbox_test.py
 - Injected with unique-style affixed items for verification
 - Immediate access to Shrines and Boss encounters
 
+**Debug Keys (Sandbox Only)**:
+- `F`: Jump **Forward** 10 floors
+- `B`: Jump **Backward** 10 floors
+- `J`: **Jump** to a specific floor (Input required in terminal)
+- `G`: Get **1,000 Gold** immediately
+
 ### Game Mechanics
 
 #### Stats

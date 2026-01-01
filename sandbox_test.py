@@ -125,6 +125,64 @@ class SandboxEngine(engine.Engine):
                  ai.behavior = AIComponent.STATIONARY
         return monster
 
+    def handle_sandbox_input(self, action: str) -> bool:
+        """샌드박스 전용 명령어 처리"""
+        from dungeon.events import MapTransitionEvent, MessageEvent
+        
+        # 'F': 10층 건너뛰기
+        if action == 'F':
+            target = min(99, self.current_level + 10)
+            self.world.event_manager.push(MessageEvent(f"[Sandbox] {target}층으로 건너뜁니다!"))
+            self.world.event_manager.push(MapTransitionEvent(target_level=target))
+            return True
+        
+        # 'B': 10층 뒤로가기
+        if action == 'B':
+            target = max(1, self.current_level - 10)
+            self.world.event_manager.push(MessageEvent(f"[Sandbox] {target}층으로 돌아갑니다!"))
+            self.world.event_manager.push(MapTransitionEvent(target_level=target))
+            return True
+            
+        # 'G': 골드 1000 추가
+        if action == 'G':
+            player = self.world.get_player_entity()
+            if player:
+                stats = player.get_component(StatsComponent)
+                if stats:
+                    stats.gold += 1000
+                    self.world.event_manager.push(MessageEvent("[Sandbox] 골드 1000을 획득했습니다!"))
+            return True
+
+        # 'J': 특정 층으로 이동 (입력 받기)
+        if action == 'J':
+            import termios, tty
+            fd = sys.stdin.fileno()
+            # 1. 터미널 설정 일시 복구 (입력 받기 위해)
+            termios.tcsetattr(fd, termios.TCSADRAIN, self.old_settings)
+            sys.stdout.write("\033[?25h") # 커서 보이기
+            sys.stdout.write("\n[Jump Floor] Go to floor (1-99): ")
+            sys.stdout.flush()
+            
+            try:
+                line = sys.stdin.readline().strip()
+                if line.isdigit():
+                    target = max(1, min(99, int(line)))
+                    self.world.event_manager.push(MessageEvent(f"[Sandbox] {target}층으로 차원 이동합니다!"))
+                    self.world.event_manager.push(MapTransitionEvent(target_level=target))
+                else:
+                    self.world.event_manager.push(MessageEvent("[Sandbox] 올바른 층 번호를 입력해주세요."))
+            except Exception:
+                pass
+            
+            # 2. cbreak 모드 재진입
+            tty.setcbreak(fd)
+            sys.stdout.write("\033[?25l") # 커서 다시 숨기기
+            sys.stdout.flush()
+            self._render() # 화면 갱신
+            return True
+
+        return False
+
 # Monkey Patch the Engine class used by Start.py
 engine.Engine = SandboxEngine
 

@@ -692,9 +692,9 @@ class CombatSystem(System):
 
     def _apply_damage(self, attacker: Entity, target: Entity, distance: int, skill=None, damage_factor=1.0, allow_splash=True):
         """실제 데미지 적용 로직 (상성 및 거리 보정 포함)"""
-        from .components import StunComponent, HitFlashComponent
         a_stats = attacker.get_component(StatsComponent)
         t_stats = target.get_component(StatsComponent)
+        player_entity = self.world.get_player_entity()
         
         if not a_stats or not t_stats:
             return
@@ -972,7 +972,6 @@ class CombatSystem(System):
 
         # 3.5 주변 동료 분노 (Angry AI)
         # 플레이어가 몬스터를 공격한 경우에만 발동
-        player_entity = self.world.get_player_entity()
         if player_entity and attacker.entity_id == player_entity.entity_id and target.has_component(MonsterComponent):
             t_pos = target.get_component(PositionComponent)
             if t_pos:
@@ -1010,7 +1009,6 @@ class CombatSystem(System):
                     m_def = m_defs.get(m_type)
                     
                     # 2. 경험치 보상 (플레이어에게)
-                    player_entity = self.world.get_player_entity()
                     if player_entity and attacker.entity_id == player_entity.entity_id:
                         if m_def:
                             # LevelSystem을 통해 경험치 획득

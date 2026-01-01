@@ -175,8 +175,10 @@ class DungeonMap:
     def _has_line_of_sight(self, x1, y1, x2, y2) -> bool:
         """두 점 사이에 시야를 가리는 벽이 있는지 확인합니다."""
         points = self._get_line(x1, y1, x2, y2)
-        for x, y in points:
-            if self.map_data[y][x] == WALL: # self.is_wall 대신 직접 map_data 참조
+        # 마지막 타일(목표 지점)을 제외한 선상의 타일들이 벽인지 확인
+        # 이렇게 해야 벽 타일 자체는 '보이는' 것으로 처리되어 visited에 추가될 수 있습니다.
+        for x, y in points[:-1]:
+            if self.map_data[y][x] == WALL:
                 return True
         return False
 

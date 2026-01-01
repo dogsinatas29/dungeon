@@ -66,6 +66,11 @@ class Engine:
         self.inventory_category_index = 0 # 0: 아이템, 1: 장비, 2: 스크롤, 3: 스킬
         self.shop_category_index = 0 # 0: 사기, 1: 팔기
         self.selected_shop_item_index = 0 # 상점 선택 인덱스
+        
+        # [Visual Effects]
+        self.particles = [] # 배경 파티클 (x, y, char, color, speed, type)
+        self.banner_timer = 0 # 배너 표시 남은 시간
+        self.banner_text = "" # 배너 텍스트
 
         # [Enhancement] Oil Selection State
         self.oil_selection_open = False
@@ -113,7 +118,8 @@ class Engine:
         else:
             width = 120
             height = 60
-            map_type = "BOSS" if self.current_level % 5 == 0 else "NORMAL"
+            # 5의 배수 층 또는 마지막 99층은 보스전으로 설정
+            map_type = "BOSS" if (self.current_level % 5 == 0 or self.current_level == 99) else "NORMAL"
         
         # DungeonMap 인스턴스 생성
         dungeon_map = DungeonMap(width, height, random, dungeon_level_tuple=(self.current_level, 0), map_type=map_type)
@@ -364,7 +370,23 @@ class Engine:
         # 3. 메시지 로그 엔티티 생성 (ID=3)
         message_entity = self.world.create_entity()
         message_comp = MessageComponent()
-        message_comp.add_message(f"던전 {self.current_level}층에 입장했습니다.")
+        theme_info = self._get_map_theme()
+        # 구역 색상을 테마에 맞춰 강조 (Cathedral: brown, Catacombs: blue, Caves: yellow, Hell: red)
+        zone_color = theme_info.get("wall_color", "white")
+        if theme_info['name'] == "Cathedral": zone_color = "gold" # Cathedral은 금색으로 강조
+        
+        message_comp.add_message(f"던전 {self.current_level}층 [{theme_info['name']}]에 입장했습니다.", zone_color)
+        
+        # [Visual Effect] 신규 구역 진입 시 대형 배너 트리거 (1, 26, 51, 76, 99층)
+        if self.current_level in [1, 26, 51, 76, 99]:
+            if self.current_level == 99:
+                self.banner_text = "--- FINAL BATTLE ---"
+            else:
+                self.banner_text = f"--- THE {theme_info['name'].upper()} ---"
+            
+            # 1층과 99층은 게임 시작 및 최종전 시점이므로 조금 더 길게(4초) 노출
+            self.banner_timer = 4.0 if self.current_level in [1, 99] else 3.0
+            
         if map_type == "BOSS":
             message_comp.add_message("[경고] 강력한 보스의 기운이 느껴집니다!", "red")
         else:
@@ -963,7 +985,7 @@ class Engine:
         
         # 터미널 설정 저장 및 cbreak 모드 전환
         fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
+        self.old_settings = termios.tcgetattr(fd)
         
         try:
             tty.setcbreak(fd)
@@ -1009,6 +1031,10 @@ class Engine:
                             self._render()
                             continue
                         
+                        # 샌드박스/치트 키 처리 (서브클래스에서 오버라이드 가능)
+                        if self.handle_sandbox_input(action):
+                            continue
+                            
                         # InputSystem은 이제 쿨다운을 자체적으로 관리하며, 
                         # 입력이 들어왔을 때만 해당 입력을 큐에 넣거나 즉시 처리함.
                         self.input_system.handle_input(action)
@@ -1077,9 +1103,10 @@ class Engine:
         except KeyboardInterrupt:
             game_result = "QUIT"
         finally:
-            # 터미널 설정 및 커서 복구
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            # 설정 복구 및 커서 보이기
+            termios.tcsetattr(fd, termios.TCSADRAIN, self.old_settings)
             sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
             sys.stdout.write("\033[0m\n")
             sys.stdout.flush()
         
@@ -1981,6 +2008,85 @@ class Engine:
 
         # [참고] VIT 증가에 따른 최대 HP 보정 등이 필요할 수 있음
 
+    def _get_map_theme(self):
+        """현재 층수에 따른 던전 테마 정보를 반환합니다."""
+        floor = self.current_level
+        if floor <= 25:
+            return {
+                "name": "Cathedral",
+                "wall_char": "#",
+                "floor_char": ".",
+                "wall_color": "brown",
+                "floor_color": "dark_grey",
+                "vision_modifier": 0
+            }
+        elif floor <= 50:
+            return {
+                "name": "Catacombs",
+                "wall_char": "▒",
+                "floor_char": ",",
+                "wall_color": "blue",
+                "floor_color": "green",
+                "vision_modifier": -1
+            }
+        elif floor <= 75:
+            return {
+                "name": "Caves",
+                "wall_char": "≈",
+                "floor_char": "·",
+                "wall_color": "yellow",
+                "floor_color": "brown",
+                "vision_modifier": -1
+            }
+        else: # 76 ~ 99
+            return {
+                "name": "Hell",
+                "wall_char": "█",
+                "floor_char": "⁕",
+                "wall_color": "red",
+                "floor_color": "purple",
+                "vision_modifier": -2
+            }
+
+    def _update_particles(self, cam_x, cam_y, view_w, view_h):
+        """배경 파티클 생성 및 위치 업데이트"""
+        theme = self._get_map_theme()
+        zone = theme['name']
+        
+        # 파티클 생성 (수 제한)
+        if len(self.particles) < 20: 
+            if zone == "Caves" and random.random() < 0.2:
+                # 동굴: 위에서 떨어지는 먼지
+                self.particles.append({
+                    'x': cam_x + random.randint(0, view_w),
+                    'y': cam_y,
+                    'char': "'",
+                    'color': "dark_grey",
+                    'speed': random.uniform(0.2, 0.5),
+                    'type': 'DUST'
+                })
+            elif zone == "Hell" and random.random() < 0.3:
+                # 지옥: 아래에서 올라오는 불꽃
+                self.particles.append({
+                    'x': cam_x + random.randint(0, view_w),
+                    'y': cam_y + view_h - 1,
+                    'char': "*",
+                    'color': random.choice(["red", "yellow", "gold"]),
+                    'speed': random.uniform(-0.3, -0.6), # 음수 속도 = 위로
+                    'type': 'FIRE'
+                })
+
+        # 위치 업데이트 및 화면 밖 제거
+        for p in self.particles[:]:
+            p['y'] += p['speed']
+            # 상하 화면 밖으로 나가면 제거
+            if p['y'] < cam_y or p['y'] >= cam_y + view_h:
+                self.particles.remove(p)
+
+    def handle_sandbox_input(self, action: str) -> bool:
+        """샌드박스 모드 등에서 특수 입력을 처리하기 위한 훅. (기본은 처리하지 않음)"""
+        return False
+
     def _render(self):
         """World 상태를 기반으로 Renderer를 사용하여 화면을 그립니다."""
         self.renderer.clear_buffer()
@@ -1997,26 +2103,30 @@ class Engine:
         
         player_entity = self.world.get_player_entity()
         player_pos = player_entity.get_component(PositionComponent) if player_entity else None
+        map_comp_list = self.world.get_entities_with_components([MapComponent])
         
         # 카메라 오프셋 계산 (플레이어를 중앙에)
-        if player_pos:
-            camera_x = max(0, min(player_pos.x - MAP_VIEW_WIDTH // 2, 120 - MAP_VIEW_WIDTH))
-            camera_y = max(0, min(player_pos.y - MAP_VIEW_HEIGHT // 2, 60 - MAP_VIEW_HEIGHT))
+        if player_pos and map_comp_list:
+            map_comp = map_comp_list[0].get_component(MapComponent)
+            camera_x = max(0, min(player_pos.x - MAP_VIEW_WIDTH // 2, map_comp.width - MAP_VIEW_WIDTH))
+            camera_y = max(0, min(player_pos.y - MAP_VIEW_HEIGHT // 2, map_comp.height - MAP_VIEW_HEIGHT))
         else:
             camera_x, camera_y = 0, 0
 
+        # ... (중략: 안개 업데이트 로직) ...
         # 0. 전장의 안개 업데이트 (시야 반경 8)
-        player_entity = self.world.get_player_entity()
         if player_entity and self.dungeon_map:
             p_pos = player_entity.get_component(PositionComponent)
             if p_pos:
                 # 시야 밝히기
                 stats = player_entity.get_component(StatsComponent)
-                vision_range = stats.vision_range if stats else 5
+                # 구역별 시야 보정 적용
+                theme = self._get_map_theme()
+                vision_modifier = theme.get("vision_modifier", 0)
+                vision_range = max(1, (stats.vision_range if stats else 5) + vision_modifier)
                 self.dungeon_map.reveal_tiles(p_pos.x, p_pos.y, radius=vision_range)
 
         # 1. 맵 렌더링 (Left Top - Viewport 적용)
-        map_comp_list = self.world.get_entities_with_components([MapComponent])
         map_height = 0
         if map_comp_list:
             map_comp = map_comp_list[0].get_component(MapComponent)
@@ -2038,26 +2148,36 @@ class Engine:
                         self.renderer.draw_char(screen_x, screen_y, " ", "white")
                         continue
 
-                    # 맵 시인성 개선: 바닥(.)과 인접하지 않은 벽(#)은 공백으로 처리
+                    # 테마별 문자 및 색상 적용
+                    theme = self._get_map_theme()
+                    
+                    # 맵 시인성 개선: 바닥, 문, 계단 등과 인접한 벽(#)만 표시
                     if char == "#":
                         is_visible_wall = False
-                        # 8방향 탐색 (안개 너머 벽까지 계산되지 않도록 방문한 타일만 고려)
+                        # 8방향 탐색
                         for dy in [-1, 0, 1]:
                             for dx in [-1, 0, 1]:
                                 if dx == 0 and dy == 0: continue
                                 nx, ny = world_x + dx, world_y + dy
                                 if 0 <= nx < map_comp.width and 0 <= ny < map_comp.height:
-                                    if map_comp.tiles[ny][nx] == ".":
+                                    # 단순히 빈 공간(.)이 아니라, 벽이 아닌 타일(장식, 문, 계단 등)과 인접하면 표시
+                                    if map_comp.tiles[ny][nx] != "#":
                                         is_visible_wall = True
                                         break
                             if is_visible_wall: break
                         
-                        render_char = "#" if is_visible_wall else " "
-                        color = "brown"
+                        render_char = theme["wall_char"] if is_visible_wall else " "
+                        color = theme["wall_color"]
                     else:
-                        render_char = char
-                        color = "dark_grey" if char == "." else "brown"
-                        if char == ">" or char == "<": color = "cyan"
+                        if char == ">" or char == "<":
+                            render_char = char
+                            color = "cyan"
+                        elif char == ".":
+                            render_char = theme["floor_char"]
+                            color = theme["floor_color"]
+                        else: # 기타 특수 타일이 있다면
+                            render_char = char
+                            color = "brown"
                     
                     self.renderer.draw_char(screen_x, screen_y, render_char, color)
 
@@ -2218,8 +2338,9 @@ class Engine:
                     # Line 1: LV, JOB, FLOOR
                     lv_str = f"LV: {level_comp.level}"
                     job_str = f"JOB: {level_comp.job}"
-                    floor_str = f"FLOOR: {self.current_level}"
-                    self.renderer.draw_text(2, current_y, f"{lv_str:<8} {job_str:<15} {floor_str:<12}", "white")
+                    theme_info = self._get_map_theme()
+                    floor_str = f"FLOOR: {self.current_level} ({theme_info['name']})"
+                    self.renderer.draw_text(2, current_y, f"{lv_str:<8} {job_str:<15} {floor_str:<25}", "white")
                     current_y += 1
 
                     # Line 2: EXP Bar
@@ -2370,7 +2491,25 @@ class Engine:
         else:
             self.renderer.draw_text(0, guide_y, " [MOVE] Arrows | [.] Wait | [I] Inventory | [Space] Attack Mode | [Q] Quit", "green")
         
-        # 6. 인벤토리/상점/신전 팝업 렌더링
+        # 6. 구역 진입 알림 배너 (Center Overlay)
+        if self.banner_timer > 0:
+            self.banner_timer -= 0.05
+            
+            # ASCII Style Banner
+            text = self.banner_text
+            border = "=" * (len(text) + 4)
+            bx = (MAP_VIEW_WIDTH - len(border)) // 2
+            by = MAP_VIEW_HEIGHT // 2
+            
+            color = "gold"
+            if int(self.banner_timer * 4) % 2 == 0:
+                 color = "white"
+                 
+            self.renderer.draw_text(bx, by - 1, border, color)
+            self.renderer.draw_text(bx, by, f"| {text} |", color)
+            self.renderer.draw_text(bx, by + 1, border, color)
+
+        # 7. 인벤토리/상점/신전 팝업 렌더링
         if self.state == GameState.INVENTORY:
             self._render_inventory_popup()
         elif self.state == GameState.SHOP:
