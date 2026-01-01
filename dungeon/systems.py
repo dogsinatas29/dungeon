@@ -1353,7 +1353,7 @@ class CombatSystem(System):
             self._handle_projectile_skill(attacker, effective_skill, event.dx, event.dy)
         elif "AREA" in effective_skill.flags or effective_skill.subtype == "AREA":
             self._handle_area_skill(attacker, effective_skill)
-        elif "AURA" in effective_skill.flags or effective_skill.subtype == "SELF" and "STUN" in effective_skill.flags:
+        elif ("AURA" in effective_skill.flags or effective_skill.subtype == "SELF" and "STUN" in effective_skill.flags) and effective_skill.duration > 0:
             # 지속형 오라 효과 (예: 휠 윈드)
             attacker.add_component(SkillEffectComponent(
                 name=effective_skill.name,
@@ -1398,6 +1398,9 @@ class CombatSystem(System):
                     if dx != 0: positions = [(tx, ty - 2), (tx, ty + 2)]
                     else: positions = [(tx - 2, ty), (tx + 2, ty)]
                 else: positions = [(tx, ty)]
+            elif "MOVING_WALL" in skill.flags: # 전진하는 벽 (화염 파도 등)
+                if dx != 0: positions = [(tx, ty - 1), (tx, ty), (tx, ty + 1)]
+                else: positions = [(tx - 1, ty), (tx, ty), (tx + 1, ty)]
             else: # 일반
                 positions = [(tx, ty)]
 
@@ -1407,8 +1410,11 @@ class CombatSystem(System):
                 if (0 <= px < map_comp.width and 0 <= py < map_comp.height) and map_comp.tiles[py][px] != '#':
                     valid_positions.append((px, py))
             
-            if not valid_positions and dist == 1: # 시작부터 막히면 종료
+            if not valid_positions: # 벽이나 맵 경계에 막히면 종료
                 break
+            
+            # [Teleport Hook] 마지막 유효 좌표 저장 (텔레포트 스킬용)
+            last_tx, last_ty = tx, ty
             
             # 이펙트 생성
             effect_ids = []
@@ -1456,6 +1462,10 @@ class CombatSystem(System):
                             # 여기서는 관통 시 데미지 유지하고 계속 진행하도록 함.
                             self._apply_skill_damage(attacker, target, skill, dx, dy, damage_factor=1.0)
                             hit_target = True
+                            
+                            # [NEW] 체인 라이트닝 처리
+                            if "CHAIN" in skill.flags:
+                                self._handle_chain_lightning(attacker, target, skill, depth=1, hit_targets={target.entity_id})
                     
                     if not is_piercing: # 관통이 아니면 첫 타격 후 소멸
                         break
@@ -1478,6 +1488,74 @@ class CombatSystem(System):
         if hasattr(self.world, 'engine'):
             self.world.engine._render()
 
+        # [NEW] TELEPORT 스킬 처리
+        if "TELEPORT" in skill.flags or skill.id == "TELEPORT" or skill.name == "텔레포트":
+            # 투사체가 도달한 마지막 유효 좌표 확인
+            if 'last_tx' in locals() and 'last_ty' in locals():
+                target_x, target_y = last_tx, last_ty
+                
+                pos = attacker.get_component(PositionComponent)
+                if pos:
+                    pos.x, pos.y = target_x, target_y
+                    self.event_manager.push(MessageEvent(f"차원 문을 통해 이동했습니다! ({target_x}, {target_y})", "cyan"))
+                    self.event_manager.push(SoundEvent("TELEPORT"))
+                    if hasattr(self.world.engine, '_render'):
+                        self.world.engine._render()
+
+    def _handle_chain_lightning(self, attacker, last_target, skill, depth, hit_targets=None):
+        """연쇄 번개: 적중한 대상 주변의 다른 적에게 전이"""
+        if depth >= 5: # 최대 5번 전이
+            return
+            
+        if hit_targets is None:
+            hit_targets = {last_target.entity_id}
+        else:
+            hit_targets.add(last_target.entity_id)
+            
+        l_pos = last_target.get_component(PositionComponent)
+        if not l_pos: return
+        
+        # 주변 적 탐색 (사거리 3 이내)
+        targets = self.world.get_entities_with_components({PositionComponent, StatsComponent})
+        candidates = []
+        for t in targets:
+            # 시전자, 현재 타겟, 그리고 이미 맞은 타겟 제외
+            if t.entity_id == attacker.entity_id or t.entity_id in hit_targets:
+                continue
+            t_pos = t.get_component(PositionComponent)
+            dist = abs(t_pos.x - l_pos.x) + abs(t_pos.y - l_pos.y)
+            if dist <= 3:
+                candidates.append((dist, t.entity_id, t))
+        
+        if not candidates:
+            return
+            
+        # 가장 가까운 적 선택
+        candidates.sort()
+        next_dist, _, next_target = candidates[0]
+        nt_pos = next_target.get_component(PositionComponent)
+        
+        # 시각적 이펙트 (직선 연결)
+        steps = max(abs(nt_pos.x - l_pos.x), abs(nt_pos.y - l_pos.y))
+        for s in range(1, steps + 1):
+            tx = l_pos.x + int((nt_pos.x - l_pos.x) * s / steps)
+            ty = l_pos.y + int((nt_pos.y - l_pos.y) * s / steps)
+            e_id = self.world.create_entity().entity_id
+            self.world.add_component(e_id, PositionComponent(x=tx, y=ty))
+            self.world.add_component(e_id, RenderComponent(char='+', color='light_blue'))
+            self.world.add_component(e_id, EffectComponent(duration=0.1))
+            
+        if hasattr(self.world.engine, '_render'):
+            self.world.engine._render()
+            time.sleep(0.04)
+            
+        # 데미지 적용 (전이될 때마다 20%씩 감소)
+        factor = 0.8 ** depth
+        self._apply_skill_damage(attacker, next_target, skill, 0, 0, damage_factor=factor)
+        
+        # 다음 전이
+        self._handle_chain_lightning(attacker, next_target, skill, depth + 1, hit_targets)
+
     def _handle_explosion(self, attacker, cx, cy, skill):
         """폭발 효과: 지정된 좌표 주변 8방향(3x3)에 피해 및 이펙트 생성"""
         
@@ -1493,11 +1571,12 @@ class CombatSystem(System):
                 self.world.add_component(e_id, RenderComponent(char='#', color='yellow'))
                 self.world.add_component(e_id, EffectComponent(duration=0.2))
                 
-                # 범위 내 모든 엔티티 피해 적용
+                # 범위 내 모든 엔티티 피해 적용 (시전자 제외)
                 targets = [
                     e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
                     if e.get_component(PositionComponent).x == tx 
                     and e.get_component(PositionComponent).y == ty
+                    and e.entity_id != attacker.entity_id
                 ]
                 for target in targets:
                     self._apply_skill_damage(attacker, target, skill, dx, dy)
@@ -1603,6 +1682,32 @@ class CombatSystem(System):
                 else:
                     self.event_manager.push(MessageEvent("차를 충전할 지팡이를 들고 있지 않습니다."))
         
+        elif skill.id == "PHASING" or skill.name == "페이징" or "TELEPORT_RANDOM" in getattr(skill, 'flags', set()):
+            # 랜덤 텔레포트
+            map_entities = self.world.get_entities_with_components({MapComponent})
+            if map_entities:
+                map_comp = map_entities[0].get_component(MapComponent)
+                floor_tiles = []
+                for y in range(map_comp.height):
+                    for x in range(map_comp.width):
+                        if map_comp.tiles[y][x] == '.':
+                            # 현재 위치 제외
+                            pos = attacker.get_component(PositionComponent)
+                            if pos and (pos.x != x or pos.y != y):
+                                floor_tiles.append((x, y))
+                
+                if floor_tiles:
+                    tx, ty = random.choice(floor_tiles)
+                    pos = attacker.get_component(PositionComponent)
+                    if pos:
+                        pos.x, pos.y = tx, ty
+                        self.event_manager.push(MessageEvent(f"시공간이 뒤틀리며 무작위 위치로 이동했습니다! ({tx}, {ty})", "cyan"))
+                        self.event_manager.push(SoundEvent("TELEPORT"))
+                        if hasattr(self.world.engine, '_render'):
+                            self.world.engine._render()
+                else:
+                    self.event_manager.push(MessageEvent("이동할 수 있는 빈 공간이 없습니다."))
+
         elif skill.type == "RECOVERY":
             stats = attacker.get_component(StatsComponent)
             old_hp = stats.current_hp
@@ -1630,8 +1735,6 @@ class CombatSystem(System):
                 # Provocation Range (Already scaled: Base 15 + (Skill Level - 1))
                 provoke_range = getattr(skill, 'range', 15)
                 
-                # [Update] Add Aura Component for Continuous Taunt
-                # This ensures monsters entering range ARE provoked, and persistence is guaranteed.
                 aura = SkillEffectComponent(name="RAGE_AURA", duration=duration, damage=0, radius=provoke_range, effect_type="AURA")
                 attacker.add_component(aura)
                 
@@ -1648,10 +1751,56 @@ class CombatSystem(System):
                             if ai.behavior != AIComponent.CHASE:
                                 ai.behavior = AIComponent.CHASE
                                 provoked += 1
-                                t.add_component(EffectComponent(duration=1))
-                    if provoked > 0:
-                        self.event_manager.push(MessageEvent(f"주변 {provoked}마리의 적이 격분하여 달려듭니다!", "red"))
-            
+
+        elif skill.id == "FLASH" or skill.name == "플래시":
+            # 주변 즉발 폭발 (3x3)
+            pos = attacker.get_component(PositionComponent)
+            if pos:
+                self.event_manager.push(MessageEvent(f"'{skill.name}'!! 번개 폭발이 주변을 뒤덮습니다!"))
+                self.event_manager.push(SoundEvent("MAGIC_BOLT"))
+                self._handle_explosion(attacker, pos.x, pos.y, skill)
+
+        elif skill.id == "NOVA" or skill.name == "노바" or "NOVA" in getattr(skill, 'flags', set()):
+            # 시전자 중심 원형 파동 공격
+            pos = attacker.get_component(PositionComponent)
+            if pos:
+                # 노바의 사거리는 레벨에 따라 확장 (기본 3 ~ Lv255 10+)
+                # CSV에는 0으로 되어 있으므로 기본값 설정
+                base_range = skill.range if skill.range > 0 else 3
+                # 레벨당 사거리 보정은 handle_skill_use_event에서 이미 처리됨 (scaled_range)
+                radius = skill.range if skill.range > 0 else 3
+                
+                self.event_manager.push(MessageEvent(f"'{skill.name}'!! 서늘한 번개 파동이 퍼져나갑니다!"))
+                self.event_manager.push(SoundEvent("MAGIC_BOLT"))
+                
+                # 파동 연출 (거리 1부터 radius까지 확장)
+                for r in range(1, radius + 1):
+                    for dy in range(-r, r + 1):
+                        for dx in range(-r, r + 1):
+                            # 원형 판정 (맨해튼 거리 또는 유클리드 근사)
+                            if r-1 < abs(dx) + abs(dy) <= r:
+                                tx, ty = pos.x + dx, pos.y + dy
+                                
+                                # 이펙트 생성
+                                e_id = self.world.create_entity().entity_id
+                                self.world.add_component(e_id, PositionComponent(x=tx, y=ty))
+                                self.world.add_component(e_id, RenderComponent(char='O', color='light_blue'))
+                                self.world.add_component(e_id, EffectComponent(duration=0.1))
+                                
+                                # 데미지 적용
+                                targets = [
+                                    e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                                    if e.get_component(PositionComponent).x == tx 
+                                    and e.get_component(PositionComponent).y == ty
+                                    and e.entity_id != attacker.entity_id
+                                ]
+                                for target in targets:
+                                    self._apply_skill_damage(attacker, target, skill, dx, dy)
+                    
+                    if hasattr(self.world.engine, '_render'):
+                        self.world.engine._render()
+                        time.sleep(0.05)
+
             # 시각 효과 (초록색 반짝임)
             pos = attacker.get_component(PositionComponent)
             if pos:

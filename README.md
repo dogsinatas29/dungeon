@@ -73,6 +73,17 @@ Diablo like real time rogue for terminal
 - **Sacrifice System**: Risk mitigation and special upgrades (Blood for success rate, Feather for protection, Rune for reroll, Crystal for rarity upgrade).
 - **Destruction Mechanic**: Shrines are now powerful, single-use objects that are destroyed after one interaction.
 
+### 2. Skill System Overhaul (Phase 1-3)
+- **Phase 1 (Utility)**: Implemented actual logic for `REPAIR`, `DISARM`, `RECHARGE`, and `MANA_SHIELD`.
+- **Phase 2 (Movement)**: Implemented `PHASING` (random teleport) and `TELEPORT` (targeted movement).
+- **Phase 3 (AoE Magic)**: Implemented `FLASH`, `NOVA`, `CHAIN_LIGHTNING`, and `FLAME_WAVE` with advanced hit detection and chain logic.
+
+### 3. Engine & UI Improvements
+- **Large Map Support**: Fixed camera rendering bugs on 99-floor sized maps.
+- **Stability**: Resolved multiple `UnboundLocalError` issues in combat and rendering systems.
+- **Visuals**: Added particle effects for different dungeon themes (Caves, Hell).
+- **Sandbox**: Added floor jumping (F/B/J) and gold cheat (G) commands for testing.
+
 ### 2. Hack & Slash Overhaul
 - **Monster Nests**: Increased spawn density and grouping for a more intense combat experience.
 - **Loot Explosion**: Defeating monsters now triggers satisfying item drops and visual feedback.
@@ -85,32 +96,22 @@ Diablo like real time rogue for terminal
 ## TODO List
 
 ### High Priority
-- [/] **Diablo 1 Boss System**:
-  - [x] **Boss Summoning Mechanic** (Desperate Call at 50% HP)
-  - [x] **Aggressive Boss AI** (All bosses use CHASE mode)
-  - [x] **Final Boss: Diablo** (Epic encounter on Floor 99)
-  - [ ] Other Unique Bosses (Butcher, Leoric, etc.)
-  - [ ] Boss dialogue/bark system ("Ah... Fresh Meat!")
-  - [ ] Guaranteed unique item drops per boss
-  - [x] Hand-crafted boss maps (Reached goal for Floor 99)
-- [x] **Staff Combat System** - dual-mode weapon mechanics:
-  - [x] Physical bash attack (melee, uses durability, STR-based damage)
-  - [x] Magic Charge mode (consumes staff charges instead of MP for Sorcerers)
-  - [x] Random spell assignment to staves
-  - [ ] 'S' key to activate spell mode + directional casting (currently integrated into quickslots)
-- [ ] **Special Spell Effects** (12 spells need implementation):
-  - [ ] Holy Bolt - bonus damage vs undead
-  - [ ] Inferno - persistent flame wall
-  - [ ] Stone Curse - petrification effect
-  - [ ] Phasing - random teleport
-  - [ ] Chain Lightning - chain attack
-  - [ ] Flame Wave - fire wave attack
-  - [ ] Guardian - summon turret
-  - [ ] Teleport - directional teleport
-  - [ ] Mana Shield - absorb damage with mana
-  - [ ] Nova - omnidirectional attack
-  - [ ] Golem - summon golem
-  - [ ] Apocalypse - screen-wide attack
+- [x] **Diablo 1 Boss System**:
+    - [x] **Boss Summoning Mechanic** (Desperate Call at 50% HP)
+    - [x] **Aggressive Boss AI** (All bosses use CHASE mode)
+    - [x] **Final Boss: Diablo** (Epic encounter on Floor 99)
+    - [ ] Other Unique Bosses (Butcher, Leoric, etc.)
+    - [ ] Boss dialogue/bark system ("Ah... Fresh Meat!")
+    - [ ] Guaranteed unique item drops per boss
+    - [x] Hand-crafted boss maps (Reached goal for Floor 99)
+- [x] **Skill System Implementation (Phase 1-3)**:
+    - [x] Utility skills (Repair, Disarm, Recharge)
+    - [x] Survival skills (Mana Shield, Phasing, Teleport)
+    - [x] Combat magic (Flash, Nova, Chain Lightning, Flame Wave)
+- [ ] **Skill System Implementation (Phase 4)**:
+    - [ ] Guardian (Hydra) - summon turret
+    - [ ] Golem - summon golem
+    - [ ] Apocalypse - screen-wide attack
 
 ### Medium Priority
 - [ ] **Item Drop System Overhaul**:
@@ -274,17 +275,9 @@ This project is open source and available for educational purposes.
 ### Unimplemented Skills (Known Issues)
 Currently, definitions exist in `skills.csv`, but the following skills lack full system logic implementation:
 
-1. **REPAIR** (Warrior Trait): Operates as HP Recovery; equipment durability repair logic missing.
-2. **DISARM** (Rogue Trait): Operates as HP Recovery; trap removal logic missing.
-3. **RECHARGE** (Sorcerer Trait): Operates as HP Recovery; staff charge restoration logic missing.
-4. **MANA_SHIELD** (Sorcerer): Mana damage absorption formula missing.
-5. **PHASING**: Random teleportation logic missing.
-6. **TELEPORT**: Targeted teleportation logic missing.
-7. **GOLEM**: Summon AI and entity creation logic missing.
-8. **GUARDIAN** (Hydra): Turret summoning and attack logic missing.
-9. **INFERNO**: Continuous damage projectile logic missing.
-10. **FLASH**: Area of Effect damage logic missing (visual only).
-11. **NOVA**: Expanding wave damage logic missing.
-12. **CHAIN_LIGHTNING**: Chain hit logic missing.
-13. **FLAME_WAVE**: Moving wall projectile logic missing.
-14. **APOCALYPSE**: Screen-wide attack logic missing.
+1. **GUARDIAN** (Hydra): Turret summoning and attack logic missing.
+2. **GOLEM**: Summon AI and entity creation logic missing.
+3. **APOCALYPSE**: Screen-wide attack logic missing.
+4. **INFERNO**: Continuous damage projectile logic missing.
+5. **HOLY BOLT**: Bonus damage vs undead logic missing.
+6. **STONE CURSE**: Petrification effect logic missing.
