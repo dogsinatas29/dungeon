@@ -1,7 +1,45 @@
+# Python
 __pycache__/
 *.pyc
+*.py[cod]
+*$py.class
 .venv/
+
+# IDE/Tools
 .gemini/
+
+# Project Specific
 game_data/
 *.log
+api_usage_log.json
+bug.md
+bug.txt
+history.txt
+작업방식.txt
+추가사항.txt1
+
+# Testing & Verification
+test_sandbox.py
+verify_*.py
+debug_*.py
+sandbox_test.py
+test_*.py
+
+# Media & Archives
+*.zip
+*.rar
 *.mp4
+!skill_test.mp4
+*.png
+!screen_shot.png
+screenshots/
+
+# Misc
+package-lock.json
+main.py
+back/
+docs/
+*.old
+events/
+tmp/
+out/
