@@ -3777,6 +3777,9 @@ class BossSystem(System):
 
 class InteractionSystem(System):
     """상호작용 이벤트(InteractEvent)를 처리하는 시스템"""
+    def process(self):
+        pass # Event-driven system
+
     def handle_interact_event(self, event):
         entity_id = event.who
         target_id = event.target
