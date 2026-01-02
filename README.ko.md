@@ -13,6 +13,24 @@ Diablo like real time rogue for terminal
 
 **상태**: 현재 밸런스 테스트 진행 중...
 
+## 설치 및 실행
+
+1. **저장소 복제**
+   ```bash
+   git clone https://github.com/dogsinatas29/dungeon.git
+   cd dungeon
+   ```
+
+2. **의존성 패키지 설치**
+   ```bash
+   pip install readchar
+   ```
+
+3. **게임 실행**
+   ```bash
+   python3 Start.py
+   ```
+
 ## 요구 사항
 - **오디오**: 효과음 및 BGM 재생을 위해 `ffmpeg` 또는 `aplay` (ALSA)가 필요합니다.
     - Ubuntu/Debian: `sudo apt install ffmpeg` 또는 `sudo apt install alsa-utils`

@@ -12,6 +12,24 @@ Diablo-like real-time roguelike engine for terminal
 
 **Status**: Currently undergoing balance testing.
 
+## Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/dogsinatas29/dungeon.git
+   cd dungeon
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pip install readchar
+   ```
+
+3. **Run the game**
+   ```bash
+   python3 Start.py
+   ```
+
 ## Requirements
 - **Audio**: `ffmpeg` or `aplay` (ALSA) is required for sound effects and BGM.
     - Ubuntu/Debian: `sudo apt install ffmpeg` or `sudo apt install alsa-utils`
