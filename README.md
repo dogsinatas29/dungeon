@@ -4,7 +4,7 @@
 
 Diablo-like real-time roguelike engine for terminal
 
-![Gameplay Screenshot](screenshots/gameplay_test.png)
+![Gameplay Screenshot](dungeon/screenshots/gameplay_test.png)
 
 ### [Watch Gameplay Video](https://youtu.be/o8M7aBofsvQ)
 
