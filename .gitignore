@@ -32,6 +32,7 @@ test_*.py
 !skill_test.mp4
 *.png
 !screen_shot.png
+!**/assets/title_screen.png
 screenshots/
 
 # Misc
