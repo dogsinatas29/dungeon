@@ -1777,25 +1777,23 @@ class CombatSystem(System):
                     return
                 a_stats.current_hp -= cost_val
                 resource_used = f"HP -{cost_val}"
-            elif "COST_STM" in s_flags:
-                if a_stats.current_stamina < cost_val:
-                    self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
+            elif "COST_STM" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "STAMINA"):
+                # [Balance] STM 삭제 -> HP + MP 소모로 변경
+                hp_cost = int(cost_val * 0.5) # 절반은 HP
+                mp_cost = int(cost_val * 0.5) # 절반은 MP
+                if hp_cost < 1: hp_cost = 1
+                if mp_cost < 1: mp_cost = 1
+                
+                if a_stats.current_hp <= hp_cost:
+                    self.event_manager.push(MessageEvent("체력이 부족하여 기술을 사용할 수 없습니다!"))
                     return
-                a_stats.current_stamina -= cost_val
-                resource_used = f"STM -{cost_val}"
-            elif mp_scaling: # Re-use check
-                if a_stats.current_mp < cost_val:
-                    # 상세 정보 제공 (현재/필요)
-                    self.event_manager.push(MessageEvent(f"마력이 부족합니다! (필요: {cost_val}, 현재: {int(a_stats.current_mp)})"))
+                if a_stats.current_mp < mp_cost:
+                    self.event_manager.push(MessageEvent("마력이 부족하여 기술을 사용할 수 없습니다!"))
                     return
-                a_stats.current_mp -= cost_val
-                resource_used = f"MP -{cost_val}"
-            elif hasattr(skill, 'cost_type') and skill.cost_type == "STAMINA":
-                if a_stats.current_stamina < cost_val:
-                    self.event_manager.push(MessageEvent("스태미나가 부족합니다!"))
-                    return
-                a_stats.current_stamina -= cost_val
-                resource_used = f"STM -{cost_val}"
+                    
+                a_stats.current_hp -= hp_cost
+                a_stats.current_mp -= mp_cost
+                resource_used = f"HP -{hp_cost}, MP -{mp_cost}"
 
         # [Buff] 능력치 버프 스킬 처리
         if any(v != 0 for v in [getattr(skill, 'str_bonus', 0), getattr(skill, 'mag_bonus', 0), 

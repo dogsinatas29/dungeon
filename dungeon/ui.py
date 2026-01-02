@@ -577,8 +577,9 @@ class ConsoleUI:
         
         # 2. 플레이어 상태
         add_line(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}\n")
-        add_line(f" 이름: {player_stats.get('name', 'N/A'):<10} | 레벨: {player_stats.get('level', 1)}\n")
-        add_line(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<10} | MP: {player_stats.get('mp', 0)} | 골드: {player_stats.get('gold', 0)}G\n")
+        job_display = player_stats.get('job', 'Adventurer')
+        add_line(f" Name : {player_stats.get('name', 'N/A')} ({job_display})\n")
+        add_line(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<15} | MP: {COLOR_MAP['blue']}{player_stats.get('mp', 0)}/{player_stats.get('max_mp', 0)}{COLOR_MAP['reset']:<15} | 골드: {player_stats.get('gold', 0)}G\n")
         
         # 3. 메시지 로그
         add_line(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}\n")
@@ -608,8 +609,12 @@ class ConsoleUI:
         
         print("\n--- 장비 --- ")
         if player_equipped_items:
-            for slot, item_id in player_equipped_items.items():
-                print(f"  {slot}: {item_id}")
+            for slot, item_obj in player_equipped_items.items():
+                # item_obj가 문자열(ID)일 수도 있고 객체일 수도 있음. 객체라면 이름 사용
+                display_name = item_obj
+                if hasattr(item_obj, 'name'):
+                    display_name = item_obj.name
+                print(f"  {slot}: {display_name}")
         else:
             print("  장착된 아이템 없음")
 

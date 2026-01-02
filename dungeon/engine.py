@@ -587,13 +587,83 @@ class Engine:
                     
                 self._spawn_monster_at(mx, my, pool=pool)
 
-        # [Hack & Slash] Increase corridor spawn (15% chance, was 5%)
+        # [Hack & Slash] Corridors
         for cx, cy in dungeon_map.corridors:
             if random.random() < 0.15:
-                # [Fix] 시작 지점 근처(반경 20칸)는 스폰 제외 - 안전 구역 확대
-                if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 400:  # 20^2 = 400
-                    continue
+                if (cx - dungeon_map.start_x)**2 + (cy - dungeon_map.start_y)**2 < 400: continue
                 self._spawn_monster_at(cx, cy, pool=pool)
+
+        # [Balance] Monster Density Minimum Guarantee
+        # 1-25: 40, 26-50: 60, 51-75: 80, 76-99: 100
+        current_floor = self.current_level
+        target_count = 40
+        if current_floor >= 76: target_count = 100
+        elif current_floor >= 51: target_count = 80
+        elif current_floor >= 26: target_count = 60
+        
+        # Count existing monsters
+        existing_monsters = len(self.world.get_entities_with_components({MonsterComponent}))
+        
+        # Fill remaining
+        attempts = 0
+        while existing_monsters < target_count and attempts < 200:
+            attempts += 1
+            # Random room spawn
+            room = random.choice(dungeon_map.rooms)
+            if safe_room_index is not None and dungeon_map.rooms.index(room) == safe_room_index: continue
+            
+            rx = random.randint(room.x1 + 1, room.x2 - 1)
+            ry = random.randint(room.y1 + 1, room.y2 - 1)
+            
+            if (rx - dungeon_map.start_x)**2 + (ry - dungeon_map.start_y)**2 < 400: continue
+            
+            # Check occupancy
+            occupied = False
+            for e in self.world.get_entities_with_components({PositionComponent}):
+                p = e.get_component(PositionComponent)
+                if p.x == rx and p.y == ry:
+                    occupied = True
+                    break
+            if occupied: continue
+            
+            self._spawn_monster_at(rx, ry, pool=pool)
+            existing_monsters += 1
+
+        # [Balance] Monster Density Minimum Guarantee
+        # 1-25: 40, 26-50: 60, 51-75: 80, 76-99: 100
+        current_floor = self.current_level
+        target_count = 40
+        if current_floor >= 76: target_count = 100
+        elif current_floor >= 51: target_count = 80
+        elif current_floor >= 26: target_count = 60
+        
+        # Count existing monsters
+        existing_monsters = len(self.world.get_entities_with_components({MonsterComponent}))
+        
+        # Fill remaining
+        attempts = 0
+        while existing_monsters < target_count and attempts < 200:
+            attempts += 1
+            # Random room spawn
+            room = random.choice(dungeon_map.rooms)
+            if safe_room_index is not None and dungeon_map.rooms.index(room) == safe_room_index: continue
+            
+            rx = random.randint(room.x1 + 1, room.x2 - 1)
+            ry = random.randint(room.y1 + 1, room.y2 - 1)
+            
+            if (rx - dungeon_map.start_x)**2 + (ry - dungeon_map.start_y)**2 < 400: continue
+            
+            # Check occupancy
+            occupied = False
+            for e in self.world.get_entities_with_components({PositionComponent}):
+                p = e.get_component(PositionComponent)
+                if p.x == rx and p.y == ry:
+                    occupied = True
+                    break
+            if occupied: continue
+            
+            self._spawn_monster_at(rx, ry, pool=pool)
+            existing_monsters += 1
 
 
     def _spawn_boss_room_features(self, dungeon_map):
@@ -667,11 +737,16 @@ class Engine:
         # 보스는 항상 앵그리 모드 (CHASE)
         self.world.add_component(boss.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=15))
         
-        hp = boss_def.hp
-        attack = boss_def.attack
+        hp = int(boss_def.hp * 2.0) # [Balance] Boss Buff (200% Base Stats)
+        attack = int(boss_def.attack * 2.0)
         if is_summoned:
-            hp = int(hp * 0.5)
-            attack = int(attack * 0.7) # 공격력은 약간 덜 깎음
+            # [Balance] Summoned Boss Scaling
+            # Prevent one-shot by enforcing minimum HP based on current floor
+            floor_scaling = self.current_level * 1500 # Increased scaling
+            base_hp = hp * 0.5
+            hp = int(max(base_hp, floor_scaling))
+            
+            attack = int(attack * 0.8) # 공격력 80%
 
         stats = StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=boss_def.defense)
         stats.flags.update(boss_def.flags)
@@ -1850,8 +1925,15 @@ class Engine:
                              if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
         elif self.inventory_category_index == 1: # 장비
             # Include all equippable items: WEAPON, ARMOR, SHIELD, ACCESSORY
+            # 1. From Inventory
             filtered_items = [(id, data) for id, data in inv_comp.items.items() 
                              if data['item'].type in ['WEAPON', 'ARMOR', 'SHIELD', 'ACCESSORY']]
+            
+            # 2. From Equipped Slots (UI fix: ensure equipped items are visible)
+            for slot, item in inv_comp.equipped.items():
+                if item:
+                    if hasattr(item, 'type'):
+                         filtered_items.append((item.ID, {'item': item, 'qty': 1}))
         elif self.inventory_category_index == 2: # 스크롤
             filtered_items = [(id, data) for id, data in inv_comp.items.items() 
                              if data['item'].type == 'SCROLL']
@@ -2989,7 +3071,9 @@ class Engine:
             
             if stats:
                 # Name
-                self.renderer.draw_text(2, current_y, f"NAME: {self.player_name}", "gold")
+                # Name (Updated Format)
+                job_name = level_comp.job if level_comp else "N/A"
+                self.renderer.draw_text(2, current_y, f"Name : {self.player_name} ({job_name})", "gold")
                 current_y += 1
                 
                 # HP Bar
@@ -3004,26 +3088,15 @@ class Engine:
                 current_y += 1
                 current_y += 1
                 
-                # MP Bar (Removed as per user request)
-                # mp_per = max(0, min(1, stats.current_mp / stats.max_mp)) if stats.max_mp > 0 else 0
-                # mp_filled = int(mp_per * 15)
-                # self.renderer.draw_text(2, current_y, "MP  :", "white")
-                # self.renderer.draw_text(8, current_y, "[", "white")
-                # self.renderer.draw_text(9, current_y, "=" * mp_filled, "blue")
-                # self.renderer.draw_text(9 + mp_filled, current_y, "-" * (15 - mp_filled), "dark_grey")
-                # self.renderer.draw_text(9 + 15, current_y, "]", "white")
-                # self.renderer.draw_text(26, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
-                # current_y += 1
-
-                # STM Bar
-                stm_per = max(0, min(1, stats.current_stamina / stats.max_stamina)) if stats.max_stamina > 0 else 0
-                stm_filled = int(stm_per * 15)
-                self.renderer.draw_text(2, current_y, "STM :", "white")
+                # MP Bar (Restored)
+                mp_per = max(0, min(1, stats.current_mp / stats.max_mp)) if stats.max_mp > 0 else 0
+                mp_filled = int(mp_per * 15)
+                self.renderer.draw_text(2, current_y, "MP  :", "white")
                 self.renderer.draw_text(8, current_y, "[", "white")
-                self.renderer.draw_text(9, current_y, "=" * stm_filled, "green")
-                self.renderer.draw_text(9 + stm_filled, current_y, "-" * (15 - stm_filled), "dark_grey")
+                self.renderer.draw_text(9, current_y, "=" * mp_filled, "blue")
+                self.renderer.draw_text(9 + mp_filled, current_y, "-" * (15 - mp_filled), "dark_grey")
                 self.renderer.draw_text(9 + 15, current_y, "]", "white")
-                self.renderer.draw_text(26, current_y, f"{int(stats.current_stamina)}/{int(stats.max_stamina)}", "white")
+                self.renderer.draw_text(26, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
                 current_y += 1
                 
                 # Level info
