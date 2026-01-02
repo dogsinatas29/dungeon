@@ -1,8 +1,8 @@
-# Dungeon Crawl
+![Dungeon Crawl Title Screen](assets/title_screen.png)
 
 **English** | [한국어](README.ko.md)
 
-Diablo like real time rogue for terminal
+Diablo-like real-time roguelike engine for terminal
 
 ![Gameplay Screenshot](screenshots/gameplay_test.png)
 
@@ -66,6 +66,36 @@ Diablo like real time rogue for terminal
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
 
+## Recent Updates (2026-01-02)
+
+### 1. Boss Room Redesign & Interaction System
+- **Boss Room Layout**: Three-room structure (Antechamber, Lever Room, Boss Room)
+- **Lever Mechanism**: Lever opens locked boss door and triggers trap (20 damage)
+- **InteractionSystem**: New ECS system for handling switch/lever interactions
+- **Components**: Added `DoorComponent`, `BlockMapComponent`, `SwitchComponent` with door linking
+
+### 2. Trap System Refactoring
+- **Modular Design**: Extracted `TrapSystem` to `trap_manager.py` module
+- **CSV Data Management**: All trap data now in `data/traps.csv`
+- **TrapDefinition Class**: Structured trap data with validation
+- **8 Trap Types**: Arrow, Spike, Lightning, Gas, Nova, Fire, Ice, Teleport
+
+### 3. Level-Based Trap System
+- **MinLevel Requirement**: Traps spawn based on floor level (Lv1-50)
+- **Guaranteed Placement**: Fixed trap count per floor (default: 5)
+- **Level Filtering**: Only appropriate traps spawn on each floor
+  - Floor 1: Arrow traps only
+  - Floor 10: Arrow, Spike, Lightning traps
+  - Floor 50: All trap types available
+- **Weighted Selection**: Higher-level traps are rarer (lower weight)
+- **Multiple Locations**: Traps spawn in rooms (70%) and corridors (30%)
+
+### 4. Sandbox Testing Environment
+- **DISARM Skill Books**: 30 copies added to test character
+- **Trap Showcase**: All 8 trap types placed in starting room
+- **Visible Traps**: Test mode shows all traps for easy testing
+
+
 ## Recent Updates (2025-12-29)
 
 ### 1. Advanced Shrine & Enhancement System
@@ -115,8 +145,8 @@ Diablo like real time rogue for terminal
     - [x] **Boss Summoning Mechanic** (Desperate Call at 50% HP)
     - [x] **Aggressive Boss AI** (All bosses use CHASE mode)
     - [x] **Final Boss: Diablo** (Epic encounter on Floor 99)
-    - [ ] Other Unique Bosses (Butcher, Leoric, etc.)
-    - [ ] Boss dialogue/bark system ("Ah... Fresh Meat!")
+    - [x] Other Unique Bosses (Butcher, Leoric, Diablo)
+    - [x] Boss dialogue/bark system ("Ah... Fresh Meat!")
     - [ ] Guaranteed unique item drops per boss
     - [x] Hand-crafted boss maps (Reached goal for Floor 99)
 - [x] **Skill System Implementation (Phase 1-3)**:
@@ -277,7 +307,7 @@ dungeon/
 │   ├── items.py         # Item definitions and logic
 │   ├── inventory.py     # Inventory management
 │   ├── skills.py        # Skill system
-│   ├── trap.py          # Trap system
+│   ├── trap_manager.py  # Trap system (refactored)
 │   ├── shrine_methods.py # Shrine interactions
 │   ├── events.py        # Event definition and handling
 │   ├── constants.py     # Game constants
@@ -291,6 +321,7 @@ dungeon/
 │   ├── Boss.csv         # Boss stats
 │   ├── classes.csv      # Character class definitions
 │   ├── maps.csv         # Map generation parameters
+│   ├── traps.csv        # Trap definitions
 │   ├── prefixes.json    # Magic item prefixes
 │   └── suffixes.json    # Magic item suffixes
 ├── game_data/           # Save files (JSON)

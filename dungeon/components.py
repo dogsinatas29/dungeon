@@ -359,13 +359,27 @@ class TrapComponent(Component):
     GAS = "GAS"
     FIREBALL = "FIREBALL_LAUNCHER"
     
-    def __init__(self, trap_type: str = "ARROW", damage_min: int = 10, damage_max: int = 20, detection_difficulty: int = 10, is_hidden: bool = True, target_selection: str = "TRIGGERER", effect: str = None, is_triggered: bool = False):
+    def __init__(self, trap_type: str = "ARROW", damage_min: int = 10, damage_max: int = 20, 
+                 detection_difficulty: int = 10, is_hidden: bool = True, 
+                 target_selection: str = "TRIGGERER", effect: str = None, 
+                 is_triggered: bool = False, trigger_type: str = "STEP_ON",
+                 direction: str = None, detection_range: int = 5,
+                 linked_trap_pos: tuple = None, auto_reset: bool = False):
         self.trap_type = trap_type
         self.damage_min = damage_min
         self.damage_max = damage_max
         self.detection_difficulty = detection_difficulty
         self.is_hidden = is_hidden
         self.target_selection = target_selection # "TRIGGERER", "NEAREST", "AREA"
+        
+        # Advanced trap mechanics
+        self.trigger_type = trigger_type  # "STEP_ON", "PROXIMITY", "REMOTE"
+        self.direction = direction  # "NORTH", "SOUTH", "EAST", "WEST" (for wall traps)
+        self.detection_range = detection_range  # Range for proximity detection
+        self.linked_trap_pos = linked_trap_pos  # (x, y) for pressure plates
+        self.auto_reset = auto_reset  # Auto-reset for pressure plates
+        self.reset_delay = 2.0  # Reset delay in seconds
+        self.last_trigger_time = 0.0  # Last trigger timestamp
         
         # Legacy/Compatibility
         self.damage = (damage_min + damage_max) // 2
@@ -409,6 +423,13 @@ class PetrifiedComponent(Component):
         self.duration = duration
         self.stacks = stacks
         self.max_stacks = 3
+
+class CurseComponent(Component):
+    """저주 상태: 공격력/방어력 감소"""
+    def __init__(self, duration: float = 30.0, attack_penalty: int = 5, defense_penalty: int = 5):
+        self.duration = duration
+        self.attack_penalty = attack_penalty
+        self.defense_penalty = defense_penalty
 
 class CombatTrackerComponent(Component):
     """전투 추적 컴포넌트 - HP 바 표시용"""
@@ -466,11 +487,15 @@ class ColliderComponent(Component):
         self.is_solid = is_solid
 
 class DoorComponent(Component):
-    """문 상태 (열림/닫힘, 잠김 여부)"""
-    def __init__(self, is_open: bool = False, is_locked: bool = False, key_id: str = None):
+    """문 상태 (열림/닫힘, 잠김 여부, 함정)"""
+    def __init__(self, is_open: bool = False, is_locked: bool = False, key_id: str = None,
+                 has_trap: bool = False, trap_type: str = None):
         self.is_open = is_open
         self.is_locked = is_locked
         self.key_id = key_id
+        # Door trap fields
+        self.has_trap = has_trap  # 문에 함정이 있는지
+        self.trap_type = trap_type  # "POISON_NEEDLE", "EXPLOSION", "CURSE", "GAS"
 
 class KeyComponent(Component):
     """열쇠 정보"""

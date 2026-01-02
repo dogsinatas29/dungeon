@@ -2184,22 +2184,78 @@ class CombatSystem(System):
         elif skill.id == "DISARM" or skill.name == "함정 해제":
             # 주변 함정 제거
             pos = attacker.get_component(PositionComponent)
-            if pos:
+            inv = attacker.get_component(InventoryComponent)
+            
+            if pos and inv:
+                skill_name = skill.name if skill.name else "함정 해제"
+                level = inv.skill_levels.get(skill_name, 1)
+                
+                # 1~10레벨 기준으로 선형 스케일링 (10레벨 이상은 최대치 고정)
+                clamped_lv = max(1, min(10, level))
+                
+                # 성공 확률: 1레벨(80%) ~ 10레벨(95%)
+                success_rate = 0.80 + (clamped_lv - 1) * (0.15 / 9.0)
+                # 데미지 감쇄: 1레벨(10%) ~ 10레벨(50%)
+                mitigation = 0.10 + (clamped_lv - 1) * (0.40 / 9.0)
+                
                 trap_entities = self.world.get_entities_with_components({TrapComponent, PositionComponent})
                 removed_count = 0
-                for trap in trap_entities:
-                    t_pos = trap.get_component(PositionComponent)
-                    if abs(t_pos.x - pos.x) <= 3 and abs(t_pos.y - pos.y) <= 3:
-                        # 함정 제거 (엔티티 삭제 또는 컴포넌트 제거)
-                        # 여기서는 함정 엔티티 자체를 삭제 (대부분 함정은 맵 장식 엔티티)
-                        self.world.delete_entity(trap.entity_id)
-                        removed_count += 1
+                triggered_count = 0
                 
-                if removed_count > 0:
-                    self.event_manager.push(MessageEvent(f"주변의 함정 {removed_count}개를 안전하게 제거했습니다!", "yellow"))
+                # TrapSystem 참조 가져오기 (원격 발동 및 발사체 발동용)
+                from .trap_manager import TrapSystem
+                trap_system = self.world.get_system(TrapSystem)
+                
+                # 주변 3x3 범위 함정 확인
+                for trap_ent in list(trap_entities):
+                    t_pos = trap_ent.get_component(PositionComponent)
+                    if abs(t_pos.x - pos.x) <= 2 and abs(t_pos.y - pos.y) <= 2:
+                        # 확률 체크
+                        if random.random() < success_rate:
+                            # 성공: 함정 안전 제거
+                            self.world.delete_entity(trap_ent.entity_id)
+                            removed_count += 1
+                        else:
+                            # 실패: 함정 발동 (감쇄된 데미지)
+                            triggered_count += 1
+                            if trap_system:
+                                tc = trap_ent.get_component(TrapComponent)
+                                if tc.trigger_type == "PROXIMITY":
+                                    trap_system._fire_projectile(trap_ent, attacker, damage_multiplier=(1.0 - mitigation))
+                                else:
+                                    trap_system._trigger_trap(attacker, trap_ent, damage_multiplier=(1.0 - mitigation))
+                            else:
+                                # fallback: 그냥 제거
+                                self.world.delete_entity(trap_ent.entity_id)
+                
+                if removed_count > 0 or triggered_count > 0:
+                    if removed_count > 0:
+                        # 경험치 지급 (함정당 5~15 XP)
+                        total_xp = removed_count * random.randint(5, 15)
+                        level_comp = attacker.get_component(LevelComponent)
+                        if level_comp:
+                            level_comp.exp += total_xp
+                        
+                        # 아이템 수거 확률 (30% 확률로 화살 또는 기계 부품)
+                        loot_msg = ""
+                        if random.random() < 0.3:
+                            from .data_manager import load_item_definitions
+                            item_defs = load_item_definitions()
+                            loot_id = random.choice(["화살", "기계 부품"])
+                            loot_def = next((d for d in item_defs.values() if d.name == loot_id), None)
+                            
+                            if loot_def:
+                                inv.add_item(loot_def, 1)
+                                loot_msg = f" (수거: {loot_id})"
+                        
+                        self.event_manager.push(MessageEvent(f"함정 {removed_count}개를 안전하게 해제했습니다! (+{total_xp}XP){loot_msg} (성공률 {int(success_rate*100)}%)", "green"))
+                    
+                    if triggered_count > 0:
+                        self.event_manager.push(MessageEvent(f"해제에 실패하여 함정 {triggered_count}개가 발동되었습니다! (피해 감쇄 {int(mitigation*100)}%)", "yellow"))
+                    
                     self.event_manager.push(SoundEvent("UNLOCK"))
                 else:
-                    self.event_manager.push(MessageEvent("주변에 함정이 발견되지 않았습니다."))
+                    self.event_manager.push(MessageEvent("주변에 해제할 함정이 발견되지 않았습니다.", "white"))
 
         elif skill.id == "RECHARGE" or skill.name == "충전":
             # 지팡이 차지 회복
@@ -3729,9 +3785,17 @@ class InteractionSystem(System):
         target = self.world.get_entity(target_id)
         if not target: return
         
+        entity = self.world.get_entity(entity_id)
+        
         # 1. 스위치(레버/문) 상호작용
         switch = target.get_component(SwitchComponent)
         if switch and action == "TOGGLE":
+            # 문 함정 체크 (문을 열기 전)
+            door_comp = target.get_component(DoorComponent)
+            if door_comp and door_comp.has_trap and not door_comp.is_open:
+                self._trigger_door_trap(entity, door_comp)
+                door_comp.has_trap = False  # 1회 발동 후 소멸
+            
             self._handle_switch_toggle(target, switch)
 
     def _handle_switch_toggle(self, entity, switch):
@@ -3822,10 +3886,11 @@ class InteractionSystem(System):
                              # 데미지 처리
                              p_stats = player.get_component(StatsComponent)
                              if p_stats:
-                                 damage = 20 # 고정 데미지
+                                 damage_pct = 50 # 50% fixed for this special lever
+                                 damage = int(p_stats.max_hp * (damage_pct / 100.0))
                                  p_stats.current_hp -= damage
                                  player.add_component(HitFlashComponent())
-                                 self.event_manager.push(MessageEvent(f"폭발로 인해 {damage}의 피해를 입었습니다!", "red"))
+                                 self.event_manager.push(MessageEvent(f"폭발로 인해 {damage}의 피해를 입었습니다! (HP {damage_pct}%)", "red"))
                         
                         break
             
@@ -3836,3 +3901,82 @@ class InteractionSystem(System):
         if switch.linked_trap_id:
             pass # 나중에 TrapSystem과 연동 가능
 
+
+    def _trigger_door_trap(self, victim, door_comp, damage_multiplier: float = 1.0):
+        """문 함정 발동 (데미지 배율 지원)"""
+        import random
+        from .components import PoisonComponent, CurseComponent, HitFlashComponent
+        
+        is_player = victim.entity_id == self.world.get_player_entity().entity_id
+        victim_name = "당신" if is_player else "몬스터"
+        stats = victim.get_component(StatsComponent)
+        
+        # 함정 효과 처리
+        if door_comp.trap_type == "POISON_NEEDLE":
+            # 독침 함정
+            self.event_manager.push(MessageEvent(f"문에서 독침이 튀어나왔습니다!", "green"))
+            self.event_manager.push(SoundEvent("BASH"))
+            
+            # 독 상태 이상 적용 (틱당 데미지도 Max HP 비례로 할 수 있지만 일단 고정)
+            if not victim.has_component(PoisonComponent):
+                # 총 데미지가 약 30-50% 되도록 설정 (10틱 * 4% = 40%)
+                tick_pct = 4
+                tick_damage = max(2, int(stats.max_hp * (tick_pct / 100.0) * damage_multiplier)) if stats else 10
+                victim.add_component(PoisonComponent(damage=tick_damage, duration=15.0))
+                self.event_manager.push(MessageEvent(f"{victim_name}이(가) 중독되었습니다!", "green"))
+            
+            victim.add_component(HitFlashComponent())
+            
+        elif door_comp.trap_type == "EXPLOSION":
+            # 폭발 함정
+            self.event_manager.push(MessageEvent(f"문이 폭발했습니다!", "red"))
+            self.event_manager.push(SoundEvent("EXPLOSION"))
+            
+            # 데미지 적용
+            if stats:
+                damage_pct = random.randint(45, 60) # 50% 내외
+                damage = int(stats.max_hp * (damage_pct / 100.0) * damage_multiplier)
+                stats.current_hp -= damage
+                if stats.current_hp < 0:
+                    stats.current_hp = 0
+                self.event_manager.push(MessageEvent(f"{victim_name}이(가) {damage}의 피해를 입었습니다! (HP {damage_pct}%, 감쇄 {int((1-damage_multiplier)*100)}%)", "red"))
+            
+            victim.add_component(HitFlashComponent())
+            
+        elif door_comp.trap_type == "CURSE":
+            # 저주 함정
+            self.event_manager.push(MessageEvent(f"문에서 사악한 기운이 뿜어져 나옵니다!", "magenta"))
+            self.event_manager.push(SoundEvent("CURSE"))
+            
+            # 저주 상태 이상 적용 (공격력/방어력 감소)
+            if not victim.has_component(CurseComponent):
+                victim.add_component(CurseComponent(duration=30.0))
+                self.event_manager.push(MessageEvent(f"{victim_name}이(가) 저주에 걸렸습니다!", "magenta"))
+            
+        elif door_comp.trap_type == "GAS":
+            # 가스 함정
+            self.event_manager.push(MessageEvent(f"문에서 독가스가 분출됩니다!", "green"))
+            self.event_manager.push(SoundEvent("GAS"))
+            
+            # 주변 2칸 범위에 독 구름 생성
+            door_pos = None
+            entities = self.world.get_entities_with_components({DoorComponent, PositionComponent})
+            for ent in entities:
+                dc = ent.get_component(DoorComponent)
+                if dc == door_comp:
+                    door_pos = ent.get_component(PositionComponent)
+                    break
+            
+            if door_pos:
+                # 범위 내 모든 엔티티에 독 적용
+                all_entities = self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                for entity in all_entities:
+                    e_pos = entity.get_component(PositionComponent)
+                    dist = abs(e_pos.x - door_pos.x) + abs(e_pos.y - door_pos.y)
+                    
+                    if dist <= 2:
+                        if not entity.has_component(PoisonComponent):
+                            entity.add_component(PoisonComponent(damage=5, duration=10.0))
+                            e_is_player = entity.entity_id == self.world.get_player_entity().entity_id
+                            e_name = "당신" if e_is_player else "몬스터"
+                            self.event_manager.push(MessageEvent(f"{e_name}이(가) 독가스에 중독되었습니다!", "green"))

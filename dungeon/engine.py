@@ -773,7 +773,8 @@ class Engine:
             damage_min=selected_trap.damage_min,
             damage_max=selected_trap.damage_max,
             effect=selected_trap.status_effect,
-            is_hidden='HIDDEN' in selected_trap.flags
+            is_hidden="HIDDEN" in selected_trap.flags,
+            auto_reset="AUTO_RESET" in selected_trap.flags
         ))
         
         # RenderComponent 추가 (숨겨진 함정은 나중에 발견 시 표시)
@@ -790,19 +791,26 @@ class Engine:
         
         floor_level = dungeon_map.dungeon_level_tuple[0]
         
-        # 현재 층에서 사용 가능한 함정 필터링
+        # 함정 개수 분배: 바닥 함정 70%, 벽 함정 30%
+        floor_trap_count = int(trap_count * 0.7)
+        wall_trap_count = trap_count - floor_trap_count
+        
+        # 1. 바닥 함정 배치 (STEP_ON)
+        # 현재 층에서 사용 가능한 함정 필터링 (STEP_ON만)
         eligible_traps = [trap for trap in self.trap_defs.values() 
-                         if trap.min_level <= floor_level]
+                         if trap.min_level <= floor_level 
+                         and getattr(trap, 'trigger_type', 'STEP_ON') == 'STEP_ON']
         
         if not eligible_traps:
-            # 사용 가능한 함정이 없으면 모든 함정 사용
-            eligible_traps = list(self.trap_defs.values())
+            # 사용 가능한 함정이 없으면 모든 STEP_ON 함정 사용
+            eligible_traps = [trap for trap in self.trap_defs.values() 
+                             if getattr(trap, 'trigger_type', 'STEP_ON') == 'STEP_ON']
         
         placed = 0
-        max_attempts = trap_count * 5  # 최대 시도 횟수
+        max_attempts = floor_trap_count * 5  # 최대 시도 횟수
         attempts = 0
         
-        while placed < trap_count and attempts < max_attempts:
+        while placed < floor_trap_count and attempts < max_attempts:
             attempts += 1
             
             # 배치 위치 타입 선택 (바닥 70%, 복도 30%)
@@ -821,6 +829,124 @@ class Engine:
             if not self._is_trap_at(x, y):
                 self._spawn_trap_at(x, y, eligible_traps)
                 placed += 1
+        
+        # 2. 벽 함정 배치 (PROXIMITY)
+        if wall_trap_count > 0:
+            self._spawn_wall_traps(dungeon_map, wall_trap_count)
+
+        # 3. 연쇄 함정 구역 (Trap Gauntlet) 배치
+        # 복도 중 일부를 선택하여 함정을 밀집 배치
+        self._spawn_trap_gauntlets(dungeon_map, eligible_traps)
+
+        # 4. 압력판 배치 (10-20% 확률로 바닥 함정 대신 압력판 생성)
+        # 이미 배치된 벽 함정 중 일부를 압력판으로 제어하도록 설정
+        self._link_pressure_plates(dungeon_map, rooms)
+
+    def _spawn_trap_gauntlets(self, dungeon_map, eligible_traps: list):
+        """복도에 연쇄 함정 구역 생성"""
+        if not dungeon_map.corridors or not eligible_traps:
+            return
+            
+        # 복도가 충분히 긴 경우에만 생성
+        # corridors는 [(x,y), (x,y), ...] 리스트임. 
+        # 실제 연쇄 함정을 위해서는 연속된 위치가 필요함.
+        
+        # 간단한 구현: 무작위 복도 타일을 선택하고 그 주변 복도 타일들에 함정 배치
+        num_gauntlets = max(1, len(dungeon_map.corridors) // 100) # 맵 크기에 비례
+        if random.random() > 0.3: # 30% 확률로만 생성 (너무 자주 나오면 고통스러움)
+            num_gauntlets = 0
+            
+        for _ in range(num_gauntlets):
+            start_node = random.choice(dungeon_map.corridors)
+            gx, gy = start_node
+            
+            # 주변 3x3 범위 내의 모든 복도 타일에 함정 배치 시도
+            traps_placed = 0
+            for dy in range(-2, 3):
+                for dx in range(-2, 3):
+                    tx, ty = gx + dx, gy + dy
+                    if (tx, ty) in dungeon_map.corridors:
+                        if not self._is_trap_at(tx, ty) and random.random() < 0.6:
+                            self._spawn_trap_at(tx, ty, eligible_traps)
+                            traps_placed += 1
+            
+            if traps_placed > 0:
+                # [DEBUG] print(f"Trap Gauntlet spawned at {gx}, {gy} with {traps_placed} traps")
+                pass
+
+    def _link_pressure_plates(self, dungeon_map, rooms):
+        """벽 함정 중 일부를 압력판으로 제어하도록 링크 설정"""
+        if not self.trap_defs or not rooms:
+            return
+            
+        floor_level = dungeon_map.dungeon_level_tuple[0]
+        
+        # 압력판 타입 필터링
+        pressure_defs = [trap for trap in self.trap_defs.values() 
+                        if trap.min_level <= floor_level 
+                        and getattr(trap, 'effect_type', '') == 'REMOTE']
+        
+        if not pressure_defs:
+            return
+            
+        # 맵에 있는 모든 벽 함정 찾기
+        traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
+        wall_traps = []
+        for tent in traps:
+            tc = tent.get_component(TrapComponent)
+            if tc.trigger_type == 'PROXIMITY':
+                wall_traps.append(tent)
+        
+        if not wall_traps:
+            return
+            
+        # 약 20%의 벽 함정을 압력판으로 제어
+        num_to_link = max(1, len(wall_traps) // 5)
+        random.shuffle(wall_traps)
+        
+        for i in range(min(num_to_link, len(wall_traps))):
+            target_trap = wall_traps[i]
+            t_pos = target_trap.get_component(PositionComponent)
+            t_comp = target_trap.get_component(TrapComponent)
+            
+            # 압력판 위치 선정 (벽 함정 근처 방 바닥)
+            found_pos = False
+            for _ in range(10): # 최대 10번 시도
+                room = random.choice(rooms)
+                px = random.randint(room.x1 + 1, room.x2 - 1)
+                py = random.randint(room.y1 + 1, room.y2 - 1)
+                
+                # 거리 체크 (너무 멀면 안됨)
+                dist = abs(px - t_pos.x) + abs(py - t_pos.y)
+                if 2 < dist < 8 and not self._is_trap_at(px, py):
+                    # 압력판 생성
+                    selected_p = random.choice(pressure_defs)
+                    pp = self.world.create_entity()
+                    self.world.add_component(pp.entity_id, PositionComponent(x=px, y=py))
+                    
+                    self.world.add_component(pp.entity_id, TrapComponent(
+                        trap_type=selected_p.id,
+                        damage_min=0,
+                        damage_max=0,
+                        is_hidden='HIDDEN' in selected_p.flags,
+                        trigger_type='STEP_ON',
+                        linked_trap_pos=(t_pos.x, t_pos.y),
+                        auto_reset='AUTO_RESET' in selected_p.flags,
+                        reset_delay=2.0
+                    ))
+                    
+                    if 'HIDDEN' not in selected_p.flags:
+                        self.world.add_component(pp.entity_id, RenderComponent(
+                            char=selected_p.symbol,
+                            color=selected_p.color
+                        ))
+                    
+                    # 연결된 원격 함정은 이제 근접 감지를 하지 않고 압력판에 의해서만 발동됨
+                    # (여기서는 트리거 타입을 REMOTE로 유지하거나 그냥 둠. TrapSystem logic에 따라)
+                    # 벽 함정의 trigger_type을 STEP_ON으로 바꿔서 플레이어가 밟아도 발동하게 할 수도 있음
+                    # 또는 플레이어 감지 범위를 0으로 만들거나 hidden 처리
+                    found_pos = True
+                    break
     
     def _is_trap_at(self, x: int, y: int) -> bool:
         """지정된 위치에 함정이 있는지 확인"""
@@ -846,7 +972,8 @@ class Engine:
             damage_min=selected_trap.damage_min,
             damage_max=selected_trap.damage_max,
             effect=selected_trap.status_effect,
-            is_hidden='HIDDEN' in selected_trap.flags
+            is_hidden="HIDDEN" in selected_trap.flags,
+            auto_reset="AUTO_RESET" in selected_trap.flags
         ))
         
         # RenderComponent 추가 (숨겨진 함정은 나중에 발견 시 표시)
@@ -855,6 +982,84 @@ class Engine:
                 char=selected_trap.symbol,
                 color=selected_trap.color
             ))
+    
+    def _get_wall_adjacent_tiles(self, dungeon_map):
+        """벽에 인접한 바닥 타일 반환 (x, y, direction)"""
+        adjacent_tiles = []
+        
+        for y in range(1, dungeon_map.height - 1):
+            for x in range(1, dungeon_map.width - 1):
+                if dungeon_map.tiles[y][x] == '.':  # 바닥 타일
+                    # 4방향 체크
+                    if dungeon_map.tiles[y-1][x] == '#':  # 북쪽 벽
+                        adjacent_tiles.append((x, y, 'SOUTH'))
+                    elif dungeon_map.tiles[y+1][x] == '#':  # 남쪽 벽
+                        adjacent_tiles.append((x, y, 'NORTH'))
+                    elif dungeon_map.tiles[y][x-1] == '#':  # 서쪽 벽
+                        adjacent_tiles.append((x, y, 'EAST'))
+                    elif dungeon_map.tiles[y][x+1] == '#':  # 동쪽 벽
+                        adjacent_tiles.append((x, y, 'WEST'))
+        
+        return adjacent_tiles
+    
+    def _spawn_wall_traps(self, dungeon_map, count: int):
+        """벽에 인접한 위치에 벽 함정 배치"""
+        if not self.trap_defs or count <= 0:
+            return
+        
+        floor_level = dungeon_map.dungeon_level_tuple[0]
+        
+        # PROXIMITY 타입 함정 필터링
+        wall_traps = [trap for trap in self.trap_defs.values() 
+                     if trap.min_level <= floor_level and hasattr(trap, 'trigger_type') 
+                     and getattr(trap, 'trigger_type', 'STEP_ON') == 'PROXIMITY']
+        
+        if not wall_traps:
+            return
+        
+        # 벽 인접 타일 가져오기
+        wall_tiles = self._get_wall_adjacent_tiles(dungeon_map)
+        if not wall_tiles:
+            return
+        
+        # 랜덤하게 선택하여 배치
+        placed = 0
+        random.shuffle(wall_tiles)
+        
+        for x, y, direction in wall_tiles:
+            if placed >= count:
+                break
+            
+            if not self._is_trap_at(x, y):
+                # 벽 함정 배치
+                trap = self.world.create_entity()
+                self.world.add_component(trap.entity_id, PositionComponent(x=x, y=y))
+                
+                # 가중치 기반 선택
+                weights = [t.weight for t in wall_traps]
+                selected_trap = random.choices(wall_traps, weights=weights, k=1)[0]
+                
+                # TrapComponent 생성 (direction 포함)
+                self.world.add_component(trap.entity_id, TrapComponent(
+                    trap_type=selected_trap.id,
+                    damage_min=selected_trap.damage_min,
+                    damage_max=selected_trap.damage_max,
+                    effect=selected_trap.status_effect,
+                    is_hidden='HIDDEN' in selected_trap.flags,
+                    trigger_type='PROXIMITY',
+                    direction=direction,
+                    detection_range=5,
+                    auto_reset='AUTO_RESET' in selected_trap.flags
+                ))
+                
+                # RenderComponent 추가
+                if 'HIDDEN' not in selected_trap.flags:
+                    self.world.add_component(trap.entity_id, RenderComponent(
+                        char=selected_trap.symbol,
+                        color=selected_trap.color
+                    ))
+                
+                placed += 1
     
     def _spawn_shrine(self, x, y):
         """신전 엔티티 생성"""

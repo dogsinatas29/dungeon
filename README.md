@@ -1,8 +1,8 @@
-# Dungeon Crawl
+![Dungeon Crawl Title Screen](assets/title_screen.png)
 
 **English** | [한국어](README.ko.md)
 
-Diablo like real time rogue for terminal
+Diablo-like real-time roguelike engine for terminal
 
 ![Gameplay Screenshot](screenshots/gameplay_test.png)
 
@@ -66,6 +66,36 @@ Diablo like real time rogue for terminal
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
 
+## Recent Updates (2026-01-02)
+
+### 1. Boss Room Redesign & Interaction System
+- **Boss Room Layout**: Three-room structure (Antechamber, Lever Room, Boss Room)
+- **Lever Mechanism**: Lever opens locked boss door and triggers trap (20 damage)
+- **InteractionSystem**: New ECS system for handling switch/lever interactions
+- **Components**: Added `DoorComponent`, `BlockMapComponent`, `SwitchComponent` with door linking
+
+### 2. Trap System Refactoring
+- **Modular Design**: Extracted `TrapSystem` to `trap_manager.py` module
+- **CSV Data Management**: All trap data now in `data/traps.csv`
+- **TrapDefinition Class**: Structured trap data with validation
+- **8 Trap Types**: Arrow, Spike, Lightning, Gas, Nova, Fire, Ice, Teleport
+
+### 3. Level-Based Trap System
+- **MinLevel Requirement**: Traps spawn based on floor level (Lv1-50)
+- **Guaranteed Placement**: Fixed trap count per floor (default: 5)
+- **Level Filtering**: Only appropriate traps spawn on each floor
+  - Floor 1: Arrow traps only
+  - Floor 10: Arrow, Spike, Lightning traps
+  - Floor 50: All trap types available
+- **Weighted Selection**: Higher-level traps are rarer (lower weight)
+- **Multiple Locations**: Traps spawn in rooms (70%) and corridors (30%)
+
+### 4. Sandbox Testing Environment
+- **DISARM Skill Books**: 30 copies added to test character
+- **Trap Showcase**: All 8 trap types placed in starting room
+- **Visible Traps**: Test mode shows all traps for easy testing
+
+
 ## Recent Updates (2025-12-29)
 
 ### 1. Advanced Shrine & Enhancement System
@@ -115,8 +145,8 @@ Diablo like real time rogue for terminal
     - [x] **Boss Summoning Mechanic** (Desperate Call at 50% HP)
     - [x] **Aggressive Boss AI** (All bosses use CHASE mode)
     - [x] **Final Boss: Diablo** (Epic encounter on Floor 99)
-    - [ ] Other Unique Bosses (Butcher, Leoric, etc.)
-    - [ ] Boss dialogue/bark system ("Ah... Fresh Meat!")
+    - [x] Other Unique Bosses (Butcher, Leoric, Diablo)
+    - [x] Boss dialogue/bark system ("Ah... Fresh Meat!")
     - [ ] Guaranteed unique item drops per boss
     - [x] Hand-crafted boss maps (Reached goal for Floor 99)
 - [x] **Skill System Implementation (Phase 1-3)**:
@@ -150,15 +180,37 @@ Diablo like real time rogue for terminal
 - [ ] **More Character Classes** - expand beyond 4 classes
 - [ ] **Multiplayer Support** - co-op gameplay
 
-## Requirements
+## Keyboard Shortcuts
 
+### General Controls
+- **Movement**: `Arrow Keys` or `W`, `A`, `S`, `D`
+- **Wait / Pass Turn**: `.`, `X`, `Z`, or `5`
+- **Interact / Pick Up / Use Stairs**: `ENTER`
+- **Attack Mode (Toggle)**: `SPACE` (Once active, press a direction key to attack)
+- **Quick Slots**: `1` through `0` (Use bound skills or items)
+- **Character Sheet**: `C` (View stats and allocate bonus points)
+- **Inventory**: `I` (Open/Close inventory)
+- **Quit Game**: `Q`
+
+### Inventory & Menus
+- **Navigate**: `Arrow Keys` or `W`, `S`
+- **Switch Tabs**: `Left` / `Right` Arrow keys (Inside Inventory)
+- **Use / Equip**: `E` or `ENTER`
+- **Drop Item**: `X`
+- **Close Menu**: `ESC`, `Q`, or the menu's toggle key (`I`, `C`)
+
+### Character Sheet (Stat Point Allocation)
+- **Select Stat**: `UP` / `DOWN` Arrow keys or `W`, `S`
+- **Allocate Point**: `RIGHT` Arrow key, `D`, `+`, `=`, or `ENTER`
+- **Close**: `C`, `ESC`, or `Q`
+
+## Requirements
 ```bash
 sudo apt install python3-gi python3-gi-cairo python3-dbus gir1.2-gtk-3.0
 pip install readchar
 ```
 
 ## How to Play
-
 ```bash
 python3 dungeon/Start.py
 ```
@@ -166,9 +218,7 @@ python3 dungeon/Start.py
 ## Testing
 
 ### Test Environment (test_classes.py)
-
 For comprehensive testing of all game features, use the test environment script:
-
 ```bash
 python3 test_classes.py
 ```
@@ -192,9 +242,7 @@ python3 test_classes.py
 - Shop interactions
 
 ### Sandbox Environment (sandbox_test.py)
-
 For high-end game logic testing (Shrines, Bosses, Affixed items):
-
 ```bash
 python3 sandbox_test.py
 ```
@@ -210,6 +258,9 @@ python3 sandbox_test.py
 - `B`: Jump **Backward** 10 floors
 - `J`: **Jump** to a specific floor (Input required in terminal)
 - `G`: Get **1,000 Gold** immediately
+- `L`: Set **Level** (Input required in terminal)
+- `Z`: Summon **Butcher** (Boss)
+- `W`: Get **Warrior Set** (Level 21 + Full Plate/Great Axe)
 
 ### Game Mechanics
 
@@ -242,27 +293,39 @@ python3 sandbox_test.py
 ```
 dungeon/
 ├── Start.py              # Main entry point
-├── dungeon/
-│   ├── game.py          # Main game loop
-│   ├── engine.py        # Game engine and state management
-│   ├── ecs.py           # Entity Component System
-│   ├── components.py    # ECS components
-│   ├── systems.py       # ECS systems (combat, movement, etc.)
-│   ├── player.py        # Player class
-│   ├── dungeon_map.py   # Map generation
-│   ├── ui.py            # Terminal UI rendering
-│   ├── data_manager.py  # Data loading
-│   └── sound_system.py  # Audio system
 ├── test_classes.py       # Class balance test environment
 ├── sandbox_test.py       # High-end systems & sandbox environment
-├── sounds/               # Audio effect files (.wav)
-├── data/                 # Game data files
+├── dungeon/              # Core Game Package
+│   ├── engine.py        # Game engine and state management
+│   ├── systems.py       # ECS systems (combat, movement, etc.)
+│   ├── components.py    # ECS components
+│   ├── ecs.py           # Entity Component System core
+│   ├── ui.py            # Terminal UI rendering
+│   ├── map.py           # Map generation
+│   ├── player.py        # Player entity logic
+│   ├── monster.py       # Monster entity logic
+│   ├── items.py         # Item definitions and logic
+│   ├── inventory.py     # Inventory management
+│   ├── skills.py        # Skill system
+│   ├── trap_manager.py  # Trap system (refactored)
+│   ├── shrine_methods.py # Shrine interactions
+│   ├── events.py        # Event definition and handling
+│   ├── constants.py     # Game constants
+│   ├── config.py        # Configuration settings
+│   ├── data_manager.py  # Data loading utility
+│   └── sound_system.py  # Audio system
+├── data/                 # Game Data Files
 │   ├── items.csv        # Item definitions
 │   ├── skills.csv       # Skill definitions
+│   ├── monsters.csv     # Monster definitions
+│   ├── Boss.csv         # Boss stats
+│   ├── classes.csv      # Character class definitions
+│   ├── maps.csv         # Map generation parameters
+│   ├── traps.csv        # Trap definitions
 │   ├── prefixes.json    # Magic item prefixes
-│   ├── suffixes.json    # Magic item suffixes
-│   └── monster_data.txt # Monster definitions
-└── game_data/           # Save files (JSON)
+│   └── suffixes.json    # Magic item suffixes
+├── game_data/           # Save files (JSON)
+└── sounds/              # Audio effect files (.wav)
 ```
 
 ## Development

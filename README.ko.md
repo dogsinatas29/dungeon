@@ -1,4 +1,5 @@
 # 던전 크롤 (Dungeon Crawl)
+![Dungeon Crawl Title Screen](assets/title_screen.png)
 
 [English](README.md) | **한국어**
 
