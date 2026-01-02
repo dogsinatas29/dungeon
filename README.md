@@ -159,26 +159,18 @@ Diablo-like real-time roguelike engine for terminal
     - [x] Apocalypse - screen-wide attack
 
 ### Medium Priority
-- [ ] **Item Drop System Overhaul**:
-  - [ ] Drop chance formula (15-25% for normal, 100% for boss)
-  - [ ] Rarity determination (Normal 85%, Magic 14.5%, Unique 0.5%)
-  - [ ] Monster level-based item restrictions
-  - [ ] Magic affix rolling (40% prefix, 40% suffix, 20% both)
-  - [ ] Magic Find (MF) system for accessories
-  - [ ] Boss-specific loot tables
+- [x] **Item Drop System Overhaul** (Loot tables, Affixes, MF)
 - [ ] **Language Selection Menu** - choose Korean/English at startup
-- [ ] **Dynamic Job System** - auto-change job based on highest skill level
 - [ ] **Player Action Cooldown** - enforce cooldown in input handling
 - [ ] **Balance Adjustments** - tune difficulty for real-time gameplay
 - [ ] **UI Improvements**:
-  - [ ] Cooldown indicators
+  - [ ] Cooldown indicators (Gauge next to skill names)
   - [ ] Real-time HP/MP bar animations
   - [ ] Monster action prediction
 
 ### Low Priority
-- [ ] **Boss Special Patterns** - unique boss behaviors
-- [ ] **More Character Classes** - expand beyond 4 classes
-- [ ] **Multiplayer Support** - co-op gameplay
+- [ ] **Boss Special Patterns** - unique boss behaviors (In Progress)
+- [x] **More Character Classes** - 4 classes implemented (Warrior, Rogue, Sorcerer, Barbarian)
 
 ## Keyboard Shortcuts
 
