@@ -105,12 +105,8 @@ class EventManager:
                 snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).lower()
                 handler_name = f"handle_{snake_name}"
                 
-                # 하위 호환성을 위해 이전 방식(handle_messageevent)도 체크 가능하지만, 
-                # 현재 코드베이스가 모두 언더바를 사용하므로 언더바 방식으로 통일
-                
                 for listener in self.listeners[event_type]:
                     handler = getattr(listener, handler_name, None)
-                    # 만약 언더바 버전이 없으면 언더바 없는 버전도 시도
                     if not handler:
                         old_handler_name = f"handle_{class_name.lower()}"
                         handler = getattr(listener, old_handler_name, None)
@@ -118,7 +114,6 @@ class EventManager:
                     if handler:
                         handler(event)
                     elif callable(listener):
-                        # 리스너 자체가 호출 가능한 경우 (manual register)
                         listener(event)
 
 # --- 1.3 월드 (World) ---
@@ -221,19 +216,19 @@ def initialize_event_listeners(world: World):
 )
     
     # EventManager에 이벤트 타입이 등록되어 있어야 함 (빈 리스트라도)
-    world.event_manager.listeners[MoveSuccessEvent] = []
-    world.event_manager.listeners[CollisionEvent] = []
-    world.event_manager.listeners[MessageEvent] = []
-    world.event_manager.listeners[DirectionalAttackEvent] = []
-    world.event_manager.listeners[MapTransitionEvent] = []
-    world.event_manager.listeners[ShopOpenEvent] = []
-    world.event_manager.listeners[SkillUseEvent] = []
-    world.event_manager.listeners[SoundEvent] = []
+    world.event_manager.listeners.setdefault(MoveSuccessEvent, [])
+    world.event_manager.listeners.setdefault(CollisionEvent, [])
+    world.event_manager.listeners.setdefault(MessageEvent, [])
+    world.event_manager.listeners.setdefault(DirectionalAttackEvent, [])
+    world.event_manager.listeners.setdefault(MapTransitionEvent, [])
+    world.event_manager.listeners.setdefault(ShopOpenEvent, [])
+    world.event_manager.listeners.setdefault(SkillUseEvent, [])
+    world.event_manager.listeners.setdefault(SoundEvent, [])
     
     # [Boss System V2] New Events
     from .events import CombatResultEvent, BossBarkEvent
-    world.event_manager.listeners[CombatResultEvent] = []
-    world.event_manager.listeners[BossBarkEvent] = []
+    world.event_manager.listeners.setdefault(CombatResultEvent, [])
+    world.event_manager.listeners.setdefault(BossBarkEvent, [])
 
     for system in world._systems:
         for event_type in world.event_manager.listeners.keys():

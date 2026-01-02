@@ -19,11 +19,11 @@ from .components import (
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent, ShrineComponent,
     StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent, TrapComponent,
-    SleepComponent, PoisonComponent, StatModifierComponent
+    SleepComponent, PoisonComponent, StatModifierComponent, SwitchComponent
 )
 from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
-    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem
+    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem, InteractionSystem
 )
 from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
 from .sound_system import SoundSystem
@@ -615,13 +615,34 @@ class Engine:
             else:
                 self._spawn_chest(cx, cy, floor, item_pool)
 
-        # 함정 (CSV 설정 기반)
+        # 함정 (CSV 설정 기반) - 최소 3개 보장
         trap_prob = map_config.trap_prob if map_config else 0.05
+        traps_spawned = 0
+        min_traps = 3  # 최소 함정 개수
+        
+        # 1. 확률 기반 함정 생성
         for room in other_rooms:
             if random.random() < trap_prob:
                 tx = random.randint(room.x1 + 1, room.x2 - 1)
                 ty = random.randint(room.y1 + 1, room.y2 - 1)
                 self._spawn_trap(tx, ty)
+                traps_spawned += 1
+        
+        # 2. 최소 개수 미달 시 추가 생성
+        while traps_spawned < min_traps and other_rooms:
+            room = random.choice(other_rooms)
+            tx = random.randint(room.x1 + 1, room.x2 - 1)
+            ty = random.randint(room.y1 + 1, room.y2 - 1)
+            self._spawn_trap(tx, ty)
+            traps_spawned += 1
+        
+        # 3. 압력판 생성 (복도에 1-2개)
+        if dungeon_map.corridors:
+            num_pressure_plates = random.randint(1, 2)
+            for _ in range(num_pressure_plates):
+                if dungeon_map.corridors:
+                    corridor_tile = random.choice(dungeon_map.corridors)
+                    self._spawn_pressure_plate(corridor_tile[0], corridor_tile[1])
         
         # [Shrine] 신전 (2층마다 1개, 보스 층 제외)
         is_boss_floor = self.current_level % 5 == 0
@@ -632,16 +653,57 @@ class Engine:
             self._spawn_shrine(shrine_x, shrine_y)
 
     def _spawn_trap(self, x, y):
-        """함정 엔티티 생성"""
+        """함정 엔티티 생성 (다양한 타입)"""
         trap = self.world.create_entity()
         self.world.add_component(trap.entity_id, PositionComponent(x=x, y=y))
         
+        # 다양한 함정 타입
         trap_types = [
-            {"type": "가시", "damage": 10, "effect": None},
-            {"type": "마비", "damage": 5, "effect": "STUN"},
+            {"type": "ARROW", "min": 10, "max": 15, "effect": None, "weight": 40},
+            {"type": "LIGHTNING", "min": 5, "max": 10, "effect": "STUN", "weight": 25},
+            {"type": "GAS", "min": 3, "max": 6, "effect": "POISON", "weight": 20},
+            {"type": "NOVA", "min": 15, "max": 25, "effect": None, "weight": 15},
+        ]
+        
+        # 가중치 기반 선택
+        weights = [t["weight"] for t in trap_types]
+        t_data = random.choices(trap_types, weights=weights, k=1)[0]
+        
+        self.world.add_component(trap.entity_id, TrapComponent(
+            trap_type=t_data["type"], 
+            damage_min=t_data["min"], 
+            damage_max=t_data["max"],
+            effect=t_data["effect"]
+        ))
+    
+    def _spawn_pressure_plate(self, x, y):
+        """압력판 생성 (복도용)"""
+        from .components import PressurePlateComponent
+        
+        # 먼저 함정 생성
+        trap = self.world.create_entity()
+        trap.add_component(PositionComponent(x=x, y=y))
+        
+        # 압력판용 함정 타입 (더 강력함)
+        trap_types = [
+            {"type": "ARROW", "min": 15, "max": 25, "effect": None},
+            {"type": "LIGHTNING", "min": 10, "max": 20, "effect": "STUN"},
+            {"type": "GAS", "min": 5, "max": 10, "effect": "POISON"},
         ]
         t_data = random.choice(trap_types)
-        self.world.add_component(trap.entity_id, TrapComponent(trap_type=t_data["type"], damage=t_data["damage"], effect=t_data["effect"]))
+        
+        trap.add_component(TrapComponent(
+            trap_type=t_data["type"],
+            damage_min=t_data["min"],
+            damage_max=t_data["max"],
+            effect=t_data["effect"]
+        ))
+        
+        # 압력판 엔티티 생성
+        plate = self.world.create_entity()
+        plate.add_component(PositionComponent(x=x, y=y))
+        plate.add_component(RenderComponent(char='.', color='dark_grey'))  # 바닥처럼 보임
+        plate.add_component(PressurePlateComponent(linked_trap_id=trap.entity_id, is_triggered=False))
     
     def _spawn_shrine(self, x, y):
         """신전 엔티티 생성"""
@@ -733,6 +795,7 @@ class Engine:
         self.regeneration_system = RegenerationSystem(self.world)
         self.level_system = LevelSystem(self.world)
         self.trap_system = TrapSystem(self.world)
+        self.interaction_system = InteractionSystem(self.world)
         self.sound_system = SoundSystem(self.world)
         self.render_system = RenderSystem(self.world)
         
@@ -744,6 +807,7 @@ class Engine:
             self.movement_system,
             self.combat_system,
             self.level_system,
+            self.interaction_system,
             self.trap_system,
             self.regeneration_system,
             self.sound_system,
@@ -1159,7 +1223,14 @@ class Engine:
                     else:
                         try:
                             # to_dict가 없는 경우 기본 속성들만 저장
-                            attrs = {k: v for k, v in vars(comp).items() if not k.startswith('_')}
+                            attrs = {}
+                            for k, v in vars(comp).items():
+                                if k.startswith('_'): continue
+                                # JSON serializable check & convert set to list
+                                if isinstance(v, set):
+                                    attrs[k] = list(v)
+                                else:
+                                    attrs[k] = v
                             serialized_list.append(attrs)
                         except TypeError:
                             # vars()가 불가능한 경우 (built-in 등) 빈 딕셔너리 또는 가능한 속성만
@@ -1190,6 +1261,10 @@ class Engine:
 
         direction_str = "위로 올라갑니다" if going_up else "깊은 곳으로 내려갑니다"
         self.world.event_manager.push(MessageEvent(f"{direction_str}... (던전 {self.current_level}층)"))
+        
+        # [Auto-Save] 층 이동 시 자동 저장
+        self._save_game()
+        self.world.event_manager.push(MessageEvent("게임이 저장되었습니다.", "cyan"))
         
         # 1. 플레이어 데이터 보존
         player_entity = self.world.get_player_entity()
@@ -1584,17 +1659,17 @@ class Engine:
                 if current_lv >= 255:
                     msg = f"'{skill_name}' 스킬은 이미 극의에 도달했습니다!"
                 else:
-                    # 필요 권수: 2권 (User Request: 2 books = 1 level)
-                    books_needed = 2
+                    # 지수 레벨링: 3^n (Lv1→2: 3권, Lv2→3: 9권, Lv3→4: 27권)
+                    books_needed = 3 ** current_lv
                     
-                    # 읽은 횟수 증가 (사실상 즉시 레벨업)
+                    # 읽은 횟수 증가
                     inv.skill_books_read[skill_name] = inv.skill_books_read.get(skill_name, 0) + 1
                     current_reads = inv.skill_books_read[skill_name]
                     
                     if current_reads >= books_needed:
                         inv.skill_levels[skill_name] = current_lv + 1
                         inv.skill_books_read[skill_name] = 0
-                        msg = f"'{skill_name}'의 오의를 깨달았습니다! (Lv.{current_lv} -> Lv.{current_lv + 1})"
+                        msg = f"'{skill_name}'의 오의를 깨달았습니다! (Lv.{current_lv} → Lv.{current_lv + 1})"
                         self.world.event_manager.push(SoundEvent("LEVEL_UP"))
                     else:
                         msg = f"'{skill_name}'의 지식을 쌓고 있습니다. ({current_reads}/{books_needed}권)"
@@ -2290,6 +2365,44 @@ class Engine:
                         color = "red_bg"
 
                 self.renderer.draw_char(screen_x, screen_y, char, color)
+        
+        # [V12] Rogue Trap Sense Overlay
+        if player_entity:
+            inv = player_entity.get_component(InventoryComponent)
+            if inv and "함정 해제" in inv.skills:
+                # Find all switches with linked traps
+                for entity in self.world.get_entities_with_components({SwitchComponent, PositionComponent}):
+                    switch = entity.get_component(SwitchComponent)
+                    if switch.linked_trap_id and not switch.is_open:
+                        trap = self.world.get_entity(switch.linked_trap_id)
+                        t_comp = trap.get_component(TrapComponent) if trap else None
+                        
+                        if t_comp and not t_comp.is_disarmed:
+                            pos = entity.get_component(PositionComponent)
+                            screen_x = pos.x - camera_x
+                            screen_y = pos.y - camera_y
+                            
+                            if 0 <= screen_x < MAP_VIEW_WIDTH and 0 <= screen_y < MAP_VIEW_HEIGHT:
+                                # Check if visible (visited)
+                                if self.dungeon_map and (pos.x, pos.y) in self.dungeon_map.visited:
+                                    self.renderer.draw_char(screen_x, screen_y, '!', 'red')
+                
+                # Find all pressure plates with linked traps
+                from .components import PressurePlateComponent
+                for entity in self.world.get_entities_with_components({PressurePlateComponent, PositionComponent}):
+                    plate = entity.get_component(PressurePlateComponent)
+                    if plate.linked_trap_id and not plate.is_triggered:
+                        trap = self.world.get_entity(plate.linked_trap_id)
+                        t_comp = trap.get_component(TrapComponent) if trap else None
+                        
+                        if t_comp and not t_comp.is_disarmed:
+                            pos = entity.get_component(PositionComponent)
+                            screen_x = pos.x - camera_x
+                            screen_y = pos.y - camera_y
+                            
+                            if 0 <= screen_x < MAP_VIEW_WIDTH and 0 <= screen_y < MAP_VIEW_HEIGHT:
+                                if self.dungeon_map and (pos.x, pos.y) in self.dungeon_map.visited:
+                                    self.renderer.draw_char(screen_x, screen_y, '!', 'red')
 
                 # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘) - 우선순위 순서로 표시
                 # Priority: Petrified > Stun > Sleep > Poison > Bleeding > Mana Shield
@@ -2641,7 +2754,7 @@ class Engine:
             text = self.banner_text
             border = "=" * (len(text) + 4)
             bx = (MAP_VIEW_WIDTH - len(border)) // 2
-            by = MAP_VIEW_HEIGHT // 2
+            by = 3
             
             color = "gold"
             if int(self.banner_timer * 4) % 2 == 0:
@@ -3614,3 +3727,4 @@ class Engine:
 if __name__ == '__main__':
     engine = Engine()
     engine.run()
+print('USING TOP LEVEL ENGINE')

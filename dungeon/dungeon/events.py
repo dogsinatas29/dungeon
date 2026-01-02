@@ -1,6 +1,6 @@
 # dungeon/events.py - 모든 게임 이벤트를 정의하는 모듈
 
-from typing import Any
+from typing import Any, Tuple
 from .ecs import Event
 
 class MoveSuccessEvent(Event):
@@ -53,11 +53,12 @@ class DirectionalAttackEvent(Event):
 
 class SkillUseEvent(Event):
     """플레이어가 스킬을 사용할 때 발생"""
-    def __init__(self, attacker_id: int, skill_name: str, dx: int, dy: int = 0):
+    def __init__(self, attacker_id: int, skill_name: str, dx: int, dy: int = 0, cost: int = None):
         self.attacker_id = attacker_id
         self.skill_name = skill_name
         self.dx = dx
         self.dy = dy
+        self.cost = cost # None이면 기본 비용 사용, 값이 있으면 이 값 사용 (0 포함)
 
 class SoundEvent(Event):
     """효과음 재생을 위한 이벤트"""
@@ -82,3 +83,17 @@ class BossBarkEvent(Event):
         self.boss_entity = boss_entity
         self.bark_type = bark_type # 'ENTRANCE', 'DODGE', 'HIT_PLAYER', 'CRIT', 'SKILL', 'HP', 'DEATH'
         self.text = text # 수동으로 대사를 지정할 경우
+
+class InteractEvent(Event):
+    """문, 레버 등과 상호작용할 때 발생"""
+    def __init__(self, who: int, target: int, action: str = "TOGGLE"):
+        self.who = who
+        self.target = target
+        self.action = action # "OPEN", "CLOSE", "TOGGLE"
+
+class TrapTriggerEvent(Event):
+    """함정이 발동될 때 발생"""
+    def __init__(self, trap_entity_id: int, victim_entity_id: int = None, location: Tuple[int, int] = None):
+        self.trap_entity_id = trap_entity_id
+        self.victim_entity_id = victim_entity_id
+        self.location = location

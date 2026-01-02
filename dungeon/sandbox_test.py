@@ -106,12 +106,26 @@ class SandboxEngine(engine.Engine):
                 stats.current_hp = stats.max_hp
                 stats.current_mp = stats.max_mp
 
-        # 5. Spawn The Butcher near the player
+        # 5. Spawn Bosses at specific floors (only if not already spawned by base engine)
         if starting_room:
-            bx, by = starting_room.x1 + 3, starting_room.y1 + 3
-            self._spawn_boss(bx, by, "BUTCHER")
-            print(f"[Sandbox] Spawned The Butcher at ({bx}, {by})")
-        
+            # Check if a boss already exists
+            from dungeon.components import BossComponent
+            existing_bosses = self.world.get_entities_with_components({BossComponent})
+            
+            if not existing_bosses:
+                boss_map = {
+                    25: "BUTCHER",
+                    50: "LEORIC",
+                    75: "LICH_KING",
+                    99: "DIABLO"
+                }
+                if self.current_level in boss_map:
+                    bx, by = starting_room.x1 + 3, starting_room.y1 + 3
+                    boss_id = boss_map[self.current_level]
+                    self._spawn_boss(bx, by, boss_name=boss_id)
+                    print(f"[Sandbox] Manual spawned {boss_id} as fallback.")
+            else:
+                print(f"[Sandbox] Boss already spawned by engine (found {len(existing_bosses)} boss entities).")
         # 6. Ensure player equipment is at full durability
         if player:
             inv = player.get_component(InventoryComponent)
@@ -241,6 +255,53 @@ class SandboxEngine(engine.Engine):
                 pos = player.get_component(PositionComponent)
                 self._spawn_boss(pos.x + 1, pos.y, boss_name="BUTCHER")
                 self.world.event_manager.push(MessageEvent("[Sandbox] 도살자를 소환했습니다! 준비하세요!", "red"))
+            return True
+
+        # 'W': 워리어 세트 (21레벨 + 장비)
+        if action == 'W':
+            player = self.world.get_player_entity()
+            if not player: return True
+            
+            # 1. 레벨 조정
+            level_comp = player.get_component(LevelComponent)
+            if level_comp and level_comp.level < 21:
+                old_level = level_comp.level
+                level_comp.level = 21
+                level_comp.exp = 0
+                level_comp.exp_to_next = int(100 * (1.5 ** (level_comp.level - 1)))
+                points_gained = (21 - old_level) * 5
+                level_comp.stat_points += points_gained
+                self.world.event_manager.push(MessageEvent(f'[Sandbox] 레벨을 21로 상향 조정했습니다! (보너스 스탯 +{points_gained})'))
+            
+            # 2. 장비 지급
+            from dungeon.data_manager import load_item_definitions
+            inv = player.get_component(InventoryComponent)
+            item_defs = load_item_definitions()
+            target_items = [
+                '그레이트 액스', '풀 플레이트', '고딕 실드', '그레이트 헬름',
+                '완전 치유 물약', '완전 치유 물약', '완전 치유 물약', '완전 치유 물약', '완전 치유 물약',
+                '완전 마나 물약', '완전 마나 물약', '완전 마나 물약', '완전 마나 물약', '완전 마나 물약'
+            ]
+            
+            for name in target_items:
+                if name in item_defs:
+                    inv.add_item(item_defs[name])
+            
+            # 3. 자동 장착 시도 (이미 장착된 게 없으면)
+            for item_id, item_info in inv.items.items():
+                item = item_info['item']
+                if item.type == 'WEAPON' and not inv.equipped.get('weapon'):
+                    inv.equipped['weapon'] = item
+                elif item.type == 'ARMOR' and not inv.equipped.get('armor'):
+                    inv.equipped['armor'] = item
+                elif item.type == 'SHIELD' and not inv.equipped.get('shield'):
+                    inv.equipped['shield'] = item
+                elif item.type == 'ARMOR' and item.symbol == '[' and not inv.equipped.get('helmet'):
+                    inv.equipped['helmet'] = item
+
+            self._recalculate_stats()
+            self.world.event_manager.push(MessageEvent('[Sandbox] 21레벨 워리어 세트가 지급되고 장착되었습니다!', 'gold'))
+            self._render()
             return True
 
         return False

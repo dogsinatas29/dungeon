@@ -37,6 +37,155 @@ class ConsoleUI:
         """화면 흔들림 효과를 트리거합니다."""
         self.shake_duration = frames
 
+    def show_skill_selection_menu(self, known_skills, game_renderer=None):
+        """충전할 스킬 선택 메뉴 표시 (Identifiy Menu와 유사)
+        
+        Args:
+            known_skills: [skill_name, ...] 형식의 스킬 이름 리스트
+            game_renderer: 게임 화면 재렌더링 콜백
+            
+        Returns:
+            선택된 skill_name 또는 None
+        """
+        if not known_skills:
+            self.add_message("사용 가능한 스킬이 없습니다!")
+            return None
+            
+        selected_idx = 0
+        
+        while True:
+            # Redraw game
+            if game_renderer:
+                game_renderer()
+                
+            # Popup Layout
+            menu_width = 40
+            menu_height = len(known_skills) + 5
+            start_y = 5
+            start_x = 20
+            
+            # Box
+            print(f"\033[{start_y};{start_x}H", end="")
+            print("┌" + "─" * (menu_width - 2) + "┐")
+            
+            header = f" 충전할 스킬 선택 "
+            padding = (menu_width - len(header) - 2) // 2
+            print(f"\033[{start_y + 1};{start_x}H", end="")
+            print("│" + " " * padding + header + " " * (menu_width - len(header) - padding - 2) + "│")
+            
+            print(f"\033[{start_y + 2};{start_x}H", end="")
+            print("├" + "─" * (menu_width - 2) + "┤")
+            
+            # List
+            for i, skill_name in enumerate(known_skills):
+                prefix = " >" if i == selected_idx else "  "
+                if i == selected_idx:
+                    color = "\033[93m" # Yellow
+                    reset = "\033[0m"
+                else:
+                    color = ""
+                    reset = ""
+                
+                line_y = start_y + 3 + i
+                print(f"\033[{line_y};{start_x}H", end="")
+                
+                content = f"{prefix} {skill_name}"
+                print(f"│{color}{content:<{menu_width - 2}}{reset}│")
+
+            # Footer
+            print(f"\033[{start_y + 3 + len(known_skills)};{start_x}H", end="")
+            print("└" + "─" * (menu_width - 2) + "┘")
+            
+            sys.stdout.flush()
+            
+            # Input
+            key = self.get_key_input()
+            if key in [readchar.key.UP, 'w', 'W', '\x1b[A']:
+                selected_idx = max(0, selected_idx - 1)
+            elif key in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
+                selected_idx = min(len(known_skills) - 1, selected_idx + 1)
+            elif key in ['\r', '\n', readchar.key.ENTER, ' ']:
+                return known_skills[selected_idx]
+            elif key in [readchar.key.ESC, 'q', 'Q']:
+                return None
+
+    def show_repair_menu(self, repairable_items, game_renderer=None):
+        """수리할 아이템 선택 메뉴 표시
+        
+        Args:
+            repairable_items: [ItemDefinition, ...]
+            game_renderer: 게임 화면 재렌더링 콜백
+            
+        Returns:
+            선택된 ItemDefinition 또는 None
+        """
+        if not repairable_items:
+            self.add_message("수리할 아이템이 없습니다!")
+            return None
+            
+        selected_idx = 0
+        
+        while True:
+            # Redraw game
+            if game_renderer:
+                game_renderer()
+                
+            # Popup Layout
+            menu_width = 50
+            menu_height = len(repairable_items) + 5
+            start_y = 5
+            start_x = 15
+            
+            # Box
+            print(f"\033[{start_y};{start_x}H", end="")
+            print("┌" + "─" * (menu_width - 2) + "┐")
+            
+            header = f" 수리할 장비 선택 (성공확률 불명) "
+            padding = (menu_width - len(header) - 2) // 2
+            print(f"\033[{start_y + 1};{start_x}H", end="")
+            print("│" + " " * padding + header + " " * (menu_width - len(header) - padding - 2) + "│")
+            
+            print(f"\033[{start_y + 2};{start_x}H", end="")
+            print("├" + "─" * (menu_width - 2) + "┤")
+            
+            # List
+            for i, item in enumerate(repairable_items):
+                prefix = " >" if i == selected_idx else "  "
+                if i == selected_idx:
+                    color = "\033[93m" # Yellow
+                    reset = "\033[0m"
+                else:
+                    color = ""
+                    reset = ""
+                
+                line_y = start_y + 3 + i
+                cur_d = getattr(item, 'current_durability', 0)
+                max_d = getattr(item, 'max_durability', 0)
+                dur_str = f"({cur_d}/{max_d})"
+                
+                print(f"\033[{line_y};{start_x}H", end="")
+                
+                name_display = item.name[:20] # Truncate check
+                content = f"{prefix} {name_display:<20} {dur_str}"
+                print(f"│{color}{content:<{menu_width - 2}}{reset}│")
+
+            # Footer
+            print(f"\033[{start_y + 3 + len(repairable_items)};{start_x}H", end="")
+            print("└" + "─" * (menu_width - 2) + "┘")
+            
+            sys.stdout.flush()
+            
+            # Input
+            key = self.get_key_input()
+            if key in [readchar.key.UP, 'w', 'W', '\x1b[A']:
+                selected_idx = max(0, selected_idx - 1)
+            elif key in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
+                selected_idx = min(len(repairable_items) - 1, selected_idx + 1)
+            elif key in ['\r', '\n', readchar.key.ENTER, ' ']:
+                return repairable_items[selected_idx]
+            elif key in [readchar.key.ESC, 'q', 'Q']:
+                return None
+
     def _clear_screen(self):
         """화면을 깨끗하게 지웁니다. (ANSI 이스케이프 코드 사용으로 깜빡임 최소화)"""
         # \033[H: 커서를 홈 위치(0,0)로 이동

@@ -9,7 +9,8 @@ from .components import (
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
     HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent,
     StatModifierComponent, ShrineComponent, ManaShieldComponent, SummonComponent,
-    PetrifiedComponent, BleedingComponent
+    PetrifiedComponent, BleedingComponent, BossComponent, CombatTrackerComponent,
+    ChargeComponent, SwitchComponent
 )
 import readchar
 import random
@@ -17,7 +18,8 @@ import time
 from .ui import COLOR_MAP
 from .events import (
     MoveSuccessEvent, CollisionEvent, MessageEvent, MapTransitionEvent,
-    ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent
+    ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent,
+    InteractEvent, TrapTriggerEvent, CombatResultEvent
 )
 
 
@@ -118,8 +120,48 @@ class InputSystem(System):
             if self.world.engine.is_attack_mode:
                 self.world.engine.is_attack_mode = False # 공격 후 모드 해제
                 
-                # 활성화된 스킬이 있는 경우
+                # [Charge Skill] 스킬 충전 확인 (ChargeComponent)
+                c_comp = player_entity.get_component(ChargeComponent)
                 active_skill = getattr(self.world.engine, 'active_skill_name', None)
+                
+                if c_comp and c_comp.stored_skill_name:
+                    # 충전된 스킬 발사!
+                    skill_name = c_comp.stored_skill_name
+                    
+                    # [Heal Check] 회복 스킬이면 자신에게 시전
+                    is_heal = False
+                    skill_defs = getattr(self.world.engine, 'skill_defs', {})
+                    if skill_name in skill_defs:
+                        skill_def = skill_defs[skill_name]
+                        if getattr(skill_def, 'type', '') == 'HEAL' or 'Heal' in skill_name or '회복' in skill_name:
+                            is_heal = True
+                    
+                    if is_heal:
+                        # 자신에게 시전 (dx=0, dy=0), Cost=0 (Free)
+                        self.event_manager.push(MessageEvent(f"지팡이에 충전된 '{skill_name}'을(를) 방출하여 자신을 치유합니다!", "yellow"))
+                        self.event_manager.push(SkillUseEvent(
+                            attacker_id=player_entity.entity_id,
+                            skill_name=skill_name,
+                            dx=0,
+                            dy=0,
+                            cost=0 # FREE
+                        ))
+                    else:
+                        # 방향 발사, Cost=0 (Free)
+                        self.event_manager.push(MessageEvent(f"지팡이에 충전된 '{skill_name}'을(를) 방출합니다!", "yellow"))
+                        self.event_manager.push(SkillUseEvent(
+                            attacker_id=player_entity.entity_id,
+                            skill_name=skill_name,
+                            dx=dx,
+                            dy=dy,
+                            cost=0 # FREE
+                        ))
+                    
+                    # 충전 해제
+                    player_entity.remove_component(ChargeComponent)
+                    return True # 턴 소모
+
+                # 활성화된 스킬이 있는 경우
                 if active_skill:
                     self.world.engine.active_skill_name = None
                     self.event_manager.push(SkillUseEvent(
@@ -206,13 +248,138 @@ class InputSystem(System):
         if action_lower in ['.', '5', 'x', 'z']: # 대기 키 확장
             self.event_manager.push(MessageEvent("제자리에서 대기합니다."))
             return True # 턴 소모
+        
+        # [d] 수동 함정 해제
+        if action_lower == 'd':
+            player_entity = self.world.get_player_entity()
+            if not player_entity:
+                return False
+            
+            inv = player_entity.get_component(InventoryComponent)
+            if not inv or "함정 해제" not in inv.skills:
+                self.event_manager.push(MessageEvent("함정 해제 스킬이 필요합니다!", "yellow"))
+                return False
+            
+            # Find nearby traps/pressure plates
+            player_pos = player_entity.get_component(PositionComponent)
+            if self._attempt_manual_disarm(player_entity, player_pos):
+                return True  # Turn consumed
+            else:
+                self.event_manager.push(MessageEvent("근처에 해제할 함정이 없습니다.", "yellow"))
+                return False
 
         if action_lower == 'q':
+            # [Auto-Save] 게임 종료 시 자동 저장
+            if hasattr(self.world, 'engine') and self.world.engine:
+                self.world.engine._save_game()
+                self.event_manager.push(MessageEvent("게임이 저장되었습니다.", "cyan"))
+            
             self.world.engine.is_running = False
             return True
         
         # [DEBUG] 알 수 없는 명령 로그
         # self.world.event_manager.push(MessageEvent(f"알 수 없는 명령: {repr(action_clean)}"))
+        return False
+    
+    def _attempt_manual_disarm(self, player, player_pos):
+        """수동 함정 해제 시도"""
+        from .components import PressurePlateComponent, SwitchComponent, TrapComponent
+        from .events import TrapTriggerEvent, SoundEvent
+        
+        inv = player.get_component(InventoryComponent)
+        skill_level = inv.skill_levels.get("함정 해제", 1)
+        success_rate = min(95, 50 + (skill_level * 10))
+        
+        # Check for pressure plate at current position
+        pressure_plates = self.world.get_entities_with_components({PressurePlateComponent, PositionComponent})
+        for plate_entity in pressure_plates:
+            plate_pos = plate_entity.get_component(PositionComponent)
+            if plate_pos.x == player_pos.x and plate_pos.y == player_pos.y:
+                plate_comp = plate_entity.get_component(PressurePlateComponent)
+                
+                if plate_comp.is_triggered:
+                    self.event_manager.push(MessageEvent("이미 발동된 압력판입니다.", "yellow"))
+                    return False
+                
+                if not plate_comp.linked_trap_id:
+                    self.event_manager.push(MessageEvent("함정이 연결되지 않은 압력판입니다.", "yellow"))
+                    return False
+                
+                # Attempt disarm
+                self.event_manager.push(MessageEvent("압력판을 조심스럽게 해체하고 있습니다...", "yellow"))
+                
+                if random.randint(1, 100) <= success_rate:
+                    # Success
+                    plate_comp.is_triggered = True
+                    trap = self.world.get_entity(plate_comp.linked_trap_id)
+                    if trap:
+                        trap_comp = trap.get_component(TrapComponent)
+                        if trap_comp:
+                            trap_comp.is_disarmed = True
+                    
+                    # Update visual
+                    render_comp = plate_entity.get_component(RenderComponent)
+                    if render_comp:
+                        render_comp.char = '✓'
+                        render_comp.color = 'green'
+                    
+                    self.event_manager.push(MessageEvent(f"찰칵! 압력판을 성공적으로 해제했습니다! (성공률: {success_rate}%)", "green"))
+                    self.event_manager.push(SoundEvent("COIN"))
+                    return True
+                else:
+                    # Failure - trigger trap
+                    self.event_manager.push(MessageEvent(f"틱! 압력판이 발동됩니다! (성공률: {success_rate}%)", "red"))
+                    self.event_manager.push(TrapTriggerEvent(plate_comp.linked_trap_id, player.entity_id, None))
+                    return True
+        
+        # Check for trapped doors/levers nearby (adjacent tiles)
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                if dx == 0 and dy == 0:
+                    continue
+                
+                check_x = player_pos.x + dx
+                check_y = player_pos.y + dy
+                
+                switches = self.world.get_entities_with_components({SwitchComponent, PositionComponent})
+                for switch_entity in switches:
+                    switch_pos = switch_entity.get_component(PositionComponent)
+                    if switch_pos.x == check_x and switch_pos.y == check_y:
+                        switch_comp = switch_entity.get_component(SwitchComponent)
+                        
+                        if not switch_comp.linked_trap_id:
+                            continue
+                        
+                        if switch_comp.is_open:
+                            continue  # Already open
+                        
+                        trap = self.world.get_entity(switch_comp.linked_trap_id)
+                        if not trap:
+                            continue
+                        
+                        trap_comp = trap.get_component(TrapComponent)
+                        if not trap_comp:
+                            continue
+                        
+                        if trap_comp.is_disarmed:
+                            self.event_manager.push(MessageEvent("이미 해제된 함정입니다.", "yellow"))
+                            return False
+                        
+                        # Attempt disarm
+                        self.event_manager.push(MessageEvent("함정을 조심스럽게 해체하고 있습니다...", "yellow"))
+                        
+                        if random.randint(1, 100) <= success_rate:
+                            # Success
+                            trap_comp.is_disarmed = True
+                            self.event_manager.push(MessageEvent(f"찰칵! 함정을 성공적으로 해제했습니다! (성공률: {success_rate}%)", "green"))
+                            self.event_manager.push(SoundEvent("COIN"))
+                            return True
+                        else:
+                            # Failure - trigger trap
+                            self.event_manager.push(MessageEvent(f"틱! 함정이 발동됩니다! (성공률: {success_rate}%)", "red"))
+                            self.event_manager.push(TrapTriggerEvent(switch_comp.linked_trap_id, player.entity_id, None))
+                            return True
+        
         return False
 
 
@@ -256,8 +423,14 @@ class MovementSystem(System):
                 collision_data = self._check_entity_collision(entity, new_x, new_y)
                 if collision_data:
                     collided_id, collision_type = collision_data
-                    self.event_manager.push(CollisionEvent(entity.entity_id, collided_id, new_x, new_y, collision_type))
-                    is_collision = True
+                    
+                    if collision_type == "SWITCH":
+                        # 스위치 상호작용 (문 열기 등)
+                        self.event_manager.push(InteractEvent(entity.entity_id, collided_id, "TOGGLE"))
+                        is_collision = True # 상호작용 하느라 이동은 못함 (한 턴 소모)
+                    else:
+                        self.event_manager.push(CollisionEvent(entity.entity_id, collided_id, new_x, new_y, collision_type))
+                        is_collision = True
             
             # 3. 이동 성공 (어떤 충돌도 없었을 때만 실행)
             if not is_collision:
@@ -299,6 +472,29 @@ class MovementSystem(System):
                             p_stats = player.get_component(StatsComponent)
                             if p_stats and p_stats.sees_hidden:
                                  self.event_manager.push(MessageEvent("숨겨진 무언가를 발견했습니다!"))
+            
+            # 6. 압력판 (PressurePlateComponent) 확인
+            if not is_collision:
+                from .components import PressurePlateComponent
+                from .events import TrapTriggerEvent
+                
+                pressure_plates = self.world.get_entities_with_components({PressurePlateComponent, PositionComponent})
+                for plate_entity in pressure_plates:
+                    plate_pos = plate_entity.get_component(PositionComponent)
+                    if plate_pos.x == new_x and plate_pos.y == new_y:
+                        plate_comp = plate_entity.get_component(PressurePlateComponent)
+                        
+                        # Trigger only once
+                        if not plate_comp.is_triggered and plate_comp.linked_trap_id:
+                            plate_comp.is_triggered = True
+                            self.event_manager.push(MessageEvent("찰칵! 압력판을 밟았습니다!", "red"))
+                            self.event_manager.push(TrapTriggerEvent(plate_comp.linked_trap_id, entity.entity_id, None))
+                            
+                            # Update visual
+                            render_comp = plate_entity.get_component(RenderComponent)
+                            if render_comp:
+                                render_comp.char = '▼'
+                                render_comp.color = 'red'
 
             # DesiredPositionComponent 제거 (처리 완료)
             entity.remove_component(DesiredPositionComponent)
@@ -337,8 +533,14 @@ class MovementSystem(System):
             return collided_entity.entity_id, "MONSTER"
         
         # 플레이어 체크 (ID=1 가정 또는 컴포넌트 유무)
+        # 플레이어 체크 (ID=1 가정 또는 컴포넌트 유무)
         if collided_entity.entity_id == self.world.get_player_entity().entity_id:
             return collided_entity.entity_id, "PLAYER"
+            
+        # 스위치(문/레버) 체크
+        switch_comp = collided_entity.get_component(SwitchComponent)
+        if switch_comp and not switch_comp.is_open:
+            return collided_entity.entity_id, "SWITCH"
             
         return collided_entity.entity_id, "OTHER"
 
@@ -604,6 +806,28 @@ class CombatSystem(System):
         aura_entities = self.world.get_entities_with_components({SkillEffectComponent, PositionComponent})
         for entity in aura_entities:
             self._handle_skill_aura(entity)
+
+    def _apply_damage_direct(self, target: Entity, damage: int, damage_type: str, is_critical: bool = False):
+        """방어력/상성 계산 없이(또는 최소한으로) 직접 데미지 적용 (함정 등)"""
+        t_stats = target.get_component(StatsComponent)
+        if not t_stats: return
+        
+        # 데미지 적용
+        t_stats.current_hp -= damage
+        if t_stats.current_hp < 0: t_stats.current_hp = 0
+        
+        # 메시지 및 이펙트
+        target_name = self.world.engine._get_entity_name(target) if hasattr(self.world, 'engine') else "대상"
+        color = "red" if is_critical else "white"
+        msg = f"{target_name}에게 {damage}의 데미지! ({damage_type})"
+        if is_critical: msg += " (치명타!)"
+        
+        self.event_manager.push(MessageEvent(msg, color))
+        # self.event_manager.push(SoundEvent("HIT")) # TrapSystem handles sounds usually
+        
+        # 사망 처리
+        if t_stats.current_hp == 0:
+            self._handle_death(None, target)
 
     def _handle_skill_aura(self, entity: Entity):
         """지속 스킬(예: 휠 윈드)의 실시간 효과 처리"""
@@ -1428,6 +1652,77 @@ class CombatSystem(System):
         attacker = self.world.get_entity(event.attacker_id)
         if not attacker: return
 
+        # [Charge Skill] 특별 처리
+        if event.skill_name == "Charge" or event.skill_name == "차지":
+             inv = attacker.get_component(InventoryComponent)
+             known_skills = list(inv.skill_levels.keys()) if inv else []
+             
+             # Show UI
+             if hasattr(self.world.engine, 'ui'):
+                 selected_skill = self.world.engine.ui.show_skill_selection_menu(known_skills, self.world.engine._render)
+                 
+                 if selected_skill:
+                     # Add ChargeComponent
+                     # 기존 차지 제거 (덮어쓰기)
+                     if attacker.has_component(ChargeComponent):
+                         attacker.remove_component(ChargeComponent)
+                     
+                     attacker.add_component(ChargeComponent(selected_skill))
+                     self.event_manager.push(MessageEvent(f"지팡이에 '{selected_skill}' 마력을 충전했습니다!", "cyan"))
+                     self.event_manager.push(MessageEvent("충전을 취소했습니다."))
+             return
+
+        # [Repair Skill] 특별 처리
+        if event.skill_name == "Repair" or event.skill_name == "수리":
+            inv = attacker.get_component(InventoryComponent)
+            if not inv: 
+                self.event_manager.push(MessageEvent("수리할 장비가 없습니다."))
+                return
+
+            # 내구도가 감소된 아이템 찾기 (착용 중 + 인벤토리)
+            repairable_items = []
+            
+            # 1. Equipped
+            for slot, item in inv.equipped.items():
+                if item:
+                    max_d = getattr(item, 'max_durability', 0)
+                    curr_d = getattr(item, 'current_durability', 0)
+                    if max_d > 0 and curr_d < max_d:
+                        repairable_items.append(item)
+            
+            # 2. Inventory
+            for key, entry in inv.items.items():
+                item = entry['item']
+                max_d = getattr(item, 'max_durability', 0)
+                curr_d = getattr(item, 'current_durability', 0)
+                if max_d > 0 and curr_d < max_d:
+                    if item not in repairable_items: # 중복 방지
+                        repairable_items.append(item)
+            
+            if not repairable_items:
+                self.event_manager.push(MessageEvent("수리가 필요한 아이템이 없습니다.", "yellow"))
+                return
+
+            # Show UI
+            if hasattr(self.world.engine, 'ui'):
+                selected_item = self.world.engine.ui.show_repair_menu(repairable_items, self.world.engine._render)
+                
+                if selected_item:
+                    # Repair Attempt (60% Chance)
+                    import random
+                    if random.random() < 0.6:
+                        # Success
+                        selected_item.current_durability = selected_item.max_durability
+                        self.event_manager.push(MessageEvent(f"'{selected_item.name}' 수리에 성공했습니다!", "green"))
+                        self.event_manager.push(SoundEvent("LEVEL_UP")) # 긍정적 효과음
+                    else:
+                        # Fail
+                        self.event_manager.push(MessageEvent(f"'{selected_item.name}' 수리에 실패했습니다...", "red"))
+                        # 페널티는 현재 턴 소모 뿐
+                else:
+                    self.event_manager.push(MessageEvent("수리를 취소했습니다."))
+            return
+
         a_stats = attacker.get_component(StatsComponent)
         if not a_stats: return
 
@@ -1503,6 +1798,10 @@ class CombatSystem(System):
 
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
         cost_val = skill.cost_value
+        
+        # [Override] Event에서 cost를 지정했다면 (예: Charge Skill Release = 0)
+        if hasattr(event, 'cost') and event.cost is not None:
+            cost_val = event.cost
         
         # [Update] MP Cost Scaling: +1.5 per level
         # Goal: At Lv.255, Cost ~391 (Max MP ~812 naked Barb). 2 Uses -> Remainder ~30.
@@ -2529,6 +2828,38 @@ class TimeSystem(System):
             if bleed.duration <= 0:
                 entity.remove_component(BleedingComponent)
                 self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 출혈이 멈췄습니다."))
+        
+        # 1-3-1. 독가스 구름 (PoisonCloudComponent) 처리
+        from .components import PoisonCloudComponent
+        poison_clouds = self.world.get_entities_with_components({PoisonCloudComponent, PositionComponent})
+        for cloud in poison_clouds:
+            cloud_comp = cloud.get_component(PoisonCloudComponent)
+            cloud_pos = cloud.get_component(PositionComponent)
+            
+            cloud_comp.tick_timer -= dt
+            if cloud_comp.tick_timer <= 0:
+                cloud_comp.tick_timer = 1.0
+                
+                # Find victims at cloud position
+                victims = [
+                    e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                    if e.get_component(PositionComponent).x == cloud_pos.x
+                    and e.get_component(PositionComponent).y == cloud_pos.y
+                ]
+                
+                for victim in victims:
+                    stats = victim.get_component(StatsComponent)
+                    if stats and stats.current_hp > 0:
+                        stats.current_hp -= cloud_comp.damage_per_tick
+                        if stats.current_hp < 0:
+                            stats.current_hp = 0
+                        
+                        if not victim.has_component(HitFlashComponent):
+                            victim.add_component(HitFlashComponent(duration=0.1))
+                        
+                        if stats.current_hp == 0:
+                            victim_name = self.world.engine._get_entity_name(victim) if hasattr(self.world, 'engine') else "대상"
+                            self.event_manager.push(MessageEvent(f"{victim_name}이(가) 독가스에 질식했습니다!", "purple"))
 
         # 1-3. StatModifier (Buff/Debuff) 시간 감액
         stat_mod_entities = self.world.get_entities_with_components({StatModifierComponent})
@@ -2712,49 +3043,291 @@ class LevelSystem(System):
             # 레벨업 사운드 재사용 (또는 별도 사운드)
             self.event_manager.push(SoundEvent("LEVEL_UP", "보너스 포인트!"))
 
-class TrapSystem(System):
-    """함정 발동 및 처리를 담당하는 시스템"""
-    def process(self):
-        player = self.world.get_player_entity()
-        if not player: return
-        
-        # 위치 컴포넌트가 있는 모든 엔티티 (플레이어, 몬스터)
-        entities = self.world.get_entities_with_components({PositionComponent, StatsComponent})
-        # 함정 엔티티
-        traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
-        
-        for entity in list(entities):
-            e_pos = entity.get_component(PositionComponent)
-            for trap_ent in traps:
-                t_pos = trap_ent.get_component(PositionComponent)
-                trap = trap_ent.get_component(TrapComponent)
-                
-                # 같은 위치이고 아직 발동되지 않은 함정
-                if not trap.is_triggered and e_pos.x == t_pos.x and e_pos.y == t_pos.y:
-                    self._trigger_trap(entity, trap_ent)
+class InteractionSystem(System):
+    """상호작용 처리 (문, 레버)"""
+    _required_components = {SwitchComponent}
 
-    def _trigger_trap(self, victim, trap_ent):
-        """함정 발동 효과 처리"""
-        trap = trap_ent.get_component(TrapComponent)
-        self.event_manager.push(SoundEvent("BASH", f"철컥! 함정이 발동되었습니다! ({trap.trap_type})"))
-        trap = trap_ent.get_component(TrapComponent)
-        stats = victim.get_component(StatsComponent)
+    def initialize_event_listeners(self):
+        self.event_manager.register(InteractEvent, self)
+
+    def process(self):
+        pass
+
+    def handle_interact_event(self, event: InteractEvent):
+        target_entity = self.world.get_entity(event.target)
+        if not target_entity: return
         
-        trap.is_triggered = True
-        trap.visible = True # 발동되면 보임
+        switch_comp = target_entity.get_component(SwitchComponent)
+        if not switch_comp: return
         
-        is_player = victim.entity_id == self.world.get_player_entity().entity_id
-        victim_name = "당신" if is_player else "몬스터"
-        self.event_manager.push(MessageEvent(f"{victim_name}이(가) {trap.trap_type} 함정을 밟았습니다!"))
+        # Action 처리
+        if event.action == "TOGGLE" or event.action == "OPEN":
+            if not switch_comp.is_open:
+                # [V12] Trap Disarm Check
+                if switch_comp.linked_trap_id:
+                    trap_entity = self.world.get_entity(switch_comp.linked_trap_id)
+                    if trap_entity:
+                        trap_comp = trap_entity.get_component(TrapComponent)
+                        
+                        if trap_comp and not trap_comp.is_disarmed:
+                            # Check if player has disarm skill
+                            player = self.world.get_entity(event.who)
+                            inv = player.get_component(InventoryComponent) if player else None
+                            
+                            has_disarm_skill = inv and "함정 해제" in inv.skills
+                            
+                            if has_disarm_skill:
+                                # Skill-level based success rate (Lv1: 60%, Lv5: 95%)
+                                skill_level = inv.skill_levels.get("함정 해제", 1)
+                                success_rate = min(95, 50 + (skill_level * 10))
+                                
+                                # Attempt disarm
+                                if random.randint(1, 100) <= success_rate:
+                                    trap_comp.is_disarmed = True
+                                    self.event_manager.push(MessageEvent(f"함정을 성공적으로 해제했습니다! (성공률: {success_rate}%)", "green"))
+                                    self.event_manager.push(SoundEvent("COIN"))  # Success sound
+                                else:
+                                    self.event_manager.push(MessageEvent(f"함정 해제 실패! 함정이 발동됩니다! (성공률: {success_rate}%)", "red"))
+                                    self.event_manager.push(TrapTriggerEvent(switch_comp.linked_trap_id, event.who, None))
+                                    return  # Don't open door if trap triggered
+                            else:
+                                # No skill - warn and trigger trap
+                                self.event_manager.push(MessageEvent("함정이 감지되었지만 해제할 수 없습니다! (함정 해제 스킬 필요)", "yellow"))
+                                self.event_manager.push(MessageEvent("문을 열면 함정이 발동됩니다!", "red"))
+                                # Trigger trap immediately
+                                self.event_manager.push(TrapTriggerEvent(switch_comp.linked_trap_id, event.who, None))
+                                return  # Don't open door
+                
+                # [Lock Check]
+                if switch_comp.locked:
+                    # TODO: Check key
+                    self.event_manager.push(MessageEvent(f"잠겨있습니다. {switch_comp.key_name or '열쇠'}가 필요합니다.", "yellow"))
+                    # return 
+                
+                switch_comp.is_open = True
+                
+                # Render update (Visual)
+                render_comp = target_entity.get_component(RenderComponent)
+                if render_comp:
+                    if render_comp.char == '+': render_comp.char = '/' # Door
+                
+                self.event_manager.push(MessageEvent("문을 열었습니다."))
+                self.event_manager.push(SoundEvent("DOOR_OPEN"))
+
+class TrapSystem(System):
+    """함정 발동 처리"""
+    _required_components = {TrapComponent}
+
+    def initialize_event_listeners(self):
+        self.event_manager.register(TrapTriggerEvent, self)
+
+    def process(self):
+        # Trap reload logic
+        trap_entities = self.world.get_entities_with_components({TrapComponent})
+        for trap_entity in trap_entities:
+            trap_comp = trap_entity.get_component(TrapComponent)
+            if trap_comp.is_disarmed:
+                trap_comp.turns_since_trigger += 1
+                if trap_comp.turns_since_trigger >= trap_comp.reload_turns:
+                    trap_comp.is_disarmed = False
+                    trap_comp.turns_since_trigger = 0
+                    player = self.world.get_player_entity()
+                    if player:
+                        player_pos = player.get_component(PositionComponent)
+                        trap_pos = trap_entity.get_component(PositionComponent)
+                        if player_pos and trap_pos:
+                            distance = abs(player_pos.x - trap_pos.x) + abs(player_pos.y - trap_pos.y)
+                            if distance <= 10:
+                                self.event_manager.push(MessageEvent("근처에서 함정이 재장전되는 소리가 들립니다...", "yellow"))
+
+    def handle_trap_trigger(self, event: TrapTriggerEvent):
+        trap = self.world.get_entity(event.trap_entity_id)
+        if not trap: return
         
-        # 데미지 적용
-        stats.current_hp -= trap.damage
-        if stats.current_hp < 0: stats.current_hp = 0
+        t_comp = trap.get_component(TrapComponent)
+        if not t_comp: return
         
-        # 상태 이상 적용
-        if trap.effect == "STUN":
-            victim.add_component(StunComponent(duration=2.0))
-            self.event_manager.push(MessageEvent(f"{victim_name}이(가) 기절했습니다!"))
+        # Check if disarmed
+        if t_comp.is_disarmed:
+            return  # Trap was disarmed, do nothing
         
-        # 시각적 피드백
-        victim.add_component(HitFlashComponent())
+        victim = self.world.get_entity(event.victim_entity_id) if event.victim_entity_id else None
+        
+        damage = random.randint(t_comp.damage_min, t_comp.damage_max)
+        
+        combat_sys = self.world.get_system(CombatSystem)
+        if not combat_sys:
+             return
+
+        if t_comp.trap_type == TrapComponent.ARROW:
+            # [V12] High-speed projectile with knockback
+            self.event_manager.push(MessageEvent(f"함정 발동! 화살이 날아옵니다!", "red"))
+            self._fire_arrow_projectile(t_comp, victim, damage, combat_sys)
+                
+        elif t_comp.trap_type == TrapComponent.NOVA:
+             self.event_manager.push(MessageEvent(f"함정 발동! 주변으로 에너지가 폭발합니다!", "red"))
+             if victim:
+                 combat_sys._apply_damage_direct(victim, damage, "MAGIC", is_critical=False)
+                 
+        elif t_comp.trap_type == TrapComponent.LIGHTNING:
+             self.event_manager.push(MessageEvent(f"함정 발동! 번개가 내리칩니다!", "yellow"))
+             if victim:
+                 combat_sys._apply_damage_direct(victim, damage, "LIGHTNING", is_critical=True)
+                 
+        elif t_comp.trap_type == TrapComponent.GAS:
+             self.event_manager.push(MessageEvent(f"함정 발동! 독가스가 퍼집니다!", "purple"))
+             # Create 3x3 poison cloud AOE
+             self._create_poison_cloud(event, damage)
+        
+        # Generic Effect Handling (STUN, etc.)
+        if getattr(t_comp, 'effect', None) == "STUN" and victim:
+             if not victim.has_component(StunComponent):
+                 victim.add_component(StunComponent(duration=2.0))
+                 self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(victim)}이(가) 기절했습니다!", "yellow"))
+    
+    def _fire_arrow_projectile(self, trap_comp: TrapComponent, victim: Entity, damage: int, combat_sys):
+        """고속 화살 투사체 발사 (0.01초 간격으로 타일 이동)"""
+        if not victim or not trap_comp.source_x or not trap_comp.source_y:
+            # No source position, fall back to direct damage
+            if victim:
+                combat_sys._apply_damage_direct(victim, damage, "PHYSICAL", is_critical=False)
+            return
+        
+        victim_pos = victim.get_component(PositionComponent)
+        if not victim_pos:
+            return
+        
+        # Calculate direction
+        dx = victim_pos.x - trap_comp.source_x
+        dy = victim_pos.y - trap_comp.source_y
+        distance = max(abs(dx), abs(dy))
+        
+        if distance == 0:
+            return
+        
+        # Normalize direction
+        step_x = 1 if dx > 0 else (-1 if dx < 0 else 0)
+        step_y = 1 if dy > 0 else (-1 if dy < 0 else 0)
+        
+        # Trace projectile path (max 10 tiles)
+        current_x, current_y = trap_comp.source_x, trap_comp.source_y
+        max_range = min(distance + 5, 10)  # Overshoot slightly
+        
+        map_entities = self.world.get_entities_with_components({MapComponent})
+        map_comp = map_entities[0].get_component(MapComponent) if map_entities else None
+        
+        for step in range(max_range):
+            current_x += step_x
+            current_y += step_y
+            
+            # Check map boundaries
+            if not map_comp or current_x < 0 or current_x >= map_comp.width or current_y < 0 or current_y >= map_comp.height:
+                break
+            
+            # Check wall collision
+            if map_comp.tiles[current_y][current_x] == '#':
+                self.event_manager.push(MessageEvent("화살이 벽에 박혔습니다.", "white"))
+                break
+            
+            # Visual effect - Diablo 1 style (slower, visible trajectory)
+            effect_entity = self.world.create_entity()
+            self.world.add_component(effect_entity.entity_id, PositionComponent(x=current_x, y=current_y))
+            arrow_char = '-' if step_x != 0 else '|'
+            self.world.add_component(effect_entity.entity_id, RenderComponent(char=arrow_char, color='yellow'))
+            # Longer duration for trail effect
+            self.world.add_component(effect_entity.entity_id, EffectComponent(duration=0.3))
+            
+            # Render frame for smooth animation
+            if hasattr(self.world, 'engine'):
+                self.world.engine._render()
+                time.sleep(0.05)  # Slower for visible trajectory (50ms per tile)
+            
+            # Check entity collision
+            targets = [
+                e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                if e.get_component(PositionComponent).x == current_x
+                and e.get_component(PositionComponent).y == current_y
+            ]
+            
+            if targets:
+                target = targets[0]
+                # Hit! Apply damage and knockback
+                combat_sys._apply_damage_direct(target, damage, "PHYSICAL", is_critical=False)
+                self.event_manager.push(SoundEvent("HIT"))
+                
+                # Knockback effect
+                self._apply_trap_knockback(target, step_x, step_y, map_comp)
+                break
+    
+    def _apply_trap_knockback(self, target: Entity, dx: int, dy: int, map_comp):
+        """함정 화살에 의한 넉백 효과"""
+        t_pos = target.get_component(PositionComponent)
+        if not t_pos or not map_comp:
+            return
+        
+        # Knockback 1 tile in arrow direction
+        nx, ny = t_pos.x + dx, t_pos.y + dy
+        
+        # Check if valid position
+        if 0 <= nx < map_comp.width and 0 <= ny < map_comp.height and map_comp.tiles[ny][nx] == '.':
+            # Check for other entities
+            others = [e for e in self.world.get_entities_with_components({PositionComponent})
+                     if e.get_component(PositionComponent).x == nx and e.get_component(PositionComponent).y == ny]
+            if not others:
+                t_pos.x, t_pos.y = nx, ny
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}이(가) 뒤로 밀려났습니다!", "yellow"))
+    def _apply_trap_knockback(self, target: Entity, dx: int, dy: int, map_comp):
+        """함정 화살에 의한 넉백 효과"""
+        t_pos = target.get_component(PositionComponent)
+        if not t_pos or not map_comp:
+            return
+        
+        # Knockback 1 tile in arrow direction
+        nx, ny = t_pos.x + dx, t_pos.y + dy
+        
+        # Check if valid position
+        if 0 <= nx < map_comp.width and 0 <= ny < map_comp.height and map_comp.tiles[ny][nx] == '.':
+            # Check for other entities
+            others = [e for e in self.world.get_entities_with_components({PositionComponent})
+                     if e.get_component(PositionComponent).x == nx and e.get_component(PositionComponent).y == ny]
+            if not others:
+                t_pos.x, t_pos.y = nx, ny
+                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}이(가) 뒤로 밀려났습니다!", "yellow"))
+    
+    def _create_poison_cloud(self, event: TrapTriggerEvent, base_damage: int):
+        """가스 함정 3x3 독구름 생성"""
+        from .components import PoisonCloudComponent, EffectComponent
+        
+        # Get trigger position (door/lever or victim position)
+        victim = self.world.get_entity(event.victim_entity_id) if event.victim_entity_id else None
+        if not victim:
+            return
+        
+        victim_pos = victim.get_component(PositionComponent)
+        if not victim_pos:
+            return
+        
+        center_x, center_y = victim_pos.x, victim_pos.y
+        
+        # Create 3x3 poison cloud
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                cloud_x = center_x + dx
+                cloud_y = center_y + dy
+                
+                # Check map boundaries
+                map_entities = self.world.get_entities_with_components({MapComponent})
+                if map_entities:
+                    map_comp = map_entities[0].get_component(MapComponent)
+                    if not (0 <= cloud_x < map_comp.width and 0 <= cloud_y < map_comp.height):
+                        continue
+                    # Don't place cloud on walls
+                    if map_comp.tiles[cloud_y][cloud_x] == '#':
+                        continue
+                
+                # Create poison cloud entity
+                cloud = self.world.create_entity()
+                self.world.add_component(cloud.entity_id, PositionComponent(x=cloud_x, y=cloud_y))
+                self.world.add_component(cloud.entity_id, RenderComponent(char='☁', color='purple'))
+                self.world.add_component(cloud.entity_id, EffectComponent(duration=5.0))  # 5 seconds
+                self.world.add_component(cloud.entity_id, PoisonCloudComponent(damage_per_tick=base_damage // 3))

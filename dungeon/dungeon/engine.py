@@ -19,18 +19,19 @@ from .components import (
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent, ShrineComponent,
     StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent, TrapComponent,
-    SleepComponent, PoisonComponent, StatModifierComponent
+    SleepComponent, PoisonComponent, StatModifierComponent, BossComponent, PetrifiedComponent, BossGateComponent
 )
 from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
-    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem
+    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem, BossSystem
 )
 from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
 from .sound_system import SoundSystem
 from .renderer import Renderer
 from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
 from .constants import (
-    ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS
+    ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS,
+    RARITY_NORMAL, RARITY_MAGIC, RARITY_UNIQUE, RARITY_CURSED
 )
 
 
@@ -377,6 +378,26 @@ class Engine:
         map_component = MapComponent(width=width, height=height, tiles=map_data) 
         self.world.add_component(map_entity.entity_id, map_component)
         
+        # [Boss Gate] 보스 층에서 계단 숨기기 및 게이트 정보 저장
+        if self.current_level in [25, 50, 75, 99]:
+            region_names = {
+                25: "Catacombs",
+                50: "Caves", 
+                75: "Hell",
+                99: "승리"
+            }
+            
+            # 맵 엔티티에 BossGateComponent 추가
+            self.world.add_component(map_entity.entity_id, BossGateComponent(
+                next_region_name=region_names[self.current_level],
+                stairs_spawned=False
+            ))
+            
+            # 실제 맵 데이터에서 계단 타일을 바닥('.')으로 임시 변경
+            if 0 <= dungeon_map.exit_x < width and 0 <= dungeon_map.exit_y < height:
+                map_component.tiles[dungeon_map.exit_y][dungeon_map.exit_x] = '.'
+                logging.info(f"Boss Floor {self.current_level}: Hidden exit stairs at ({dungeon_map.exit_x}, {dungeon_map.exit_y})")
+        
         # 3. 메시지 로그 엔티티 생성 (ID=3)
         message_entity = self.world.create_entity()
         message_comp = MessageComponent()
@@ -426,12 +447,6 @@ class Engine:
                     name = m_comp.type_name if m_comp else "강력한 적"
                     message_comp.add_message(f"[경고] {name}이(가) 나타났습니다!", "red")
                     
-                    # [Boss Bark] Floor Entry Trigger
-                    from .events import BossBarkEvent
-                    # 패턴에서 대사 가져오기
-                    pattern = self.boss_patterns.get(b_id)
-                    if pattern and "on_floor_entry" in pattern:
-                        self.world.event_manager.push(BossBarkEvent(boss_ent, "FLOOR_ENTRY", pattern["on_floor_entry"]))
 
             # 주변 호위병 몇 기
             for _ in range(3):
@@ -662,16 +677,28 @@ class Engine:
             self._spawn_shrine(shrine_x, shrine_y)
 
     def _spawn_trap(self, x, y):
-        """함정 엔티티 생성"""
+        """함정 엔티티 생성 (다양한 타입)"""
         trap = self.world.create_entity()
         self.world.add_component(trap.entity_id, PositionComponent(x=x, y=y))
         
+        # 다양한 함정 타입
         trap_types = [
-            {"type": "가시", "damage": 10, "effect": None},
-            {"type": "마비", "damage": 5, "effect": "STUN"},
+            {"type": "ARROW", "min": 10, "max": 15, "effect": None, "weight": 40},
+            {"type": "LIGHTNING", "min": 5, "max": 10, "effect": "STUN", "weight": 25},
+            {"type": "GAS", "min": 3, "max": 6, "effect": "POISON", "weight": 20},
+            {"type": "NOVA", "min": 15, "max": 25, "effect": None, "weight": 15},
         ]
-        t_data = random.choice(trap_types)
-        self.world.add_component(trap.entity_id, TrapComponent(trap_type=t_data["type"], damage=t_data["damage"], effect=t_data["effect"]))
+        
+        # 가중치 기반 선택
+        weights = [t["weight"] for t in trap_types]
+        t_data = random.choices(trap_types, weights=weights, k=1)[0]
+        
+        self.world.add_component(trap.entity_id, TrapComponent(
+            trap_type=t_data["type"], 
+            damage_min=t_data["min"], 
+            damage_max=t_data["max"],
+            effect=t_data["effect"]
+        ))
     
     def _spawn_shrine(self, x, y):
         """신전 엔티티 생성"""
@@ -1197,7 +1224,14 @@ class Engine:
                     else:
                         try:
                             # to_dict가 없는 경우 기본 속성들만 저장
-                            attrs = {k: v for k, v in vars(comp).items() if not k.startswith('_')}
+                            attrs = {}
+                            for k, v in vars(comp).items():
+                                if k.startswith('_'): continue
+                                # JSON serializable check & convert set to list
+                                if isinstance(v, set):
+                                    attrs[k] = list(v)
+                                else:
+                                    attrs[k] = v
                             serialized_list.append(attrs)
                         except TypeError:
                             # vars()가 불가능한 경우 (built-in 등) 빈 딕셔너리 또는 가능한 속성만
@@ -2223,10 +2257,13 @@ class Engine:
 
         # [Boss Bark UI] 맵 상단 중앙에 출력
         if boss_bark:
-            # 맵 상단 (y=0 or 1) 중앙 정렬
-            bark_x = max(0, (MAP_VIEW_WIDTH - len(boss_bark)) // 2)
-            # 테두리 느낌으로 강조
-            self.renderer.draw_text(dx(bark_x), dy(0), boss_bark, "yellow")
+            # 맵 상단 (y=1) 중앙 정렬 (y=0은 배너와 겹칠 수 있음)
+            # 테두리 및 반전 효과 강조
+            box_text = f"  {boss_bark}  "
+            bark_x = max(0, (MAP_VIEW_WIDTH - len(box_text)) // 2)
+            
+            # 배경 상자 느낌 (draw_text가 한글 너비를 처리하므로 안전)
+            self.renderer.draw_text(dx(bark_x), dy(1), box_text, "invert")
 
         # ... (중략: 안개 업데이트 로직) ...
         # 0. 전장의 안개 업데이트 (시야 반경 8)
@@ -2364,8 +2401,7 @@ class Engine:
 
                 # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘) - 우선순위 순서로 표시
                 # Priority: Petrified > Stun > Sleep > Poison > Bleeding > Mana Shield
-                from .components import (PetrifiedComponent, StunComponent, SleepComponent, 
-                                        PoisonComponent, BleedingComponent, ManaShieldComponent)
+                from .components import (BleedingComponent, ManaShieldComponent)
                 
                 status_icon = None
                 status_color = "white"
@@ -2712,7 +2748,7 @@ class Engine:
             text = self.banner_text
             border = "=" * (len(text) + 4)
             bx = (MAP_VIEW_WIDTH - len(border)) // 2
-            by = MAP_VIEW_HEIGHT // 2
+            by = 3
             
             color = "gold"
             if int(self.banner_timer * 4) % 2 == 0:
@@ -2740,6 +2776,9 @@ class Engine:
         # 맵 영역(80) 내에 중앙 정렬
         start_x = (MAP_WIDTH - POPUP_WIDTH) // 2
         start_y = (self.renderer.height - POPUP_HEIGHT) // 2
+        
+        # 1. 배경 및 테두리 그리기
+        max_visible_items = 6  # 목록 가독성을 위해 6개로 고정
         
         # 1. 배경 및 테두리 그리기 (불투명 처리 보강)
         for y in range(start_y, start_y + POPUP_HEIGHT):
@@ -2811,9 +2850,8 @@ class Engine:
                      current_y = start_y + 4
                      # Import constants
                      from .constants import ELEMENT_ICONS, RARITY_NORMAL
-                     
-                     # 스크롤 가능한 영역 계산 (하단에 상세 정보창 공간 확보)
-                     max_visible_items = POPUP_HEIGHT - 13 # 상세 정보창(10줄) + 헤더 등 제외
+                     # 스크롤 가능한 영역 계산 (하단 상세 정보창을 위해 6개로 제한)
+                     max_visible_items = 6
                      
                      # 스크롤 오프셋 조정 (선택된 아이템이 보이도록)
                      if self.selected_item_index < self.inventory_scroll_offset:
@@ -2885,30 +2923,26 @@ class Engine:
                          
                          self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{icon}{name} x{qty}{_s}", color)
                          current_y += 1
-                     
                      # 페이지 인디케이터 표시
                      if total_items > max_visible_items:
                          current_page = (self.inventory_scroll_offset // max_visible_items) + 1
                          total_pages = (total_items + max_visible_items - 1) // max_visible_items
                          page_info = f"Page {current_page}/{total_pages} ({start_idx+1}-{end_idx}/{total_items})"
-                         # 위치를 약간 위로 조정하여 하단 상세 정보창과 겹치지 않게 함
-                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + POPUP_HEIGHT - 6, page_info, "cyan")
+                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + 3, page_info, "cyan")
 
                  # 4.1 선택된 아이템/스킬 상세 정보 표시 (하단 영역)
-                 # 하단 정보 표시
-                 info_y = start_y + max_visible_items + 3
+                 # 하단 구분선 (y=10 고정)
+                 info_y = start_y + 10
                  self.renderer.draw_text(start_x, info_y, "─" * (POPUP_WIDTH - 2), "white")
                  
-                 # Debug: Show selection info
-                 debug_info = f"선택: {self.selected_item_index + 1}/{total_items} (총 {len(filtered_items)}개)"
-                 self.renderer.draw_text(start_x + 2, start_y + POPUP_HEIGHT - 12, debug_info, "yellow")
-                 
+                 # 가이드 메시지 (아이템 목록 바로 위 또는 구분선 근처)
+                 debug_info = f" 선택: {self.selected_item_index + 1}/{total_items} "
+                 self.renderer.draw_text(start_x + 2, start_y + 3, debug_info, "yellow")
                  if 0 <= self.selected_item_index < total_items:
                      sel_id, sel_data = filtered_items[self.selected_item_index]
                      sel_item = sel_data['item']
-                     
-                     # 구분선 (상세 정보용 - 10줄 정도 확보)
-                     detail_y = start_y + POPUP_HEIGHT - 11
+                     # 상세 정보 시작 위치 (구분선 바로 아래)
+                     detail_y = info_y + 1
                      self.renderer.draw_text(start_x + 1, detail_y, "-" * (POPUP_WIDTH - 2), "dark_grey")
                      
                      # 아이템/스킬 이름 표시 (상세 영역 최상단)

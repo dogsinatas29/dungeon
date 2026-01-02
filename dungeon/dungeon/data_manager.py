@@ -461,27 +461,38 @@ def get_item_definition(item_id):
     defs = load_item_definitions()
     return defs.get(item_id)
 
-def load_monster_definitions(data_path="data"):
+def load_monster_definitions(data_path=None):
     """monsters.csv 및 Boss.csv 파일에서 몬스터 정의 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     defs = load_data_from_csv('monsters.csv', MonsterDefinition, data_path, key_field='ID')
     bosses = load_data_from_csv('Boss.csv', MonsterDefinition, data_path, key_field='ID')
     defs.update(bosses)
     return defs
 
-def load_skill_definitions(data_path="data"):
+def load_skill_definitions(data_path=None):
     """skills.csv 파일에서 스킬 정의 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     return load_data_from_csv('skills.csv', SkillDefinition, data_path, key_field='이름')
 
-def load_map_definitions(data_path="data"):
+def load_map_definitions(data_path=None):
     """maps.csv 파일에서 층별 맵 설정 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     return load_data_from_csv('maps.csv', MapConfigDefinition, data_path, key_field='floor')
 
-def load_class_definitions(data_path="data"):
+def load_class_definitions(data_path=None):
     """classes.csv 파일에서 캐릭터 직업 정의 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     return load_data_from_csv('classes.csv', ClassDefinition, data_path, key_field='class_id')
 
-def load_boss_patterns(data_path="data"):
+def load_boss_patterns(data_path=None):
     """boss_patterns.json (패턴) 및 boss_dialogues.csv (대사)를 로드하여 병합합니다."""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
+    
     patterns = {}
     
     # 1. JSON 패턴 로드 (행동 로직)
@@ -524,6 +535,7 @@ def load_boss_patterns(data_path="data"):
                         patterns[boss_id][trigger] = dialogue
         except Exception as e:
             print(f"Failed to load boss dialogues CSV: {e}")
+            
             
     return patterns
 

@@ -352,13 +352,35 @@ class MimicComponent(Component):
         self.is_disguised = is_disguised
 
 class TrapComponent(Component):
-    """맵에 배치된 함정 컴포넌트"""
-    def __init__(self, trap_type: str = "SPIKE", damage: int = 10, effect: str = None, is_triggered: bool = False, visible: bool = False):
+    """함정 데이터"""
+    ARROW = "ARROW"
+    NOVA = "NOVA"
+    LIGHTNING = "LIGHTNING"
+    GAS = "GAS"
+    FIREBALL = "FIREBALL_LAUNCHER"
+    
+    def __init__(self, trap_type: str = "ARROW", damage_min: int = 10, damage_max: int = 20, detection_difficulty: int = 10, is_hidden: bool = True, target_selection: str = "TRIGGERER", effect: str = None, is_triggered: bool = False, source_x: int = None, source_y: int = None, is_disarmed: bool = False, reload_turns: int = 50, turns_since_trigger: int = 0):
         self.trap_type = trap_type
-        self.damage = damage
+        self.damage_min = damage_min
+        self.damage_max = damage_max
+        self.detection_difficulty = detection_difficulty
+        self.is_hidden = is_hidden
+        self.target_selection = target_selection # "TRIGGERER", "NEAREST", "AREA"
+        
+        # V12: Projectile source and disarm state
+        self.source_x = source_x  # Arrow trap origin (statue position)
+        self.source_y = source_y
+        self.is_disarmed = is_disarmed  # Rogue can disarm traps
+        
+        # V12.1: Reload system
+        self.reload_turns = reload_turns  # Turns needed to reload (50 for arrow, 100 for gas)
+        self.turns_since_trigger = turns_since_trigger  # Counter for reload
+        
+        # Legacy/Compatibility
+        self.damage = (damage_min + damage_max) // 2
         self.effect = effect
         self.is_triggered = is_triggered
-        self.visible = visible # 횃불 등으로 발견 가능
+        self.visible = not is_hidden
 
 class SleepComponent(Component):
     """수면 상태: 행동 불가, 데미지 입을 시 해제"""
@@ -371,6 +393,24 @@ class PoisonComponent(Component):
         self.damage = damage
         self.duration = duration
         self.tick_timer = 1.0 # 1초마다 데미지
+
+class PoisonCloudComponent(Component):
+    """독가스 구름: 해당 타일에 있는 엔티티에게 지속 데미지"""
+    def __init__(self, damage_per_tick: int = 3):
+        self.damage_per_tick = damage_per_tick
+        self.tick_timer = 1.0  # 1초마다 데미지 적용
+
+class PressurePlateComponent(Component):
+    """압력판: 밟으면 함정 발동"""
+    def __init__(self, linked_trap_id: int = None, is_triggered: bool = False):
+        self.linked_trap_id = linked_trap_id
+        self.is_triggered = is_triggered  # 한 번 발동되면 True
+
+class BossGateComponent(Component):
+    """보스 게이트: 보스를 처치해야 계단이 생성됨"""
+    def __init__(self, next_region_name: str = "", stairs_spawned: bool = False):
+        self.next_region_name = next_region_name  # "Catacombs", "Caves", "Hell", "승리"
+        self.stairs_spawned = stairs_spawned  # 계단 생성 여부
 
 class ManaShieldComponent(Component):
     """마나 실드 상태: 데미지를 HP 대신 MP로 흡수"""
@@ -400,3 +440,39 @@ class CombatTrackerComponent(Component):
     def __init__(self, last_damaged_time: float = 0.0, show_hp_duration: float = 3.0):
         self.last_damaged_time = last_damaged_time
         self.show_hp_duration = show_hp_duration
+
+class ChargeComponent(Component):
+    """소서러 지팡이 스킬 충전 상태"""
+    def __init__(self, stored_skill_name: str):
+        self.stored_skill_name = stored_skill_name
+
+class BossComponent(Component):
+    """보스 몬스터 데이터 및 상태 관리"""
+    def __init__(self, boss_id: str, current_phase: int = 0, is_engaged: bool = False):
+        self.boss_id = boss_id
+        self.current_phase = current_phase
+        self.is_engaged = is_engaged
+        self.last_bark_time = 0.0
+        
+        # [Bark System V2]
+        self.active_bark = "" # 현재 출력 중인 전체 대사
+        self.visible_bark = "" # 현재 화면에 보이는 부분 (타이핑 효과용)
+        self.bark_type_timer = 0.0 # 타이핑 간격 타이머
+        self.bark_display_timer = 0.0 # 전체 대사 유지 시간
+        self.triggered_hps = set() # 이미 발동된 HP 트리거 저장
+
+    def to_dict(self):
+        """JSON 저장을 위해 set을 list로 변환"""
+        data = {k: v for k, v in vars(self).items() if not k.startswith('_')}
+        if 'triggered_hps' in data and isinstance(data['triggered_hps'], set):
+            data['triggered_hps'] = list(data['triggered_hps'])
+        return data
+
+class SwitchComponent(Component):
+    """문, 레버 등 상호작용 가능한 스위치 (Open/Closed, On/Off)"""
+    def __init__(self, is_open: bool = False, locked: bool = False, key_name: str = None, linked_trap_id: int = None, auto_reset: bool = False):
+        self.is_open = is_open
+        self.locked = locked
+        self.key_name = key_name # 열기 위해 필요한 열쇠 이름 (없으면 None)
+        self.linked_trap_id = linked_trap_id
+        self.auto_reset = auto_reset # 압력판 등 자동 복구 여부

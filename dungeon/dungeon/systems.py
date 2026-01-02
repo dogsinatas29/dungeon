@@ -9,7 +9,8 @@ from .components import (
     EffectComponent, SkillEffectComponent, HitFlashComponent, LevelComponent,
     HiddenComponent, MimicComponent, TrapComponent, SleepComponent, PoisonComponent,
     StatModifierComponent, ShrineComponent, ManaShieldComponent, SummonComponent,
-    PetrifiedComponent, BleedingComponent, BossComponent, CombatTrackerComponent
+    PetrifiedComponent, BleedingComponent, BossComponent, CombatTrackerComponent,
+    ChargeComponent, SwitchComponent, BossGateComponent
 )
 import readchar
 import random
@@ -17,7 +18,8 @@ import time
 from .ui import COLOR_MAP
 from .events import (
     MoveSuccessEvent, CollisionEvent, MessageEvent, MapTransitionEvent,
-    ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent, CombatResultEvent
+    ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent, CombatResultEvent,
+    InteractEvent, TrapTriggerEvent
 )
 
 
@@ -137,9 +139,51 @@ class InputSystem(System):
             if self.world.engine.is_attack_mode:
                 self.world.engine.is_attack_mode = False # 공격 후 모드 해제
                 
-                # 활성화된 스킬이 있는 경우
+                # [Charge Skill] 스킬 충전 확인 (ChargeComponent)
+                c_comp = player_entity.get_component(ChargeComponent)
                 active_skill = getattr(self.world.engine, 'active_skill_name', None)
-                if active_skill:
+                
+                if c_comp and c_comp.stored_skill_name:
+                    # 충전된 스킬 발사!
+                    skill_name = c_comp.stored_skill_name
+                    
+                    # [Heal Check] 회복 스킬이면 자신에게 시전
+                    # (단순히 이름에 'Heal'이나 '회복'이 포함되는지, 또는 Skill Defs의 type을 확인)
+                    # 여기서는 간단히 로직 처리
+                    is_heal = False
+                    skill_defs = getattr(self.world.engine, 'skill_defs', {})
+                    if skill_name in skill_defs:
+                        skill_def = skill_defs[skill_name]
+                        if getattr(skill_def, 'type', '') == 'HEAL' or 'Heal' in skill_name or '회복' in skill_name:
+                            is_heal = True
+                    
+                    if is_heal:
+                        # 자신에게 시전 (dx=0, dy=0), Cost=0 (Free)
+                        self.event_manager.push(MessageEvent(f"지팡이에 충전된 '{skill_name}'을(를) 방출하여 자신을 치유합니다!", "yellow"))
+                        self.event_manager.push(SkillUseEvent(
+                            attacker_id=player_entity.entity_id,
+                            skill_name=skill_name,
+                            dx=0,
+                            dy=0,
+                            cost=0 # FREE
+                        ))
+                    else:
+                        # 방향 발사, Cost=0 (Free)
+                        self.event_manager.push(MessageEvent(f"지팡이에 충전된 '{skill_name}'을(를) 방출합니다!", "yellow"))
+                        self.event_manager.push(SkillUseEvent(
+                            attacker_id=player_entity.entity_id,
+                            skill_name=skill_name,
+                            dx=dx,
+                            dy=dy,
+                            cost=0 # FREE
+                        ))
+                    
+                    # 충전 해제
+                    player_entity.remove_component(ChargeComponent)
+                    return True # 턴 소모
+
+                # 활성화된 스킬이 있는 경우 (Quick Slot 등)
+                elif active_skill:
                     self.world.engine.active_skill_name = None
                     self.event_manager.push(SkillUseEvent(
                         attacker_id=player_entity.entity_id,
@@ -270,13 +314,18 @@ class MovementSystem(System):
                 self.event_manager.push(CollisionEvent(entity.entity_id, None, new_x, new_y, "WALL"))
                 is_collision = True
             
-            # 2. 다른 엔티티 충돌 확인 (벽 충돌이 아닌 경우에만 확인)
             if not is_collision:
                 collision_data = self._check_entity_collision(entity, new_x, new_y)
                 if collision_data:
                     collided_id, collision_type = collision_data
-                    self.event_manager.push(CollisionEvent(entity.entity_id, collided_id, new_x, new_y, collision_type))
-                    is_collision = True
+                    
+                    if collision_type == "SWITCH":
+                        # 스위치 상호작용 (문 열기 등)
+                        self.event_manager.push(InteractEvent(entity.entity_id, collided_id, "TOGGLE"))
+                        is_collision = True # 상호작용 하느라 이동은 못함 (한 턴 소모)
+                    else:
+                        self.event_manager.push(CollisionEvent(entity.entity_id, collided_id, new_x, new_y, collision_type))
+                        is_collision = True
             
             # 3. 이동 성공 (어떤 충돌도 없었을 때만 실행)
             if not is_collision:
@@ -358,6 +407,11 @@ class MovementSystem(System):
         # 플레이어 체크 (ID=1 가정 또는 컴포넌트 유무)
         if collided_entity.entity_id == self.world.get_player_entity().entity_id:
             return collided_entity.entity_id, "PLAYER"
+            
+        # 스위치(문/레버) 체크
+        switch_comp = collided_entity.get_component(SwitchComponent)
+        if switch_comp and not switch_comp.is_open:
+            return collided_entity.entity_id, "SWITCH"
             
         return collided_entity.entity_id, "OTHER"
 
@@ -1289,7 +1343,8 @@ class CombatSystem(System):
                             # Death Bark
                             death_bark = pattern.get("death_bark")
                             if death_bark:
-                                self.event_manager.push(MessageEvent(f"\n[{boss_id}] \"{death_bark}\"", "orange"))
+                                from .events import BossBarkEvent
+                                self.event_manager.push(BossBarkEvent(target, "DEATH", death_bark))
                             
                             # Prepare Boss Loot from Pattern
                             if pattern.get("loot_table"):
@@ -1302,6 +1357,32 @@ class CombatSystem(System):
                                         if item_def:
                                             loot.items.append({"item": item_def, "qty": 1})
                                             self.event_manager.push(MessageEvent(f"{boss_id}의 전리품: {item_name}이(가) 떨어졌습니다!", "gold"))
+
+                        # [Boss Gate] 계단 생성 로직
+                        map_ents = self.world.get_entities_with_components({MapComponent, BossGateComponent})
+                        if map_ents:
+                            map_ent = map_ents[0]
+                            map_comp = map_ent.get_component(MapComponent)
+                            boss_gate = map_ent.get_component(BossGateComponent)
+                            
+                            if not boss_gate.stairs_spawned:
+                                boss_gate.stairs_spawned = True
+                                # 저장된 출구 위치 가져오기 (engine.dungeon_map에 저장됨)
+                                d_map = getattr(self.world.engine, 'dungeon_map', None)
+                                if d_map:
+                                    ex, ey = d_map.exit_x, d_map.exit_y
+                                    if 0 <= ex < map_comp.width and 0 <= ey < map_comp.height:
+                                        from .constants import EXIT_NORMAL
+                                        map_comp.tiles[ey][ex] = EXIT_NORMAL
+                                        
+                                        # 메시지 출력
+                                        region = boss_gate.next_region_name
+                                        if region == "승리":
+                                             self.event_manager.push(MessageEvent("!!! 던전을 정복했습니다 !!!", "gold"))
+                                        else:
+                                             self.event_manager.push(MessageEvent(f"!!! {region}(으)로 가는 계단이 나타났습니다 !!!", "light_cyan"))
+                                        
+                                        self.event_manager.push(SoundEvent("LEVEL_UP")) # 보상 사운드
 
                     # 4. 시각 효과 변경
                     render = target.get_component(RenderComponent)
@@ -1467,6 +1548,77 @@ class CombatSystem(System):
         """스킬 사용 로직 처리"""
         attacker = self.world.get_entity(event.attacker_id)
         if not attacker: return
+        
+        # [Charge Skill] 특별 처리
+        if event.skill_name == "Charge" or event.skill_name == "차지":
+             inv = attacker.get_component(InventoryComponent)
+             known_skills = list(inv.skill_levels.keys()) if inv else []
+             
+             # Show UI
+             if hasattr(self.world.engine, 'ui'):
+                 selected_skill = self.world.engine.ui.show_skill_selection_menu(known_skills, self.world.engine._render)
+                 
+                 if selected_skill:
+                     # Add ChargeComponent
+                     # 기존 차지 제거 (덮어쓰기)
+                     if attacker.has_component(ChargeComponent):
+                         attacker.remove_component(ChargeComponent)
+                     
+                     attacker.add_component(ChargeComponent(selected_skill))
+                     self.event_manager.push(MessageEvent(f"지팡이에 '{selected_skill}' 마력을 충전했습니다!", "cyan"))
+                     self.event_manager.push(MessageEvent("충전을 취소했습니다."))
+             return
+
+        # [Repair Skill] 특별 처리
+        if event.skill_name == "Repair" or event.skill_name == "수리":
+            inv = attacker.get_component(InventoryComponent)
+            if not inv: 
+                self.event_manager.push(MessageEvent("수리할 장비가 없습니다."))
+                return
+
+            # 내구도가 감소된 아이템 찾기 (착용 중 + 인벤토리)
+            repairable_items = []
+            
+            # 1. Equipped
+            for slot, item in inv.equipped.items():
+                if item:
+                    max_d = getattr(item, 'max_durability', 0)
+                    curr_d = getattr(item, 'current_durability', 0)
+                    if max_d > 0 and curr_d < max_d:
+                        repairable_items.append(item)
+            
+            # 2. Inventory
+            for key, entry in inv.items.items():
+                item = entry['item']
+                max_d = getattr(item, 'max_durability', 0)
+                curr_d = getattr(item, 'current_durability', 0)
+                if max_d > 0 and curr_d < max_d:
+                    if item not in repairable_items: # 중복 방지
+                        repairable_items.append(item)
+            
+            if not repairable_items:
+                self.event_manager.push(MessageEvent("수리가 필요한 아이템이 없습니다.", "yellow"))
+                return
+
+            # Show UI
+            if hasattr(self.world.engine, 'ui'):
+                selected_item = self.world.engine.ui.show_repair_menu(repairable_items, self.world.engine._render)
+                
+                if selected_item:
+                    # Repair Attempt (60% Chance)
+                    import random
+                    if random.random() < 0.6:
+                        # Success
+                        selected_item.current_durability = selected_item.max_durability
+                        self.event_manager.push(MessageEvent(f"'{selected_item.name}' 수리에 성공했습니다!", "green"))
+                        self.event_manager.push(SoundEvent("LEVEL_UP")) # 긍정적 효과음
+                    else:
+                        # Fail
+                        self.event_manager.push(MessageEvent(f"'{selected_item.name}' 수리에 실패했습니다...", "red"))
+                        # 페널티는 현재 턴 소모 뿐
+                else:
+                    self.event_manager.push(MessageEvent("수리를 취소했습니다."))
+            return
 
         a_stats = attacker.get_component(StatsComponent)
         if not a_stats: return
@@ -1543,6 +1695,10 @@ class CombatSystem(System):
 
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
         cost_val = skill.cost_value
+        
+        # [Override] Event에서 cost를 지정했다면 (예: Charge Skill Release = 0)
+        if hasattr(event, 'cost') and event.cost is not None:
+            cost_val = event.cost
         
         # [Update] MP Cost Scaling: +1.5 per level
         # Goal: At Lv.255, Cost ~391 (Max MP ~812 naked Barb). 2 Uses -> Remainder ~30.
@@ -2919,7 +3075,7 @@ class BossSystem(System):
                     # 다음 문자 추가
                     boss.visible_bark = boss.active_bark[:len(boss.visible_bark) + 1]
                     # 타이핑 중에는 지속 시간 리셋
-                    boss.bark_display_timer = 5.0 
+                    # (bark_display_timer는 _trigger_bark에서 이미 설정됨)
                 else:
                     # 타이핑 완료 후 대기
                     boss.bark_display_timer -= 0.1 # 대략적인 감쇠 (턴 기반 한계)
@@ -2927,16 +3083,26 @@ class BossSystem(System):
                         boss.active_bark = ""
                         boss.visible_bark = ""
 
-            # --- 2. 조우 대사 (Entrance Bark) ---
+            # --- 2. 조우 및 접근 대사 ---
+            dist = abs(p_pos.x - pos.x) + abs(p_pos.y - pos.y)
+            
+            # [Proximity] 진입 대사 (Entry Bark) - 거리가 가까워지면 (12-15칸)
+            if not getattr(boss, 'entry_bark_triggered', False):
+                if dist <= 15:
+                    boss.entry_bark_triggered = True
+                    bark = pattern.get("on_floor_entry")
+                    if bark:
+                        self._trigger_bark(boss_ent, bark, duration=4.0)
+            
+            # [Encounter] 조우 대사 (Entrance Bark)
             if not boss.is_engaged:
-                dist = abs(p_pos.x - pos.x) + abs(p_pos.y - pos.y)
                 if dist <= 5: # 5타일 이내 조우 시
                     boss.is_engaged = True
                     bark = pattern.get("entrance_bark")
                     if bark:
-                        self._trigger_bark(boss_ent, bark)
+                        self._trigger_bark(boss_ent, bark, duration=5.0)
                         self.event_manager.push(SoundEvent("BOSS_INTRO", "보스 등장!"))
-                        # [Encounter] BGM 트리거 (지원할 경우)
+                        # [Encounter] BGM 트리거
                         self.event_manager.push(SoundEvent("BGM_BOSS", "전용 테마 연주 시작"))
 
             # --- 3. 페이즈 및 HP 트리거 ---
@@ -3366,24 +3532,24 @@ class BossSystem(System):
                 return tx, ty
         return x, y
 
-    def _trigger_bark(self, boss_ent, text):
+    def _trigger_bark(self, boss_ent, text, duration=5.0, bypass_cooldown=False):
         """보스 대사 트리거 (쿨다운 및 타이핑 애니메이션 시작)"""
         boss = boss_ent.get_component(BossComponent)
         if not boss: return
 
         # 쿨다운 체크
         current_time = time.time()
-        if hasattr(boss, 'last_bark_time'):
+        if not bypass_cooldown and hasattr(boss, 'last_bark_time'):
             if current_time - boss.last_bark_time < self.BARK_COOLDOWN:
                 return # 쿨다운 중이면 무시
         
         boss.active_bark = text
         boss.visible_bark = ""
-        boss.bark_display_timer = 5.0
+        boss.bark_display_timer = duration
         boss.last_bark_time = current_time
         # 로그에도 남김
         from .events import MessageEvent
-        self.event_manager.push(MessageEvent(f"[{boss.boss_id}] \"{text}\"", "yellow"))
+        self.event_manager.push(MessageEvent(f"[{boss.boss_id}] \"{text}\"", "gold"))
 
     def _handle_combat_result(self, event):
         """전투 결과를 바탕으로 보스 대사 결정"""
@@ -3431,8 +3597,19 @@ class BossSystem(System):
         if type(event).__name__ != "BossBarkEvent": return
         boss_ent = getattr(event, 'boss_entity', None)
         text = getattr(event, 'text', None)
+        bark_type = getattr(event, 'bark_type', None)
+        
+        # 사망 대사 등 특정 타입은 지속 시간 길게 및 쿨다운 무시
+        duration = 5.0
+        bypass = False
+        if bark_type == "DEATH":
+            duration = 8.0 # 사망 대사 보정
+            bypass = True
+
         if boss_ent:
-            self._trigger_bark(boss_ent, text or "...")
+            self._trigger_bark(boss_ent, text or "...", duration=duration, bypass_cooldown=bypass)
+        else:
+            print("DEBUG: _handle_boss_bark failed - no boss_ent in event")
 
     def _trigger_summon(self, boss_ent, minion_type, count):
         """보스 주변에 부하 몬스터 소환"""

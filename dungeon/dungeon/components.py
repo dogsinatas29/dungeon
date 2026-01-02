@@ -352,13 +352,26 @@ class MimicComponent(Component):
         self.is_disguised = is_disguised
 
 class TrapComponent(Component):
-    """맵에 배치된 함정 컴포넌트"""
-    def __init__(self, trap_type: str = "SPIKE", damage: int = 10, effect: str = None, is_triggered: bool = False, visible: bool = False):
+    """함정 데이터"""
+    ARROW = "ARROW"
+    NOVA = "NOVA"
+    LIGHTNING = "LIGHTNING"
+    GAS = "GAS"
+    FIREBALL = "FIREBALL_LAUNCHER"
+    
+    def __init__(self, trap_type: str = "ARROW", damage_min: int = 10, damage_max: int = 20, detection_difficulty: int = 10, is_hidden: bool = True, target_selection: str = "TRIGGERER", effect: str = None, is_triggered: bool = False):
         self.trap_type = trap_type
-        self.damage = damage
+        self.damage_min = damage_min
+        self.damage_max = damage_max
+        self.detection_difficulty = detection_difficulty
+        self.is_hidden = is_hidden
+        self.target_selection = target_selection # "TRIGGERER", "NEAREST", "AREA"
+        
+        # Legacy/Compatibility
+        self.damage = (damage_min + damage_max) // 2
         self.effect = effect
         self.is_triggered = is_triggered
-        self.visible = visible # 횃불 등으로 발견 가능
+        self.visible = not is_hidden
 
 class SleepComponent(Component):
     """수면 상태: 행동 불가, 데미지 입을 시 해제"""
@@ -403,6 +416,11 @@ class CombatTrackerComponent(Component):
         self.last_damaged_time = last_damaged_time
         self.show_hp_duration = show_hp_duration
 
+class ChargeComponent(Component):
+    """소서러 지팡이 스킬 충전 상태"""
+    def __init__(self, stored_skill_name: str):
+        self.stored_skill_name = stored_skill_name
+
 class BossComponent(Component):
     """보스 몬스터 데이터 및 상태 관리"""
     def __init__(self, boss_id: str, current_phase: int = 0, is_engaged: bool = False):
@@ -417,3 +435,18 @@ class BossComponent(Component):
         self.bark_type_timer = 0.0 # 타이핑 간격 타이머
         self.bark_display_timer = 0.0 # 전체 대사 유지 시간
         self.triggered_hps = set() # 이미 발동된 HP 트리거 저장 (0.5, 0.2 등)
+
+class SwitchComponent(Component):
+    """문, 레버 등 상호작용 가능한 스위치 (Open/Closed, On/Off)"""
+    def __init__(self, is_open: bool = False, locked: bool = False, key_name: str = None, linked_trap_id: int = None, auto_reset: bool = False):
+        self.is_open = is_open
+        self.locked = locked
+        self.key_name = key_name # 열기 위해 필요한 열쇠 이름 (없으면 None)
+        self.linked_trap_id = linked_trap_id
+        self.auto_reset = auto_reset # 압력판 등 자동 복구 여부
+
+class BossGateComponent(Component):
+    """보스 게이트: 보스를 처치해야 계단이 생성됨"""
+    def __init__(self, next_region_name: str = "", stairs_spawned: bool = False):
+        self.next_region_name = next_region_name  # "Catacombs", "Caves", "Hell"
+        self.stairs_spawned = stairs_spawned  # 계단 생성 여부
