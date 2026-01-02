@@ -216,6 +216,7 @@ def initialize_event_listeners(world: World):
     InputSystem, MovementSystem, CombatSystem, MonsterAISystem, RenderSystem,
     MessageEvent, CollisionEvent, MoveSuccessEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, SkillUseEvent, SoundEvent
 )
+    from .events import InteractEvent
     
     # EventManager에 이벤트 타입이 등록되어 있어야 함 (빈 리스트라도)
     world.event_manager.listeners[MoveSuccessEvent] = []
@@ -226,6 +227,8 @@ def initialize_event_listeners(world: World):
     world.event_manager.listeners[ShopOpenEvent] = []
     world.event_manager.listeners[SkillUseEvent] = []
     world.event_manager.listeners[SoundEvent] = []
+    world.event_manager.listeners[InteractEvent] = []
+
 
     for system in world._systems:
         for event_type in world.event_manager.listeners.keys():

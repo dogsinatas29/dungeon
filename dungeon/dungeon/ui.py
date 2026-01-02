@@ -609,6 +609,19 @@ class ConsoleUI:
         print("\n--- 장비 --- ")
         if player_equipped_items:
             for slot, item_id in player_equipped_items.items():
+                # Need item object to check rarity. player_inventory_items has full data but equipped items is separate dictionary
+                # player_equipped_items is {slot: item_id}. item_id is name (string).
+                # We need to find the item object. 
+                # Currently equipped items are removed from inventory list stats but exist in EquipmentComponent?
+                # Actually player_equipped_items passed here is likely just names.
+                # Retrying to look up item data from inventory might fail if not in inventory.
+                # However, usually we don't have the object here easily if it's just ID.
+                # But wait, InventoryComponent stores equipped items separately?
+                # The arguments are dictionaries. 
+                # Let's just print name for now, unless we fetch item def.
+                # If we want to color equipped items, we need the item object.
+                # Assuming item_id is just string name, we can guess rarity from name if prefixes exist? No.
+                # We will skip coloring equipped items for now or fetch from engine definitions if possible.
                 print(f"  {slot}: {item_id}")
         else:
             print("  장착된 아이템 없음")
@@ -618,7 +631,12 @@ class ConsoleUI:
             for item_id, item_data in player_inventory_items.items():
                 item_obj = item_data['item']
                 qty = item_data['qty']
-                print(f"  - {item_obj.name} (x{qty})")
+                from .constants import RARITY_COLORS, RARITY_NORMAL
+                rarity = getattr(item_obj, 'rarity', 'NORMAL')
+                color_name = RARITY_COLORS.get(rarity, RARITY_NORMAL)
+                color_code = COLOR_MAP.get(color_name, COLOR_MAP['reset'])
+                
+                print(f"  - {color_code}{item_obj.name}{COLOR_MAP['reset']} (x{qty})")
         else:
             print("  아이템 없음")
 

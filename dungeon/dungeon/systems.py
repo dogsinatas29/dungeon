@@ -216,8 +216,11 @@ class InputSystem(System):
         
         # Character Sheet (C)
         if action in ['c', 'C']:
-            if hasattr(self.world.engine, 'ui'):
-                self.world.engine.ui.show_character_sheet(player_entity)
+            from .engine import GameState
+            if self.world.engine.state == GameState.PLAYING:
+                self.world.engine.state = GameState.CHARACTER_SHEET
+            elif self.world.engine.state == GameState.CHARACTER_SHEET:
+                self.world.engine.state = GameState.PLAYING
             return False
 
         # 퀵슬롯 (1~0)
@@ -580,18 +583,24 @@ class MonsterAISystem(System):
             if dist > 1 and dist <= ai.detection_range and ("RANGED" in stats.flags or "가디언" in getattr(entity.get_component(MonsterComponent), 'type_name', "")):
                 combat_sys = self.world.get_system(CombatSystem)
                 if combat_sys:
-                    # 가상의 파이어볼트 발사 (이벤트 푸쉬)
+                    # [Guardian Tier 4+] Check for CopiedSkillComponent
+                    from .components import CopiedSkillComponent
+                    copied_skill = entity.get_component(CopiedSkillComponent)
+                    
                     dx = 1 if target_pos.x > pos.x else (-1 if target_pos.x < pos.x else 0)
                     dy = 1 if target_pos.y > pos.y else (-1 if target_pos.y < pos.y else 0)
-                    if dx != 0 and dy != 0: dx = 0 # 일직선 공격 우선
-                    
-                    from .data_manager import SkillDefinition
-                    # SkillDefinition(ID, 이름, 분류, 필요레벨, 속성, 소모타입, 소모값, 필요장비, 효과_설명, 데미지, 스킬타입, 스킬서브타입, 사거리, 적중효과="없음", flags="", ...)
-                    mock_firebolt = SkillDefinition(
-                        "FIREBOLT", "화염구(소환수)", "공격", 1, "불", "MP", 0, "없음", "화염구 발사", 
-                        str(stats.attack), "ATTACK", "PROJECTILE", 7, "없음", "PROJECTILE,MAGIC"
-                    )
-                    self.event_manager.push(SkillUseEvent(attacker_id=entity.entity_id, skill_name="FIREBOLT", dx=dx, dy=dy))
+                    if dx != 0 and dy != 0: dx = 0 # 일직선 공격 우선 (단순화: 일단 4방향)
+
+                    if copied_skill:
+                        # Use Copied Skill (Cost 0 for Summon)
+                        self.event_manager.push(SkillUseEvent(attacker_id=entity.entity_id, skill_name=copied_skill.skill_id, dx=dx, dy=dy, cost=0))
+                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 '{copied_skill.skill_name}'을(를) 모방하여 시전합니다!", "cyan"))
+                    else:
+                        # Default Behavior (Tier 1-3): Firebolt (Cost 0)
+                        from .data_manager import SkillDefinition
+                        # ... (SkillDefinition code is just comment/mock here, actual event uses implementation)
+                        self.event_manager.push(SkillUseEvent(attacker_id=entity.entity_id, skill_name="FIREBOLT", dx=dx, dy=dy, cost=0))
+                        
                     stats.last_action_time = current_time
                     continue
 
@@ -850,7 +859,14 @@ class CombatSystem(System):
                 inv.items[item.name]['qty'] += qty
             else:
                 inv.items[item.name] = {'item': item, 'qty': qty}
-            loot_msg.append(f"{item.name} x{qty}")
+            from .ui import COLOR_MAP
+            from .constants import RARITY_COLORS, RARITY_NORMAL
+            
+            rarity = getattr(item, 'rarity', 'NORMAL')
+            color_name = RARITY_COLORS.get(rarity, RARITY_NORMAL)
+            color_code = COLOR_MAP.get(color_name, COLOR_MAP['reset'])
+            
+            loot_msg.append(f"{color_code}{item.name}{COLOR_MAP['reset']} x{qty}")
 
         if loot_msg:
             msg = ", ".join(loot_msg)
@@ -1030,7 +1046,7 @@ class CombatSystem(System):
             
             if random.random() * 100 > to_hit:
                 msg = f"'{attacker_name}'의 공격이 '{target_name}'에게 빗나갔습니다! (확률: {int(to_hit)}%)"
-                self.event_manager.push(MessageEvent(msg))
+                self.event_manager.push(MessageEvent(msg, color="dark_grey"))
                 self.event_manager.push(SoundEvent("MISS"))
                 # [Boss] Combat Result Event for barks
                 self.event_manager.push(CombatResultEvent(attacker, target, 0, False, True, skill))
@@ -1059,15 +1075,23 @@ class CombatSystem(System):
         if final_damage <= 0 and not is_magic:
             # 물리 공격인데 데미지가 0 이하인 경우 (거의 없겠지만 방어 판정 느낌으로)
             msg = f"'{target_name}'이(가) '{attacker_name}'의 공격을 가뿐히 받아냈습니다!"
-            self.event_manager.push(MessageEvent(msg))
+            self.event_manager.push(MessageEvent(msg, color="green"))
             self.event_manager.push(SoundEvent("BLOCK"))
         else:
             final_damage = max(1, final_damage) if final_damage > 0 or is_magic else 0
+            
+            # Determine Color
+            log_color = "white"
+            if skill:
+                 log_color = "cyan"
+            if is_critical:
+                 log_color = "red"
+            
             if skill:
                 msg = f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
             else:
                 msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
-            self.event_manager.push(MessageEvent(msg))
+            self.event_manager.push(MessageEvent(msg, color=log_color))
             
             # [BUTCHER] Screen Shake & Bleeding Effect on Hit
             # Only if damage > 0
@@ -1140,7 +1164,7 @@ class CombatSystem(System):
             
             # [LEORIC] Specialized Life Steal: Melee hits leech 30%
             a_monster_id = getattr(attacker.get_component(MonsterComponent), 'monster_id', None) if attacker.has_component(MonsterComponent) else None
-            print(f"DEBUG: a_monster_id={a_monster_id}, distance={distance}, final_damage={final_damage}")
+            # print(f"DEBUG: a_monster_id={a_monster_id}, distance={distance}, final_damage={final_damage}")
             if a_monster_id == "LEORIC" and distance <= 1:
                 leech_percent = 30
             
@@ -1307,7 +1331,8 @@ class CombatSystem(System):
                             # LevelSystem을 통해 경험치 획득
                             level_sys = self.world.get_system(LevelSystem)
                             if level_sys:
-                                level_sys.gain_exp(player_entity, m_def.xp_value)
+                                xp_gained = int(m_def.xp_value * 0.9) # [Balance] Nerf XP by 10%
+                                level_sys.gain_exp(player_entity, xp_gained)
                                 
                                 # [Bonus Points] Boss Reward
                                 if "BOSS" in getattr(m_def, 'flags', []):
@@ -1384,11 +1409,12 @@ class CombatSystem(System):
                                         
                                         self.event_manager.push(SoundEvent("LEVEL_UP")) # 보상 사운드
 
-                    # 4. 시각 효과 변경
+                    # 4. 시각 효과 변경 (Moved color logic to after loot generation)
                     render = target.get_component(RenderComponent)
                     if render:
                         render.char = '%'
-                        render.color = 'blue'
+                        # Color will be set based on loot rarity below
+
                     
                     # 5. 시체 컴포넌트 추가
                     target.add_component(CorpseComponent(original_name=m_type))
@@ -1401,7 +1427,19 @@ class CombatSystem(System):
                         eligible = self.world.engine._get_eligible_items(floor)
                         
                         # [Hack & Slash] Loot Explosion Logic
-                        drop_chance = 0.6
+                        # [Themed Drop Rates]
+                        # Lv 1-25: 15-25% (Avg 20%)
+                        # Lv 26-50: 30-50% (Avg 40%) - Peak
+                        # Lv 51+: 15-25% (Avg 20%)
+                        
+                        drop_chance = 0.0
+                        if floor <= 25:
+                            drop_chance = random.uniform(0.15, 0.25)
+                        elif floor <= 50:
+                            drop_chance = random.uniform(0.30, 0.50)
+                        else:
+                            drop_chance = random.uniform(0.15, 0.25)
+
                         is_boss = (m_def and 'BOSS' in m_def.flags) or boss_comp is not None
                         if is_boss:
                             drop_chance = 1.0
@@ -1460,6 +1498,30 @@ class CombatSystem(System):
                         
                         # [Hack & Slash] Increased Gold: 50-250
                         target.add_component(LootComponent(items=loot_items, gold=random.randint(50, 250)))
+                        
+                        # [Visual] Set corpse color based on max rarity
+                        if render:
+                            from .constants import RARITY_COLORS
+                            
+                            # Determine max rarity
+                            max_rarity_val = 0
+                            rarity_map = {"NORMAL": 1, "MAGIC": 2, "UNIQUE": 3}
+                            best_rarity = "NORMAL"
+                            
+                            has_items = False
+                            for li in loot_items:
+                                item_obj = li['item']
+                                has_items = True
+                                r = getattr(item_obj, 'rarity', 'NORMAL')
+                                val = rarity_map.get(r, 0)
+                                if val > max_rarity_val:
+                                    max_rarity_val = val
+                                    best_rarity = r
+                            
+                            if has_items:
+                                render.color = RARITY_COLORS.get(best_rarity, 'white')
+                            else:
+                                render.color = 'dark_grey' # No items (only gold or empty)
                         # print(f"DEBUG: Added LootComponent to {target.entity_id}. items={loot_items}")
                 # 더 이상 delete_entity를 하지 않음
 
@@ -2475,21 +2537,107 @@ class CombatSystem(System):
         color = 'green' if "가디언" in name else 'gray'
         self.world.add_component(summon.entity_id, RenderComponent(char=char, color=color))
         
-        hp = 50 + (skill.level * 20)
-        attack = 5 + (skill.level * 3)
-        self.world.add_component(summon.entity_id, StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=5))
-        
-        # AI 설정 (PLAYER 진영)
-        self.world.add_component(summon.entity_id, AIComponent(behavior=behavior, detection_range=10, faction="PLAYER"))
-        # 소환수 컴포넌트 (수명 관리)
-        self.world.add_component(summon.entity_id, SummonComponent(owner_id=owner.entity_id, duration=skill.duration))
-        # 몬스터 컴포넌트 (AISystem에서 인식하기 위함)
-        self.world.add_component(summon.entity_id, MonsterComponent(type_name=name, level=skill.level))
-        
-        # 가디언인 경우 원거리 공격 플래그 추가 (가상)
         if "가디언" in name:
+            # [Guardian Tier System]
+            # Tier 1 (Lv 1-2): Base Stats
+            # Tier 2 (Lv 3-4): Range Up (+3)
+            # Tier 3 (Lv 5-9): Attack Up (+5), Range Up (+3)
+            # Tier 4 (Lv 10-26): Fire Player's Highest Skill
+            # Tier 5 (Lv 27+): Fire Player's Highest Skill, Atk (+15), Range (+5)
+            
+            tier = 1
+            if skill.level >= 27: tier = 5
+            elif skill.level >= 10: tier = 4
+            elif skill.level >= 5: tier = 3
+            elif skill.level >= 3: tier = 2
+            
+            # Stat Scaling based on Tier
+            hp_bonus = 0
+            atk_bonus = 0
+            range_bonus = 0
+            
+            if tier >= 3: atk_bonus += 5
+            if tier >= 5: atk_bonus += 15
+            
+            if tier >= 2: range_bonus += 3
+            if tier >= 5: range_bonus += 2 
+            
+            hp = 50 + (skill.level * 20) + hp_bonus
+            attack = 5 + (skill.level * 3) + atk_bonus
+            detect_range = 10 + range_bonus
+            duration = 5.0 # Fixed 5s for Guardian
+            
+            self.world.add_component(summon.entity_id, StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=5))
+            self.world.add_component(summon.entity_id, AIComponent(behavior=behavior, detection_range=detect_range, faction="PLAYER"))
+            self.world.add_component(summon.entity_id, SummonComponent(owner_id=owner.entity_id, duration=duration))
+            self.world.add_component(summon.entity_id, MonsterComponent(type_name=name, level=skill.level))
+            
             summon.get_component(StatsComponent).flags.add("RANGED")
             
+            # [Tier 4+] Copy Player's Highest Skill
+            if tier >= 4:
+                best_skill = None
+                best_lv = -1
+                # Check owner's known skills (Stored in InventoryComponent)
+                from .components import InventoryComponent
+                # from .data_manager import DataManager # Removed
+                
+                if owner.has_component(InventoryComponent):
+                    inv = owner.get_component(InventoryComponent)
+                    if inv and inv.skill_levels:
+                        for s_id, s_lv in inv.skill_levels.items():
+                             # Exclude Guardian itself
+                             if s_id == "GUARDIAN": continue
+                             
+                             # [Recursion Prevention] Exclude SUMMON type skills
+                             # Use self.world.engine.skill_defs
+                             s_def = self.world.engine.skill_defs.get(s_id)
+                             if s_def and (s_def.type == "SUMMON" or s_def.type == "소환"):
+                                 continue
+
+                             if s_lv > best_lv:
+                                 best_lv = s_lv
+                                 best_skill = s_id
+                
+                if best_skill:
+                    from .components import CopiedSkillComponent
+                    # from .data_manager import DataManager
+                    skill_def = self.world.engine.skill_defs.get(best_skill)
+                    skill_name = skill_def.name if skill_def else best_skill
+                    self.world.add_component(summon.entity_id, CopiedSkillComponent(skill_id=best_skill, skill_name=skill_name))
+
+        elif "골렘" in name:
+            # [Golem Overhaul]
+            # Stats: Scale with Owner (Similar to Character Level)
+            # Duration: Base 10s + (Level * 2s)
+            
+            owner_stats = owner.get_component(StatsComponent)
+            if owner_stats:
+                # HP: Owner's Max HP * 0.8 + Skill Bonus
+                hp = int(owner_stats.max_hp * 0.8) + (skill.level * 10)
+                # Attack: Owner's Attack
+                attack = owner_stats.attack + (skill.level * 2)
+            else:
+                # Fallback if owner has no stats (shouldn't happen for player)
+                hp = 100 + (skill.level * 30)
+                attack = 10 + (skill.level * 5)
+            
+            duration = 10.0 + (skill.level * 2.0)
+            
+            self.world.add_component(summon.entity_id, StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=10))
+            self.world.add_component(summon.entity_id, AIComponent(behavior=behavior, detection_range=10, faction="PLAYER"))
+            self.world.add_component(summon.entity_id, SummonComponent(owner_id=owner.entity_id, duration=duration))
+            self.world.add_component(summon.entity_id, MonsterComponent(type_name=name, level=skill.level))
+
+        else:
+            # Default / Fallback for other potential summons
+            hp = 50 + (skill.level * 20)
+            attack = 5 + (skill.level * 3)
+            self.world.add_component(summon.entity_id, StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=5))
+            self.world.add_component(summon.entity_id, AIComponent(behavior=behavior, detection_range=10, faction="PLAYER"))
+            self.world.add_component(summon.entity_id, SummonComponent(owner_id=owner.entity_id, duration=skill.duration))
+            self.world.add_component(summon.entity_id, MonsterComponent(type_name=name, level=skill.level))
+
         return summon
 
     def _handle_status_effect(self, target, effect_type, duration=5.0):
@@ -3616,3 +3764,121 @@ class BossSystem(System):
         pos = boss_ent.get_component(PositionComponent)
         from .events import MessageEvent
         self.event_manager.push(MessageEvent(f"{minion_type}들이 보스의 부름에 응답하여 나타납니다!", "purple"))
+
+class InteractionSystem(System):
+    """상호작용 이벤트(InteractEvent)를 처리하는 시스템"""
+    def handle_interact_event(self, event):
+        entity_id = event.curr_entity_id
+        target_id = event.target_entity_id
+        action = event.action # "TOGGLE" etc.
+        
+        target = self.world.get_entity(target_id)
+        if not target: return
+        
+        # 1. 스위치(레버/문) 상호작용
+        switch = target.get_component(SwitchComponent)
+        if switch and action == "TOGGLE":
+            self._handle_switch_toggle(target, switch)
+
+    def _handle_switch_toggle(self, entity, switch):
+        """스위치/레버/문 토글 처리"""
+        # 잠김 확인
+        if switch.locked:
+            # 키 확인 로직 (플레이어 인벤토리 등)
+            player = self.world.get_player_entity()
+            has_key = False
+            if player and switch.key_name:
+                inv = player.get_component(InventoryComponent)
+                if inv:
+                    # 인벤토리에서 키 찾기 (구현 필요, 일단은 PASS or Message)
+                    # 여기서는 간단히 메시지만 출력하고 리턴
+                    pass
+            
+            if not has_key:
+                self.event_manager.push(MessageEvent("잠겨있습니다. 열쇠가 필요합니다.", "gray"))
+                return
+
+        # 상태 변경
+        switch.is_open = not switch.is_open
+        
+        # 시각적 변경 (RenderComponent char 변경 등)
+        render = entity.get_component(RenderComponent)
+        if render:
+            if switch.is_open:
+                render.char = "'" if render.char == "+" else "/" # 문이면 ', 레버면 / 유지?
+                # 레버의 경우 보통 모양이 바뀌진 않고 색이나 메시지로 피드백
+                if render.char == '/': 
+                    render.char = '\\' # 레버 젖혀짐
+            else:
+                if render.char == "'": render.char = "+"
+                if render.char == "\\": render.char = "/"
+
+        # BlockMapComponent 업데이트
+        block = entity.get_component(BlockMapComponent)
+        if block:
+            block.blocks_movement = not switch.is_open
+            block.blocks_sight = not switch.is_open
+
+        # 효과 메시지
+        name = "문" if getattr(render, 'char', '') in ['+', "'"] else "레버"
+        state = "열렸습니다" if switch.is_open else "닫혔습니다"
+        # 레버인 경우
+        if getattr(render, 'char', '') in ['/', '\\']:
+            state = "당겨졌습니다" if switch.is_open else "원위치되었습니다"
+        
+        self.event_manager.push(MessageEvent(f"{name}이(가) {state}."))
+        self.event_manager.push(SoundEvent("DOOR" if name == "문" else "CLICK"))
+
+        # [Boss Room] Linkage Logic (Lever opens Door)
+        if switch.linked_door_pos and switch.is_open:
+            lx, ly = switch.linked_door_pos
+            # 해당 위치의 문 엔티티 찾기
+            entities = self.world.get_entities_with_components({DoorComponent, PositionComponent})
+            found_door = False
+            for ent in entities:
+                pos = ent.get_component(PositionComponent)
+                if pos.x == lx and pos.y == ly:
+                    door_comp = ent.get_component(DoorComponent)
+                    if door_comp:
+                        door_comp.is_locked = False
+                        door_comp.is_open = True
+                        
+                        # 시각적 업데이트
+                        r = ent.get_component(RenderComponent)
+                        if r: r.char = "'"
+                        
+                        # 물리적 업데이트
+                        b = ent.get_component(BlockMapComponent)
+                        if b: 
+                            b.blocks_movement = False
+                            b.blocks_sight = False
+                            
+                        self.event_manager.push(MessageEvent("쿠쿠쿵! 어딘가에서 거대한 문이 열리는 소리가 들립니다!", "yellow"))
+                        self.event_manager.push(SoundEvent("DOOR_OPEN_HEAVY"))
+                        found_door = True
+                        
+                        # [Trap Trigger] 100% Trap Effect on Lever Pull
+                        # 레버를 당기면 함정도 같이 발동 (User Request: 100% trap that also opens door)
+                        player = self.world.get_player_entity()
+                        if player:
+                             # 1. 폭발 함정 효과 (Explosion Trap)
+                             self.event_manager.push(MessageEvent("레버를 당기자 함정이 발동했습니다! 폭발이 일어납니다!", "red"))
+                             self.event_manager.push(SoundEvent("EXPLOSION"))
+                             
+                             # 데미지 처리
+                             p_stats = player.get_component(StatsComponent)
+                             if p_stats:
+                                 damage = 20 # 고정 데미지
+                                 p_stats.current_hp -= damage
+                                 player.add_component(HitFlashComponent())
+                                 self.event_manager.push(MessageEvent(f"폭발로 인해 {damage}의 피해를 입었습니다!", "red"))
+                        
+                        break
+            
+            if not found_door:
+                print(f"DEBUG: Linked door not found at {lx}, {ly}")
+
+        # [Legacy] Linkage Logic via Linked Trap ID (Optional)
+        if switch.linked_trap_id:
+            pass # 나중에 TrapSystem과 연동 가능
+

@@ -179,13 +179,13 @@ class SandboxEngine(engine.Engine):
             # 터미널 설정 일시 복구
             termios.tcsetattr(fd, termios.TCSADRAIN, self.old_settings)
             sys.stdout.write("\033[?25h")  # 커서 보이기
-            sys.stdout.write("\n[Set Level] Enter level (1-99): ")
+            sys.stdout.write("\n[Set Level] Enter level (1-999): ")
             sys.stdout.flush()
             
             try:
                 line = sys.stdin.readline().strip()
                 if line.isdigit():
-                    target_level = max(1, min(99, int(line)))
+                    target_level = max(1, min(999, int(line)))
                     player = self.world.get_player_entity()
                     if player:
                         level_comp = player.get_component(LevelComponent)
@@ -233,7 +233,7 @@ class SandboxEngine(engine.Engine):
             try:
                 line = sys.stdin.readline().strip()
                 if line.isdigit():
-                    target = max(1, min(99, int(line)))
+                    target = max(1, min(999, int(line)))
                     self.world.event_manager.push(MessageEvent(f"[Sandbox] {target}층으로 차원 이동합니다!"))
                     self.world.event_manager.push(MapTransitionEvent(target_level=target))
                 else:

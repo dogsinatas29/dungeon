@@ -1,11 +1,12 @@
 # items.py
 
 class Item:
-    def __init__(self, item_id, name, item_type, description=""):
+    def __init__(self, item_id, name, item_type, description="", rarity="NORMAL"):
         self.id = item_id
         self.name = name
         self.item_type = item_type
         self.description = description
+        self.rarity = rarity
 
     def to_dict(self):
         return {
@@ -13,6 +14,7 @@ class Item:
             'name': self.name,
             'item_type': self.item_type,
             'description': self.description,
+            'rarity': self.rarity,
             'class': self.__class__.__name__
         }
 
@@ -27,12 +29,16 @@ class Item:
         elif class_name == 'SkillBook':
             return SkillBook.from_dict(data)
         
+        if class_name == 'Key':
+             return Key.from_dict(data) # Key class handled explicitly
+
         # 기본 Item 객체 또는 다른 서브클래스 처리
         item = cls(
             item_id=data['id'],
             name=data['name'],
             item_type=data['item_type'],
-            description=data.get('description', "")
+            description=data.get('description', ""),
+            rarity=data.get('rarity', "NORMAL")
         )
         return item
 
@@ -58,7 +64,8 @@ class Item:
                 value=getattr(definition, 'value', 0),
                 req_level=getattr(definition, 'req_level', 0),
                 effect_type=getattr(definition, 'effect_type', 'NONE'),
-                slot=getattr(definition, 'equip_slot', 'NONE')
+                slot=getattr(definition, 'equip_slot', 'NONE'),
+                rarity="NORMAL" # Default
             )
         elif item_type == 'CONSUMABLE':
              return Consumable(
@@ -87,13 +94,14 @@ class Item:
                 item_id=definition.id,
                 name=definition.name,
                 description=getattr(definition, 'description', ""),
-                item_type=item_type
+                item_type=item_type,
+                rarity="NORMAL"
             )
 
 class Equipment(Item):
     """장비 아이템 클래스"""
-    def __init__(self, item_id, name, description, item_type, value, req_level, effect_type, slot):
-        super().__init__(item_id, name, item_type, description)
+    def __init__(self, item_id, name, description, item_type, value, req_level, effect_type, slot, rarity="NORMAL"):
+        super().__init__(item_id, name, item_type, description, rarity)
         self.value = value
         self.req_level = req_level
         self.effect_type = effect_type
@@ -119,13 +127,14 @@ class Equipment(Item):
             value=data.get('value'),
             req_level=data.get('req_level'),
             effect_type=data.get('effect_type'),
-            slot=data.get('slot')
+            slot=data.get('slot'),
+            rarity=data.get('rarity', "NORMAL")
         )
 
 class Consumable(Item):
     """소모성 아이템 클래스"""
-    def __init__(self, item_id, name, description, item_type, value, req_level, effect_type):
-        super().__init__(item_id, name, item_type, description)
+    def __init__(self, item_id, name, description, item_type, value, req_level, effect_type, rarity="NORMAL"):
+        super().__init__(item_id, name, item_type, description, rarity)
         self.value = value
         self.req_level = req_level
         self.effect_type = effect_type
@@ -148,7 +157,8 @@ class Consumable(Item):
             item_type=data.get('item_type'),
             value=data.get('value'),
             req_level=data.get('req_level'),
-            effect_type=data.get('effect_type')
+            effect_type=data.get('effect_type'),
+            rarity=data.get('rarity', "NORMAL")
         )
 
 class Key(Item):

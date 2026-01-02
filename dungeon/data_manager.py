@@ -524,4 +524,56 @@ def list_save_files():
     files = [f.replace('.json', '') for f in os.listdir(save_dir) if f.endswith('.json')]
     return sorted(files)
 
+def load_boss_patterns(data_path=None):
+    """boss_patterns.json (패턴) 및 boss_dialogues.csv (대사)를 로드하여 병합합니다."""
+    import json
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
+    
+    patterns = {}
+    
+    # 1. JSON 패턴 로드 (행동 로직)
+    json_path = os.path.join(data_path, "boss_patterns.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                patterns = json.load(f)
+        except Exception as e:
+            print(f"Failed to load boss patterns JSON: {e}")
+
+    # 2. CSV 대사 로드 및 병합
+    csv_path = os.path.join(data_path, "boss_dialogues.csv")
+    if os.path.exists(csv_path):
+        try:
+            with open(csv_path, mode='r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    boss_id = row['BossID'].strip()
+                    trigger = row['Trigger'].strip()
+                    value = row['Value'].strip()
+                    dialogue = row['Dialogue'].strip()
+                    
+                    if boss_id not in patterns:
+                        patterns[boss_id] = {}
+                    
+                    if trigger == "phase_bark":
+                        # 페이즈 대사: Value(hp_threshold)와 일치하는 페이즈 찾기
+                        try:
+                            threshold = float(value)
+                            phases = patterns[boss_id].get('phases', [])
+                            for phase in phases:
+                                if abs(phase.get('hp_threshold', 0) - threshold) < 0.001:
+                                    phase['bark'] = dialogue
+                                    break
+                        except ValueError:
+                            pass
+                    else:
+                        # 일반 대사 (루트 레벨)
+                        patterns[boss_id][trigger] = dialogue
+        except Exception as e:
+            print(f"Failed to load boss dialogues CSV: {e}")
+            
+            
+    return patterns
+
 

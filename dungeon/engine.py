@@ -19,18 +19,20 @@ from .components import (
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent, ShrineComponent,
     StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent, TrapComponent,
-    SleepComponent, PoisonComponent, StatModifierComponent, SwitchComponent
+    SleepComponent, PoisonComponent, StatModifierComponent, BossComponent, PetrifiedComponent, BossGateComponent
 )
 from .systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
-    TimeSystem, RegenerationSystem, LevelSystem, TrapSystem, InteractionSystem
+    TimeSystem, RegenerationSystem, LevelSystem, BossSystem, InteractionSystem
 )
+
 from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
 from .sound_system import SoundSystem
 from .renderer import Renderer
 from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
 from .constants import (
-    ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS
+    ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS,
+    RARITY_NORMAL, RARITY_MAGIC, RARITY_UNIQUE, RARITY_CURSED
 )
 
 
@@ -42,6 +44,7 @@ class GameState:
     INVENTORY = 1
     SHOP = 2
     SHRINE = 3
+    CHARACTER_SHEET = 4
 
 class Engine:
     """게임 루프, 초기화, 시스템 관리를 담당하는 메인 클래스"""
@@ -57,6 +60,9 @@ class Engine:
         else:
             self.player_name = player_name
             
+        # UI State
+        self.selected_stat_index = 0
+            
         self.state = GameState.PLAYING # 초기 상태
         self.is_attack_mode = False # 원거리 공격/스킬 모드
         self.active_skill_name = None # 현재 시전 준비 중인 스킬
@@ -66,6 +72,9 @@ class Engine:
         self.inventory_category_index = 0 # 0: 아이템, 1: 장비, 2: 스크롤, 3: 스킬
         self.shop_category_index = 0 # 0: 사기, 1: 팔기
         self.selected_shop_item_index = 0 # 상점 선택 인덱스
+        
+        # [Boss Summon] 마지막으로 처치한 보스 ID
+        self.last_boss_id = None
         
         # [Visual Effects]
         self.particles = [] # 배경 파티클 (x, y, char, color, speed, type)
@@ -87,12 +96,15 @@ class Engine:
         self.renderer = Renderer() 
 
         # 데이터 정의 로드 (항상 사용 가능하도록 __init__에서 처리)
-        from .data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions, load_map_definitions, load_class_definitions
+        from .data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions, load_map_definitions, load_class_definitions, load_boss_patterns
+        from .trap_manager import load_trap_definitions
         self.item_defs = load_item_definitions()
         self.skill_defs = load_skill_definitions()
         self.monster_defs = load_monster_definitions()
         self.map_defs = load_map_definitions()
         self.class_defs = load_class_definitions()
+        self.boss_patterns = load_boss_patterns()
+        self.trap_defs = load_trap_definitions()
         self.prefix_defs = load_prefixes()
         self.suffix_defs = load_suffixes()
         
@@ -100,11 +112,18 @@ class Engine:
         from .modifiers import ModifierManager
         self.modifier_manager = ModifierManager()
 
+        self.shake_timer = 0 # Screen shake duration
+        self.rng = random.Random() # Initialize RNG for map generation
+
         self._initialize_world(game_data)
         self._initialize_systems()
 
     def _initialize_world(self, game_data=None, preserve_player=None, spawn_at="START"):
         """맵, 플레이어, 몬스터 등 초기 엔티티 생성"""
+        # [Boss Summon] 마지막 보스 정보 복원
+        if game_data and "last_boss_id" in game_data:
+            self.last_boss_id = game_data["last_boss_id"]
+
         # 0. 맵 설정 가져오기 (floor는 1부터 시작하므로 문자열 변환 시 1, 2, ... 확인)
         map_config = self.map_defs.get(str(self.current_level))
         if not map_config:
@@ -122,7 +141,32 @@ class Engine:
             map_type = "BOSS" if (self.current_level % 5 == 0 or self.current_level == 99) else "NORMAL"
         
         # DungeonMap 인스턴스 생성
-        dungeon_map = DungeonMap(width, height, random, dungeon_level_tuple=(self.current_level, 0), map_type=map_type)
+        # [Themed Map Size] Override config based on floor tier
+        floor = 1
+        if getattr(self, 'dungeon', None):
+            floor = self.dungeon.dungeon_level_tuple[0]
+            
+        width, height = 60, 40 # Lv 1-25
+        if floor >= 76:
+            width, height = 100, 80
+        elif floor >= 51:
+            width, height = 80, 60
+        elif floor >= 26:
+            width, height = 70, 50
+            
+        # Ensure we obey the override
+        if map_config:
+            # We don't modify map_config directly to avoid persistent side effects if cached, 
+            # but DungeonMap init takes explicit width/height
+            pass
+
+        level_tuple = (1, 0)
+        if getattr(self, 'dungeon', None):
+            level_tuple = self.dungeon.dungeon_level_tuple
+
+        dungeon_map = DungeonMap(width, height, self.rng, 
+                                 dungeon_level_tuple=level_tuple, 
+                                 map_type=map_type)
         self.dungeon_map = dungeon_map
         map_data = dungeon_map.map_data
         
@@ -367,6 +411,26 @@ class Engine:
         map_component = MapComponent(width=width, height=height, tiles=map_data) 
         self.world.add_component(map_entity.entity_id, map_component)
         
+        # [Boss Gate] 보스 층에서 계단 숨기기 및 게이트 정보 저장
+        if self.current_level in [25, 50, 75, 99]:
+            region_names = {
+                25: "Catacombs",
+                50: "Caves", 
+                75: "Hell",
+                99: "승리"
+            }
+            
+            # 맵 엔티티에 BossGateComponent 추가
+            self.world.add_component(map_entity.entity_id, BossGateComponent(
+                next_region_name=region_names[self.current_level],
+                stairs_spawned=False
+            ))
+            
+            # 실제 맵 데이터에서 계단 타일을 바닥('.')으로 임시 변경
+            if 0 <= dungeon_map.exit_x < width and 0 <= dungeon_map.exit_y < height:
+                map_component.tiles[dungeon_map.exit_y][dungeon_map.exit_x] = '.'
+                logging.info(f"Boss Floor {self.current_level}: Hidden exit stairs at ({dungeon_map.exit_x}, {dungeon_map.exit_y})")
+        
         # 3. 메시지 로그 엔티티 생성 (ID=3)
         message_entity = self.world.create_entity()
         message_comp = MessageComponent()
@@ -394,46 +458,47 @@ class Engine:
         self.world.add_component(message_entity.entity_id, message_comp)
         
         # 4. 엔티티 배치 (몬스터/보스/오브젝트)
-        has_boss = map_config.has_boss if map_config else (map_type == "BOSS")
-        if has_boss:
-            # 보스 설정 가져오기
-            boss_ids = map_config.boss_ids if map_config else []
-            boss_count = map_config.boss_count if map_config and map_config.boss_count > 0 else (len(boss_ids) if boss_ids else 1)
-            attacker_pool = map_config.monster_pool if map_config else []
-            
-            # 보스 스폰 및 즉각 알림
-            for i in range(boss_count):
-                # 보스 ID 결정 (리스트 순환하거나 없으면 랜덤)
-                b_id = boss_ids[i % len(boss_ids)] if boss_ids else None
+        # 4. 엔티티 배치 (몬스터/보스/오브젝트)
+        if map_type == "BOSS":
+            self._spawn_boss_room_features(dungeon_map)
+        else:
+            has_boss = map_config.has_boss if map_config else False
+            if has_boss:
+                # 보스 설정 가져오기
+                boss_ids = map_config.boss_ids if map_config else []
+                boss_count = map_config.boss_count if map_config and map_config.boss_count > 0 else (len(boss_ids) if boss_ids else 1)
+                attacker_pool = map_config.monster_pool if map_config else []
                 
-                # 출구 주변에 분산 배치
-                spawn_x = dungeon_map.exit_x - 3 - (i % 3)
-                spawn_y = dungeon_map.exit_y + (i // 3) - (boss_count // 6)
-                
-                boss_ent = self._spawn_boss(spawn_x, spawn_y, attacker_pool, boss_name=b_id)
-                if boss_ent:
-                    m_comp = boss_ent.get_component(MonsterComponent)
-                    name = m_comp.type_name if m_comp else "강력한 적"
-                    message_comp.add_message(f"[경고] {name}이(가) 나타났습니다!", "red")
+                # 보스 스폰 및 즉각 알림
+                for i in range(boss_count):
+                    # 보스 ID 결정 (리스트 순환하거나 없으면 랜덤)
+                    b_id = boss_ids[i % len(boss_ids)] if boss_ids else None
+                    
+                    # 출구 주변에 분산 배치
+                    spawn_x = dungeon_map.exit_x - 3 - (i % 3)
+                    spawn_y = dungeon_map.exit_y + (i // 3) - (boss_count // 6)
+                    
+                    boss_ent = self._spawn_boss(spawn_x, spawn_y, attacker_pool, boss_name=b_id)
+                    if boss_ent:
+                        m_comp = boss_ent.get_component(MonsterComponent)
+                        name = m_comp.type_name if m_comp else "강력한 적"
+                        message_comp.add_message(f"[경고] {name}이(가) 나타났습니다!", "red")
+                        
+                # 주변 호위병 몇 기
+                for _ in range(3):
+                    rx = dungeon_map.exit_x - random.randint(3, 6)
+                    ry = dungeon_map.exit_y + random.randint(-3, 3)
+                    self._spawn_monster_at(rx, ry, pool=attacker_pool)
 
-            # 주변 호위병 몇 기
-            for _ in range(3):
-                rx = dungeon_map.exit_x - random.randint(3, 6)
-                ry = dungeon_map.exit_y + random.randint(-3, 3)
-                self._spawn_monster_at(rx, ry, pool=attacker_pool)
-        
-        # [Safe Zone] Determine safe room index
-        safe_room_index = None
-        if spawn_at == "START":
-            safe_room_index = 0
-        elif spawn_at == "EXIT":
-            safe_room_index = len(dungeon_map.rooms) - 1
+            # [Safe Zone] Determine safe room index
+            safe_room_index = None
+            if spawn_at == "START":
+                safe_room_index = 0
+            elif spawn_at == "EXIT":
+                safe_room_index = len(dungeon_map.rooms) - 1
 
-        # 일반 몬스터 및 오브젝트 스폰
-        if map_type != "BOSS" or not has_boss:
             self._spawn_monsters(dungeon_map, map_config, safe_room_index=safe_room_index)
-            
-        self._spawn_objects(dungeon_map, map_config)
+            self._spawn_objects(dungeon_map, map_config)
 
     def _spawn_monster_at(self, x, y, monster_def=None, pool=None):
         """지정된 위치에 몬스터 한 마리를 생성합니다."""
@@ -530,6 +595,42 @@ class Engine:
                     continue
                 self._spawn_monster_at(cx, cy, pool=pool)
 
+
+    def _spawn_boss_room_features(self, dungeon_map):
+        """보스 맵 전용 엔티티 스폰 (Lever, Door, Shrine, Boss)"""
+        # 1. Shrine (Antechamber)
+        sx, sy = dungeon_map.shrine_pos
+        self._spawn_shrine(sx, sy)
+        
+        # 2. Door (Blocking Boss Room)
+        dx, dy = dungeon_map.boss_door_pos
+        door = self.world.create_entity()
+        self.world.add_component(door.entity_id, PositionComponent(x=dx, y=dy))
+        self.world.add_component(door.entity_id, RenderComponent(char='+', color='brown', priority=5))
+        self.world.add_component(door.entity_id, DoorComponent(is_open=False, is_locked=True, key_id="BOSS_DOOR_KEY")) # Locked, opened by lever
+        self.world.add_component(door.entity_id, BlockMapComponent(blocks_movement=True, blocks_sight=True))
+        
+        # 3. Lever (Side Room) -> Spawns Trap on Use & Opens Door
+        lx, ly = dungeon_map.lever_pos
+        lever = self.world.create_entity()
+        self.world.add_component(lever.entity_id, PositionComponent(x=lx, y=ly))
+        self.world.add_component(lever.entity_id, RenderComponent(char='/', color='yellow', priority=5))
+        # Switch behavior handled in components/systems
+        # linked_trap_id can be used if we spawn a trap entity. 
+        # But for now, we want a trap EFFECT (100%). We can use a dummy trap ID or handle it via event.
+        # Let's use linked_door_pos to open the door remotely.
+        self.world.add_component(lever.entity_id, SwitchComponent(
+            is_open=False, 
+            locked=False,
+            linked_door_pos=(dx, dy), # Link to Boss Door
+            auto_reset=False
+        ))
+        self.world.add_component(lever.entity_id, BlockMapComponent(blocks_movement=False, blocks_sight=False))
+        
+        # 4. Boss (Boss Room)
+        bx, by = dungeon_map.boss_spawn_pos
+        self._spawn_boss(bx, by)
+
     def _spawn_boss(self, x, y, pool=None, boss_name=None, is_summoned=False):
         """지정된 위치에 보스를 스폰합니다."""
         if not self.monster_defs: return
@@ -549,19 +650,38 @@ class Engine:
         boss = self.world.create_entity()
         self.world.add_component(boss.entity_id, PositionComponent(x=x, y=y))
         
-        # Override Boss Color with Unique
-        from .constants import RARITY_UNIQUE
-        self.world.add_component(boss.entity_id, RenderComponent(char=boss_def.symbol, color=RARITY_UNIQUE))
-        self.world.add_component(boss.entity_id, MonsterComponent(type_name=boss_def.name, monster_id=boss_def.ID, is_summoned=is_summoned))
-
+        # [Boss Summon] 소환된 보스(환영)는 파란색으로 표시하고 능력치 조정
+        color = RARITY_UNIQUE
+        if is_summoned:
+            color = 'blue'
+            
+        self.world.add_component(boss.entity_id, RenderComponent(char=boss_def.symbol, color=color))
         
+        # [Fix] 이름 설정 로직 수정
+        monster_name = boss_def.name
+        if is_summoned:
+            monster_name = f"{boss_def.name}의 환영"
+            
+        self.world.add_component(boss.entity_id, MonsterComponent(type_name=monster_name, monster_id=boss_def.ID, is_summoned=is_summoned))
+
         # 보스는 항상 앵그리 모드 (CHASE)
         self.world.add_component(boss.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=15))
         
-        stats = StatsComponent(max_hp=boss_def.hp, current_hp=boss_def.hp, attack=boss_def.attack, defense=boss_def.defense)
+        hp = boss_def.hp
+        attack = boss_def.attack
+        if is_summoned:
+            hp = int(hp * 0.5)
+            attack = int(attack * 0.7) # 공격력은 약간 덜 깎음
+
+        stats = StatsComponent(max_hp=hp, current_hp=hp, attack=attack, defense=boss_def.defense)
         stats.flags.update(boss_def.flags)
         stats.action_delay = boss_def.action_delay
         self.world.add_component(boss.entity_id, stats)
+        
+        # [Boss System] 보스 컴포넌트 추가
+        from .components import BossComponent
+        self.world.add_component(boss.entity_id, BossComponent(boss_id=boss_def.ID))
+        
         return boss
 
 
@@ -615,34 +735,16 @@ class Engine:
             else:
                 self._spawn_chest(cx, cy, floor, item_pool)
 
-        # 함정 (CSV 설정 기반) - 최소 3개 보장
-        trap_prob = map_config.trap_prob if map_config else 0.05
-        traps_spawned = 0
-        min_traps = 3  # 최소 함정 개수
+
+        # 함정 (고정 개수 배치, 레벨 기반 필터링)
+        trap_count = 5  # 기본값
+        if map_config and hasattr(map_config, 'trap_count'):
+            trap_count = map_config.trap_count
+        elif map_config:
+            # trap_count가 없으면 trap_prob 기반으로 추정
+            trap_count = int(len(other_rooms) * map_config.trap_prob * 20)
         
-        # 1. 확률 기반 함정 생성
-        for room in other_rooms:
-            if random.random() < trap_prob:
-                tx = random.randint(room.x1 + 1, room.x2 - 1)
-                ty = random.randint(room.y1 + 1, room.y2 - 1)
-                self._spawn_trap(tx, ty)
-                traps_spawned += 1
-        
-        # 2. 최소 개수 미달 시 추가 생성
-        while traps_spawned < min_traps and other_rooms:
-            room = random.choice(other_rooms)
-            tx = random.randint(room.x1 + 1, room.x2 - 1)
-            ty = random.randint(room.y1 + 1, room.y2 - 1)
-            self._spawn_trap(tx, ty)
-            traps_spawned += 1
-        
-        # 3. 압력판 생성 (복도에 1-2개)
-        if dungeon_map.corridors:
-            num_pressure_plates = random.randint(1, 2)
-            for _ in range(num_pressure_plates):
-                if dungeon_map.corridors:
-                    corridor_tile = random.choice(dungeon_map.corridors)
-                    self._spawn_pressure_plate(corridor_tile[0], corridor_tile[1])
+        self._spawn_traps_for_map(dungeon_map, trap_count, other_rooms)
         
         # [Shrine] 신전 (2층마다 1개, 보스 층 제외)
         is_boss_floor = self.current_level % 5 == 0
@@ -653,57 +755,106 @@ class Engine:
             self._spawn_shrine(shrine_x, shrine_y)
 
     def _spawn_trap(self, x, y):
-        """함정 엔티티 생성 (다양한 타입)"""
+        """함정 엔티티 생성 (CSV 데이터 기반)"""
+        if not self.trap_defs:
+            return  # 함정 정의가 없으면 생성하지 않음
+        
         trap = self.world.create_entity()
         self.world.add_component(trap.entity_id, PositionComponent(x=x, y=y))
         
-        # 다양한 함정 타입
-        trap_types = [
-            {"type": "ARROW", "min": 10, "max": 15, "effect": None, "weight": 40},
-            {"type": "LIGHTNING", "min": 5, "max": 10, "effect": "STUN", "weight": 25},
-            {"type": "GAS", "min": 3, "max": 6, "effect": "POISON", "weight": 20},
-            {"type": "NOVA", "min": 15, "max": 25, "effect": None, "weight": 15},
-        ]
+        # CSV에서 로드한 함정 정의 중 가중치 기반 선택
+        trap_list = list(self.trap_defs.values())
+        weights = [t.weight for t in trap_list]
+        selected_trap = random.choices(trap_list, weights=weights, k=1)[0]
+        
+        # TrapComponent 생성
+        self.world.add_component(trap.entity_id, TrapComponent(
+            trap_type=selected_trap.id,
+            damage_min=selected_trap.damage_min,
+            damage_max=selected_trap.damage_max,
+            effect=selected_trap.status_effect,
+            is_hidden='HIDDEN' in selected_trap.flags
+        ))
+        
+        # RenderComponent 추가 (숨겨진 함정은 나중에 발견 시 표시)
+        if 'HIDDEN' not in selected_trap.flags:
+            self.world.add_component(trap.entity_id, RenderComponent(
+                char=selected_trap.symbol,
+                color=selected_trap.color
+            ))
+    
+    def _spawn_traps_for_map(self, dungeon_map, trap_count: int, rooms: list):
+        """맵에 레벨에 맞는 함정을 고정 개수만큼 배치"""
+        if not self.trap_defs or trap_count <= 0:
+            return
+        
+        floor_level = dungeon_map.dungeon_level_tuple[0]
+        
+        # 현재 층에서 사용 가능한 함정 필터링
+        eligible_traps = [trap for trap in self.trap_defs.values() 
+                         if trap.min_level <= floor_level]
+        
+        if not eligible_traps:
+            # 사용 가능한 함정이 없으면 모든 함정 사용
+            eligible_traps = list(self.trap_defs.values())
+        
+        placed = 0
+        max_attempts = trap_count * 5  # 최대 시도 횟수
+        attempts = 0
+        
+        while placed < trap_count and attempts < max_attempts:
+            attempts += 1
+            
+            # 배치 위치 타입 선택 (바닥 70%, 복도 30%)
+            if random.random() < 0.7 and rooms:
+                # 방 바닥에 배치
+                room = random.choice(rooms)
+                x = random.randint(room.x1 + 1, room.x2 - 1)
+                y = random.randint(room.y1 + 1, room.y2 - 1)
+            elif dungeon_map.corridors:
+                # 복도에 배치
+                x, y = random.choice(dungeon_map.corridors)
+            else:
+                continue
+            
+            # 중복 체크 (이미 함정이 있는 위치는 제외)
+            if not self._is_trap_at(x, y):
+                self._spawn_trap_at(x, y, eligible_traps)
+                placed += 1
+    
+    def _is_trap_at(self, x: int, y: int) -> bool:
+        """지정된 위치에 함정이 있는지 확인"""
+        traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
+        for trap in traps:
+            pos = trap.get_component(PositionComponent)
+            if pos.x == x and pos.y == y:
+                return True
+        return False
+    
+    def _spawn_trap_at(self, x: int, y: int, eligible_traps: list):
+        """지정된 위치에 적격 함정 중 하나를 배치"""
+        trap = self.world.create_entity()
+        self.world.add_component(trap.entity_id, PositionComponent(x=x, y=y))
         
         # 가중치 기반 선택
-        weights = [t["weight"] for t in trap_types]
-        t_data = random.choices(trap_types, weights=weights, k=1)[0]
+        weights = [t.weight for t in eligible_traps]
+        selected_trap = random.choices(eligible_traps, weights=weights, k=1)[0]
         
+        # TrapComponent 생성
         self.world.add_component(trap.entity_id, TrapComponent(
-            trap_type=t_data["type"], 
-            damage_min=t_data["min"], 
-            damage_max=t_data["max"],
-            effect=t_data["effect"]
-        ))
-    
-    def _spawn_pressure_plate(self, x, y):
-        """압력판 생성 (복도용)"""
-        from .components import PressurePlateComponent
-        
-        # 먼저 함정 생성
-        trap = self.world.create_entity()
-        trap.add_component(PositionComponent(x=x, y=y))
-        
-        # 압력판용 함정 타입 (더 강력함)
-        trap_types = [
-            {"type": "ARROW", "min": 15, "max": 25, "effect": None},
-            {"type": "LIGHTNING", "min": 10, "max": 20, "effect": "STUN"},
-            {"type": "GAS", "min": 5, "max": 10, "effect": "POISON"},
-        ]
-        t_data = random.choice(trap_types)
-        
-        trap.add_component(TrapComponent(
-            trap_type=t_data["type"],
-            damage_min=t_data["min"],
-            damage_max=t_data["max"],
-            effect=t_data["effect"]
+            trap_type=selected_trap.id,
+            damage_min=selected_trap.damage_min,
+            damage_max=selected_trap.damage_max,
+            effect=selected_trap.status_effect,
+            is_hidden='HIDDEN' in selected_trap.flags
         ))
         
-        # 압력판 엔티티 생성
-        plate = self.world.create_entity()
-        plate.add_component(PositionComponent(x=x, y=y))
-        plate.add_component(RenderComponent(char='.', color='dark_grey'))  # 바닥처럼 보임
-        plate.add_component(PressurePlateComponent(linked_trap_id=trap.entity_id, is_triggered=False))
+        # RenderComponent 추가 (숨겨진 함정은 나중에 발견 시 표시)
+        if 'HIDDEN' not in selected_trap.flags:
+            self.world.add_component(trap.entity_id, RenderComponent(
+                char=selected_trap.symbol,
+                color=selected_trap.color
+            ))
     
     def _spawn_shrine(self, x, y):
         """신전 엔티티 생성"""
@@ -752,10 +903,13 @@ class Engine:
         
         if candidates:
             item = random.choice(candidates)
+            # [Fix] Clone item to avoid modifying the definition
+            item = copy.deepcopy(item)
             item_id = item.name
             
             # 2. Determine Rarity
             rarity = self._get_rarity(floor)
+            item.rarity = rarity
             
             # [Endgame] 95-99F: Force Magic+ or higher chance
             if floor >= 95:
@@ -794,10 +948,15 @@ class Engine:
         self.combat_system = CombatSystem(self.world)
         self.regeneration_system = RegenerationSystem(self.world)
         self.level_system = LevelSystem(self.world)
-        self.trap_system = TrapSystem(self.world)
-        self.interaction_system = InteractionSystem(self.world)
+        
+        # TrapSystem은 trap_manager에서 import
+        from .trap_manager import TrapSystem as TrapSystemNew
+        self.trap_system = TrapSystemNew(self.world, self.trap_defs)
+        
         self.sound_system = SoundSystem(self.world)
+        self.boss_system = BossSystem(self.world)
         self.render_system = RenderSystem(self.world)
+        self.interaction_system = InteractionSystem(self.world)
         
         # 2. 시스템 순서 등록: 시간 -> 입력 -> AI -> 이동 -> 전투 -> 레벨 -> 회복 -> 렌더링
         systems = [
@@ -805,12 +964,13 @@ class Engine:
             self.input_system,
             self.monster_ai_system,
             self.movement_system,
+            self.interaction_system, # Move success -> Interaction check
             self.combat_system,
             self.level_system,
-            self.interaction_system,
             self.trap_system,
             self.regeneration_system,
             self.sound_system,
+            self.boss_system,
             self.render_system
         ]
         for system in systems:
@@ -824,6 +984,12 @@ class Engine:
         self.world.event_manager.register(MapTransitionEvent, self)
         self.world.event_manager.register(ShopOpenEvent, self)
         self.world.event_manager.register(ShrineOpenEvent, self)
+
+    def trigger_shake(self, duration=10):
+        """화면 흔들림 효과를 트리거합니다."""
+        self.shake_timer = duration
+        if self.ui:
+            self.ui.trigger_shake(duration)
 
     def _get_input(self) -> Optional[str]:
         """사용자 입력을 받음 (os.read를 사용한 저수준 정밀 파싱)"""
@@ -864,16 +1030,34 @@ class Engine:
             
     def _get_rarity(self, floor: int, magic_find: int = 0) -> str:
         """층수와 Magic Find에 따른 아이템 등급 결정 (Top-Down: UNIQUE -> MAGIC -> NORMAL)"""
-        # Base Probabilities (User Logic: Normal 85%, Magic 14.5%, Unique 0.5%)
-        # MF는 Unique, Magic 확률을 증가시킴 (Diminishing Returns 없이 단순 % 증가 적용)
+        # [Themed Rarity Rates]
+        # Lv 1-25: Normal 85%, Magic 14.5%, Unique 0.5%
+        # Lv 26-50: Normal 70%, Magic 24.5%, Unique 5.5%
+        # Lv 51+: Normal 30%, Magic 44.5%, Unique 25.5%
+
+        if floor > 50:
+            # Target: N 30, M 44.5, U 25.5
+            # P(U) = 0.255
+            # P(M|!U) = 0.445 / (1 - 0.255) = 0.445 / 0.745 ~= 0.5973
+            base_unique = 0.255
+            base_magic = 0.5973
+        elif floor > 25:
+            # Target: N 70, M 24.5, U 5.5
+            # P(U) = 0.055
+            # P(M|!U) = 0.245 / (1 - 0.055) = 0.245 / 0.945 ~= 0.2593
+            base_unique = 0.055
+            base_magic = 0.2593
+        else:
+             # Target: N 85, M 14.5, U 0.5
+             # P(U) = 0.005
+             # P(M|!U) = 0.145 / 0.995 ~= 0.1457
+             base_unique = 0.005 
+             base_magic = 0.1457
         
-        base_unique = 0.005 # 0.5%
-        base_magic = 0.145  # 14.5%
-        
-        # [Endgame] 95층 이상: 보스런 느낌으로 확률 보정
+        # [Endgame] 95층 이상: 보스런 느낌으로 확률 보정 (기존 로직 유지 또는 통합)
         if floor >= 95:
-             base_unique = 0.05 # 5%
-             base_magic = 0.50  # 50%
+             base_unique = max(base_unique, 0.05)
+             base_magic = max(base_magic, 0.50)
         
         # MF 적용 (Ex: MF 100 -> 확률 2배)
         mf_factor = 1.0 + (magic_find / 100.0)
@@ -903,15 +1087,15 @@ class Engine:
         want_prefix = False
         want_suffix = False
         
-        if roll < 0.25:
+        if roll < 0.40:
             want_prefix = True
-        elif roll < 0.50:
+        elif roll < 0.80:
             want_suffix = True
         else:
             want_prefix = True
             want_suffix = True
             
-        # [Endgame] 95층 이상: Prefix+Suffix 확률 대폭 증가 (80%)
+        # [Endgame] 95층 이상: Prefix+Suffix 확률 대폭 증가 (80%) - Optional override
         if floor >= 95 and roll < 0.80:
              want_prefix = True
              want_suffix = True
@@ -1118,6 +1302,10 @@ class Engine:
                             self._handle_inventory_input(action)
                         self._render()
                         last_frame_time = current_time
+                    elif self.state == GameState.CHARACTER_SHEET:
+                        self._handle_character_sheet_input(action)
+                        self._render()
+                        last_frame_time = current_time
                     elif self.state == GameState.SHOP:
                         if action_lower == 'q':
                             self.state = GameState.PLAYING
@@ -1165,6 +1353,8 @@ class Engine:
                 if elapsed_since_frame >= frame_duration:
                     self._render()
                     last_frame_time = current_time
+                    if self.shake_timer > 0:
+                        self.shake_timer -= 1
                 
                 time.sleep(0.05)  # 20 FPS for game logic
 
@@ -1245,7 +1435,8 @@ class Engine:
                 # 필요한 다른 플레이어 데이터...
             },
             "current_level": self.current_level,
-            "turn_number": self.turn_number
+            "turn_number": self.turn_number,
+            "last_boss_id": self.last_boss_id  # [Boss Summon] 저장
         }
         
         save_game_data(game_state_data, self.player_name)
@@ -1261,10 +1452,6 @@ class Engine:
 
         direction_str = "위로 올라갑니다" if going_up else "깊은 곳으로 내려갑니다"
         self.world.event_manager.push(MessageEvent(f"{direction_str}... (던전 {self.current_level}층)"))
-        
-        # [Auto-Save] 층 이동 시 자동 저장
-        self._save_game()
-        self.world.event_manager.push(MessageEvent("게임이 저장되었습니다.", "cyan"))
         
         # 1. 플레이어 데이터 보존
         player_entity = self.world.get_player_entity()
@@ -1410,6 +1597,73 @@ class Engine:
         else:
             self.world.event_manager.push(MessageEvent("골드가 부족합니다!"))
 
+    def _handle_character_sheet_input(self, action):
+        """캐릭터 정보창 입력 처리"""
+        player_entity = self.world.get_player_entity()
+        if not player_entity:
+            self.state = GameState.PLAYING
+            return
+
+        from .components import StatsComponent, LevelComponent
+        level_comp = player_entity.get_component(LevelComponent)
+        stats = player_entity.get_component(StatsComponent)
+        
+        if not level_comp or not stats:
+            self.state = GameState.PLAYING
+            return
+
+        # Close
+        if action in [readchar.key.ESC, 'q', 'Q', 'c', 'C']:
+            self.state = GameState.PLAYING
+            return
+
+        # Navigation
+        if action in [readchar.key.UP, 'w', 'W', '\x1b[A']:
+            self.selected_stat_index = max(0, self.selected_stat_index - 1)
+        elif action in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
+            self.selected_stat_index = min(3, self.selected_stat_index + 1)
+        
+        # Add Point
+        elif action in [readchar.key.RIGHT, 'd', 'D', '\x1b[C', '+', '=', '\r', '\n']:
+            if level_comp.stat_points > 0:
+                level_comp.stat_points -= 1
+                if self.selected_stat_index == 0: stats.base_str += 1
+                elif self.selected_stat_index == 1: stats.base_mag += 1
+                elif self.selected_stat_index == 2: stats.base_dex += 1
+                elif self.selected_stat_index == 3: stats.base_vit += 1
+                
+                self._recalculate_stats()
+                # 효과음 등 피드백 추가 가능
+            else:
+                 pass # 포인트 부족
+
+    def _get_filtered_inventory_items(self, inv_comp):
+        """현재 카테고리 인덱스에 따라 필터링된 아이템 목록 반환"""
+        filtered_items = []
+        if self.inventory_category_index == 0: # 아이템 (소모품/스킬북)
+            filtered_items = [(id, data) for id, data in inv_comp.items.items() 
+                             if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
+        elif self.inventory_category_index == 1: # 장비
+            # Include all equippable items: WEAPON, ARMOR, SHIELD, ACCESSORY
+            filtered_items = [(id, data) for id, data in inv_comp.items.items() 
+                             if data['item'].type in ['WEAPON', 'ARMOR', 'SHIELD', 'ACCESSORY']]
+        elif self.inventory_category_index == 2: # 스크롤
+            filtered_items = [(id, data) for id, data in inv_comp.items.items() 
+                             if data['item'].type == 'SCROLL']
+        elif self.inventory_category_index == 3: # 스킬
+            for s_name in inv_comp.skills:
+                s_def = self.skill_defs.get(s_name)
+                if s_def:
+                    filtered_items.append((s_name, {'item': s_def, 'qty': 1}))
+                else:
+                    # Fallback for unknown skills
+                    dummy = type('obj', (object,), {
+                        'name': s_name, 'element': 'NONE', 'color': 'white', 
+                        'description': '설명이 없습니다.', 'range': 1, 'type': 'SKILL'
+                    })()
+                    filtered_items.append((s_name, {'item': dummy, 'qty': 1}))
+        return filtered_items
+
     def _handle_inventory_input(self, action):
         """인벤토리 상태에서의 입력 처리"""
         player_entity = self.world.get_player_entity()
@@ -1428,19 +1682,8 @@ class Engine:
                 self.world.event_manager.push(MessageEvent("몸이 움직이지 않아 아이템을 조작할 수 없습니다!"))
                 return
 
-        # 1. 현재 카테고리에 해당하는 아이템 필터링
-        filtered_items = []
-        if self.inventory_category_index == 0: # 아이템 (소모품/스킬북)
-            filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
-        elif self.inventory_category_index == 1: # 장비
-            # Include all equippable items: WEAPON, ARMOR, SHIELD, ACCESSORY
-            filtered_items = [(id, data) for id, data in inv.items.items() 
-                            if data['item'].type in ['WEAPON', 'ARMOR', 'SHIELD', 'ACCESSORY']]
-        elif self.inventory_category_index == 2: # 스크롤
-            filtered_items = [(id, data) for id, data in inv.items.items() if data['item'].type == 'SCROLL']
-        elif self.inventory_category_index == 3: # 스킬
-            filtered_items = [(s, {'item': type('obj', (object,), {'name': s})(), 'qty': 1}) for s in inv.skills]
-
+        # 1. 현재 카테고리에 해당하는 아이템 필터링 (헬퍼 사용)
+        filtered_items = self._get_filtered_inventory_items(inv)
         item_count = len(filtered_items)
 
         # 2. 내비게이션 처리
@@ -1659,17 +1902,17 @@ class Engine:
                 if current_lv >= 255:
                     msg = f"'{skill_name}' 스킬은 이미 극의에 도달했습니다!"
                 else:
-                    # 지수 레벨링: 3^n (Lv1→2: 3권, Lv2→3: 9권, Lv3→4: 27권)
-                    books_needed = 3 ** current_lv
+                    # 필요 권수: 2권 (User Request: 2 books = 1 level)
+                    books_needed = 2
                     
-                    # 읽은 횟수 증가
+                    # 읽은 횟수 증가 (사실상 즉시 레벨업)
                     inv.skill_books_read[skill_name] = inv.skill_books_read.get(skill_name, 0) + 1
                     current_reads = inv.skill_books_read[skill_name]
                     
                     if current_reads >= books_needed:
                         inv.skill_levels[skill_name] = current_lv + 1
                         inv.skill_books_read[skill_name] = 0
-                        msg = f"'{skill_name}'의 오의를 깨달았습니다! (Lv.{current_lv} → Lv.{current_lv + 1})"
+                        msg = f"'{skill_name}'의 오의를 깨달았습니다! (Lv.{current_lv} -> Lv.{current_lv + 1})"
                         self.world.event_manager.push(SoundEvent("LEVEL_UP"))
                     else:
                         msg = f"'{skill_name}'의 지식을 쌓고 있습니다. ({current_reads}/{books_needed}권)"
@@ -1942,7 +2185,16 @@ class Engine:
             inv.equipped["손2"] = item
             
         elif item.type == 'ARMOR':
-            inv.equipped["몸통"] = item
+            # 이름 기반 슬롯 판별
+            name = item.name
+            if any(k in name for k in ["헬름", "캡", "모자", "투구", "왕관", "크라운", "후드", "마스크"]):
+                inv.equipped["머리"] = item
+            elif any(k in name for k in ["장갑", "건틀릿", "글러브"]):
+                inv.equipped["장갑"] = item
+            elif any(k in name for k in ["신발", "부츠", "장화", "그리브"]):
+                inv.equipped["신발"] = item
+            else:
+                inv.equipped["몸통"] = item
         elif item.type == 'ACCESSORY':
             if not inv.equipped.get("액세서리1"):
                 inv.equipped["액세서리1"] = item
@@ -2220,12 +2472,33 @@ class Engine:
         MAP_VIEW_WIDTH = 78 
         MAP_VIEW_HEIGHT = self.renderer.height - 12 # 하단 스탯 창 공간 확보
         
+        # [Screen Shake] Apply random offset
+        shake_x = 0
+        shake_y = 0
+        if self.shake_timer > 0:
+            shake_x = random.randint(-1, 1)
+            shake_y = random.randint(0, 1) # Y는 아래로만 (위로 가면 짤림)
+        
+        # Helper for shake offset
+        def dx(x): return x + shake_x
+        def dy(y): return y + shake_y
+        
         # 0. 구분선 복구 (레이아웃 틀어짐 방지 가이드 역할)
         for y in range(self.renderer.height):
             self.renderer.draw_char(80, y, "|", "dark_grey")
         
         player_entity = self.world.get_player_entity()
         player_pos = player_entity.get_component(PositionComponent) if player_entity else None
+        
+        # [Boss Bark] 보스 대사 추출 (타이핑 효과 반영된 것)
+        boss_bark = None
+        boss_ent_list = self.world.get_entities_with_components({BossComponent})
+        for be in boss_ent_list:
+            b_comp = be.get_component(BossComponent)
+            if b_comp.visible_bark:
+                boss_bark = f"[{b_comp.boss_id}] {b_comp.visible_bark}"
+                break
+        
         map_comp_list = self.world.get_entities_with_components([MapComponent])
         
         # 카메라 오프셋 계산 (플레이어를 중앙에)
@@ -2235,6 +2508,16 @@ class Engine:
             camera_y = max(0, min(player_pos.y - MAP_VIEW_HEIGHT // 2, map_comp.height - MAP_VIEW_HEIGHT))
         else:
             camera_x, camera_y = 0, 0
+
+        # [Boss Bark UI] 맵 상단 중앙에 출력
+        if boss_bark:
+            # 맵 상단 (y=1) 중앙 정렬 (y=0은 배너와 겹칠 수 있음)
+            # 테두리 및 반전 효과 강조
+            box_text = f"  {boss_bark}  "
+            bark_x = max(0, (MAP_VIEW_WIDTH - len(box_text)) // 2)
+            
+            # 배경 상자 느낌 (draw_text가 한글 너비를 처리하므로 안전)
+            self.renderer.draw_text(dx(bark_x), dy(1), box_text, "invert")
 
         # ... (중략: 안개 업데이트 로직) ...
         # 0. 전장의 안개 업데이트 (시야 반경 8)
@@ -2339,6 +2622,10 @@ class Engine:
                 char = render.char
                 color = render.color
 
+                # [Petrified] 석화 상태면 회색으로 표시
+                if entity.has_component(PetrifiedComponent):
+                    color = "dark_grey"
+
                 # 피격 피드백(Hit Flash) 처리
                 if entity.has_component(HitFlashComponent):
                     color = "white_bg"
@@ -2365,49 +2652,10 @@ class Engine:
                         color = "red_bg"
 
                 self.renderer.draw_char(screen_x, screen_y, char, color)
-        
-        # [V12] Rogue Trap Sense Overlay
-        if player_entity:
-            inv = player_entity.get_component(InventoryComponent)
-            if inv and "함정 해제" in inv.skills:
-                # Find all switches with linked traps
-                for entity in self.world.get_entities_with_components({SwitchComponent, PositionComponent}):
-                    switch = entity.get_component(SwitchComponent)
-                    if switch.linked_trap_id and not switch.is_open:
-                        trap = self.world.get_entity(switch.linked_trap_id)
-                        t_comp = trap.get_component(TrapComponent) if trap else None
-                        
-                        if t_comp and not t_comp.is_disarmed:
-                            pos = entity.get_component(PositionComponent)
-                            screen_x = pos.x - camera_x
-                            screen_y = pos.y - camera_y
-                            
-                            if 0 <= screen_x < MAP_VIEW_WIDTH and 0 <= screen_y < MAP_VIEW_HEIGHT:
-                                # Check if visible (visited)
-                                if self.dungeon_map and (pos.x, pos.y) in self.dungeon_map.visited:
-                                    self.renderer.draw_char(screen_x, screen_y, '!', 'red')
-                
-                # Find all pressure plates with linked traps
-                from .components import PressurePlateComponent
-                for entity in self.world.get_entities_with_components({PressurePlateComponent, PositionComponent}):
-                    plate = entity.get_component(PressurePlateComponent)
-                    if plate.linked_trap_id and not plate.is_triggered:
-                        trap = self.world.get_entity(plate.linked_trap_id)
-                        t_comp = trap.get_component(TrapComponent) if trap else None
-                        
-                        if t_comp and not t_comp.is_disarmed:
-                            pos = entity.get_component(PositionComponent)
-                            screen_x = pos.x - camera_x
-                            screen_y = pos.y - camera_y
-                            
-                            if 0 <= screen_x < MAP_VIEW_WIDTH and 0 <= screen_y < MAP_VIEW_HEIGHT:
-                                if self.dungeon_map and (pos.x, pos.y) in self.dungeon_map.visited:
-                                    self.renderer.draw_char(screen_x, screen_y, '!', 'red')
 
                 # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘) - 우선순위 순서로 표시
                 # Priority: Petrified > Stun > Sleep > Poison > Bleeding > Mana Shield
-                from .components import (PetrifiedComponent, StunComponent, SleepComponent, 
-                                        PoisonComponent, BleedingComponent, ManaShieldComponent)
+                from .components import (BleedingComponent, ManaShieldComponent)
                 
                 status_icon = None
                 status_color = "white"
@@ -2549,17 +2797,18 @@ class Engine:
                 self.renderer.draw_text(9 + 15, current_y, "]", "white")
                 self.renderer.draw_text(26, current_y, f"{int(stats.current_hp)}/{int(stats.max_hp)}", "white")
                 current_y += 1
-
-                # MP Bar
-                mp_per = max(0, min(1, stats.current_mp / stats.max_mp)) if stats.max_mp > 0 else 0
-                mp_filled = int(mp_per * 15)
-                self.renderer.draw_text(2, current_y, "MP  :", "white")
-                self.renderer.draw_text(8, current_y, "[", "white")
-                self.renderer.draw_text(9, current_y, "=" * mp_filled, "blue")
-                self.renderer.draw_text(9 + mp_filled, current_y, "-" * (15 - mp_filled), "dark_grey")
-                self.renderer.draw_text(9 + 15, current_y, "]", "white")
-                self.renderer.draw_text(26, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
                 current_y += 1
+                
+                # MP Bar (Removed as per user request)
+                # mp_per = max(0, min(1, stats.current_mp / stats.max_mp)) if stats.max_mp > 0 else 0
+                # mp_filled = int(mp_per * 15)
+                # self.renderer.draw_text(2, current_y, "MP  :", "white")
+                # self.renderer.draw_text(8, current_y, "[", "white")
+                # self.renderer.draw_text(9, current_y, "=" * mp_filled, "blue")
+                # self.renderer.draw_text(9 + mp_filled, current_y, "-" * (15 - mp_filled), "dark_grey")
+                # self.renderer.draw_text(9 + 15, current_y, "]", "white")
+                # self.renderer.draw_text(26, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
+                # current_y += 1
 
                 # STM Bar
                 stm_per = max(0, min(1, stats.current_stamina / stats.max_stamina)) if stats.max_stamina > 0 else 0
@@ -2637,8 +2886,19 @@ class Engine:
                 
                 # 메시지 내용에 따른 색상 구분
                 msg_color = "white"
+                
+                # 1. Explicit color (from MessageEvent)
                 if msg_color_override:
                     msg_color = msg_color_override
+                # 2. Keyword-based fallback
+                elif "치명타" in msg_text or "Critical" in msg_text:
+                    msg_color = "red"
+                elif "빗나갔" in msg_text or "Miss" in msg_text:
+                    msg_color = "dark_grey"
+                elif "방어" in msg_text or "Block" in msg_text:
+                    msg_color = "green"
+                elif "시전" in msg_text or "Cast" in msg_text:
+                     msg_color = "cyan"
                 elif "데미지를 입었다" in msg_text:
                     msg_color = "red"
                 elif "쓰러졌습니다" in msg_text:
@@ -2771,8 +3031,76 @@ class Engine:
             self._render_shop_popup()
         elif self.state == GameState.SHRINE:
             self._render_shrine_popup()
+        elif self.state == GameState.CHARACTER_SHEET:
+            self._render_character_sheet_popup()
 
         self.renderer.render()
+
+    def _render_character_sheet_popup(self):
+        """캐릭터 상세 정보 팝업 렌더링"""
+        MAP_WIDTH = 80
+        POPUP_WIDTH = 60
+        POPUP_HEIGHT = 18
+        
+        start_x = (MAP_WIDTH - POPUP_WIDTH) // 2
+        start_y = (self.renderer.height - POPUP_HEIGHT) // 2
+        
+        # 1. Box
+        for y in range(start_y, start_y + POPUP_HEIGHT):
+            for x in range(start_x, start_x + POPUP_WIDTH):
+                if y == start_y or y == start_y + POPUP_HEIGHT - 1:
+                    char = "-"
+                elif x == start_x or x == start_x + POPUP_WIDTH - 1:
+                    char = "|"
+                else:
+                    char = " "
+                self.renderer.draw_char(x, y, char, "white")
+        
+        player_entity = self.world.get_player_entity()
+        if not player_entity: return
+        
+        from .components import StatsComponent, LevelComponent
+        stats = player_entity.get_component(StatsComponent)
+        level_comp = player_entity.get_component(LevelComponent)
+        
+        if not stats or not level_comp: return
+        
+        # 2. Header
+        header = f"[ {level_comp.job or 'Adventurer'} - Lv.{level_comp.level} ]"
+        self.renderer.draw_text(start_x + (POPUP_WIDTH - len(header)) // 2, start_y + 1, header, "gold")
+        
+        exp_info = f"EXP: {int(level_comp.exp)} / {int(level_comp.exp_to_next)}"
+        pts_info = f"Points: {level_comp.stat_points}"
+        self.renderer.draw_text(start_x + 4, start_y + 3, exp_info, "white")
+        self.renderer.draw_text(start_x + POPUP_WIDTH - len(pts_info) - 4, start_y + 3, pts_info, "yellow")
+        
+        self.renderer.draw_text(start_x + 2, start_y + 4, "-" * (POPUP_WIDTH - 4), "dark_grey")
+        
+        # 3. Stats List
+        stat_names = ["STR (힘)", "MAG (마력)", "DEX (민첩)", "VIT (활력)"]
+        stat_vals = [stats.base_str, stats.base_mag, stats.base_dex, stats.base_vit]
+        stat_desc = ["공격력 / 무기효율", "최대마력 / 마법효율", "방어력 / 명중률 / 치명타", "최대체력 / 생존력"]
+        
+        base_y = start_y + 6
+        for i in range(4):
+            prefix = "> " if i == self.selected_stat_index else "  "
+            color = "green" if i == self.selected_stat_index else "white"
+            
+            line = f"{prefix}{stat_names[i]:<10}: {stat_vals[i]:<3} | {stat_desc[i]}"
+            self.renderer.draw_text(start_x + 4, base_y + i * 2, line, color)
+            
+        self.renderer.draw_text(start_x + 2, base_y + 9, "-" * (POPUP_WIDTH - 4), "dark_grey")
+        
+        # 4. Summary
+        hp_mp = f"HP: {int(stats.current_hp)}/{int(stats.max_hp)}  MP: {int(stats.current_mp)}/{int(stats.max_mp)}"
+        atk_def = f"ATK: {stats.attack}  DEF: {stats.defense}"
+        
+        self.renderer.draw_text(start_x + 4, base_y + 10, hp_mp, "cyan")
+        self.renderer.draw_text(start_x + 4, base_y + 11, atk_def, "cyan")
+        
+        # 5. Footer
+        help_text = "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기"
+        self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
     def _render_inventory_popup(self):
         """항목 목록을 보여주는 중앙 팝업창 렌더링 (카테고리 분류 포함)"""
@@ -2782,6 +3110,9 @@ class Engine:
         # 맵 영역(80) 내에 중앙 정렬
         start_x = (MAP_WIDTH - POPUP_WIDTH) // 2
         start_y = (self.renderer.height - POPUP_HEIGHT) // 2
+        
+        # 1. 배경 및 테두리 그리기
+        max_visible_items = 6  # 목록 가독성을 위해 6개로 고정
         
         # 1. 배경 및 테두리 그리기 (불투명 처리 보강)
         for y in range(start_y, start_y + POPUP_HEIGHT):
@@ -2826,25 +3157,8 @@ class Engine:
              inv_comp = player_entity.get_component(InventoryComponent)
              
              if inv_comp:
-                 # 카테고리별 필터링
-                 if self.inventory_category_index == 0: # 아이템
-                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['CONSUMABLE', 'SKILLBOOK']]
-                 elif self.inventory_category_index == 1: # 장비
-                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type in ['WEAPON', 'ARMOR', 'ACCESSORY']]
-                 elif self.inventory_category_index == 2: # 스크롤
-                     filtered_items = [(id, data) for id, data in inv_comp.items.items() if data['item'].type == 'SCROLL']
-                 elif self.inventory_category_index == 3: # 스킬 탭
-                     filtered_items = []
-                     for s_name in inv_comp.skills:
-                         s_def = self.skill_defs.get(s_name)
-                         if s_def:
-                             # Use s_def directly but wrapped in item-like structure
-                             filtered_items.append((s_name, {'item': s_def, 'qty': 1}))
-                         else:
-                             # Fallback for unknown skills
-                             dummy = type('obj', (object,), {'name': s_name, 'element': 'NONE', 'color': 'white', 'description': '설명이 없습니다.', 'range': 1})()
-                             filtered_items.append((s_name, {'item': dummy, 'qty': 1}))
-
+                 # 카테고리별 필터링 (헬퍼 사용)
+                 filtered_items = self._get_filtered_inventory_items(inv_comp)
                  total_items = len(filtered_items)
 
                  if not filtered_items:
@@ -2853,9 +3167,8 @@ class Engine:
                      current_y = start_y + 4
                      # Import constants
                      from .constants import ELEMENT_ICONS, RARITY_NORMAL
-                     
-                     # 스크롤 가능한 영역 계산 (하단에 상세 정보창 공간 확보)
-                     max_visible_items = POPUP_HEIGHT - 13 # 상세 정보창(10줄) + 헤더 등 제외
+                     # 스크롤 가능한 영역 계산 (하단 상세 정보창을 위해 6개로 제한)
+                     max_visible_items = 6
                      
                      # 스크롤 오프셋 조정 (선택된 아이템이 보이도록)
                      if self.selected_item_index < self.inventory_scroll_offset:
@@ -2927,30 +3240,26 @@ class Engine:
                          
                          self.renderer.draw_text(start_x + 2, current_y, f"{prefix}{icon}{name} x{qty}{_s}", color)
                          current_y += 1
-                     
                      # 페이지 인디케이터 표시
                      if total_items > max_visible_items:
                          current_page = (self.inventory_scroll_offset // max_visible_items) + 1
                          total_pages = (total_items + max_visible_items - 1) // max_visible_items
                          page_info = f"Page {current_page}/{total_pages} ({start_idx+1}-{end_idx}/{total_items})"
-                         # 위치를 약간 위로 조정하여 하단 상세 정보창과 겹치지 않게 함
-                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + POPUP_HEIGHT - 6, page_info, "cyan")
+                         self.renderer.draw_text(start_x + POPUP_WIDTH - len(page_info) - 2, start_y + 3, page_info, "cyan")
 
                  # 4.1 선택된 아이템/스킬 상세 정보 표시 (하단 영역)
-                 # 하단 정보 표시
-                 info_y = start_y + max_visible_items + 3
+                 # 하단 구분선 (y=10 고정)
+                 info_y = start_y + 10
                  self.renderer.draw_text(start_x, info_y, "─" * (POPUP_WIDTH - 2), "white")
                  
-                 # Debug: Show selection info
-                 debug_info = f"선택: {self.selected_item_index + 1}/{total_items} (총 {len(filtered_items)}개)"
-                 self.renderer.draw_text(start_x + 2, start_y + POPUP_HEIGHT - 12, debug_info, "yellow")
-                 
+                 # 가이드 메시지 (아이템 목록 바로 위 또는 구분선 근처)
+                 debug_info = f" 선택: {self.selected_item_index + 1}/{total_items} "
+                 self.renderer.draw_text(start_x + 2, start_y + 3, debug_info, "yellow")
                  if 0 <= self.selected_item_index < total_items:
                      sel_id, sel_data = filtered_items[self.selected_item_index]
                      sel_item = sel_data['item']
-                     
-                     # 구분선 (상세 정보용 - 10줄 정도 확보)
-                     detail_y = start_y + POPUP_HEIGHT - 11
+                     # 상세 정보 시작 위치 (구분선 바로 아래)
+                     detail_y = info_y + 1
                      self.renderer.draw_text(start_x + 1, detail_y, "-" * (POPUP_WIDTH - 2), "dark_grey")
                      
                      # 아이템/스킬 이름 표시 (상세 영역 최상단)
@@ -3137,7 +3446,6 @@ class Engine:
         # 5. 하단 도움말
         guide_text = "[←/→] 탭 전환  [↑/↓] 선택  [ENTER] " + ("구매" if self.shop_category_index == 0 else "판매") + "  [Q/ESC] 나가기"
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(guide_text)) // 2, start_y + POPUP_HEIGHT - 2, guide_text, "dark_grey")
-
     def _handle_oil_selection_input(self, action):
         """오일 사용 시 장비 선택 입력 처리"""
         # ESC: Cancel
@@ -3727,4 +4035,3 @@ class Engine:
 if __name__ == '__main__':
     engine = Engine()
     engine.run()
-print('USING TOP LEVEL ENGINE')

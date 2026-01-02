@@ -1,6 +1,6 @@
 # dungeon/events.py - 모든 게임 이벤트를 정의하는 모듈
 
-from typing import Tuple
+from typing import Any, Tuple
 from .ecs import Event
 
 class MoveSuccessEvent(Event):
@@ -44,11 +44,12 @@ class ShrineOpenEvent(Event):
 
 class DirectionalAttackEvent(Event):
     """플레이어가 특정 방향으로 원거리 공격을 수행할 때 발생"""
-    def __init__(self, attacker_id: int, dx: int, dy: int, range_dist: int):
+    def __init__(self, attacker_id: int, dx: int, dy: int, range_dist: int, damage_factor: float = 1.0):
         self.attacker_id = attacker_id
         self.dx = dx
         self.dy = dy
         self.range_dist = range_dist
+        self.damage_factor = damage_factor
 
 class SkillUseEvent(Event):
     """플레이어가 스킬을 사용할 때 발생"""
@@ -67,13 +68,21 @@ class SoundEvent(Event):
         self.type = "SOUND" # SoundSystem에서 식별용
 
 class CombatResultEvent(Event):
-    """(혹시 누락된 경우를 대비해 추가하거나 이미 있다면 무시) -> Actually verify logic below"""
-    def __init__(self, attacker_id: int, target_id: int, damage: int, is_critical: bool, is_alive: bool):
-        self.attacker_id = attacker_id
-        self.target_id = target_id
+    """전투 결과(명중, 빗나감, 크리티컬 등)를 알리는 이벤트"""
+    def __init__(self, attacker: Any, target: Any, damage: int, is_crit: bool, is_miss: bool, skill=None):
+        self.attacker = attacker
+        self.target = target
         self.damage = damage
-        self.is_critical = is_critical
-        self.is_alive = is_alive
+        self.is_crit = is_crit
+        self.is_miss = is_miss
+        self.skill = skill
+
+class BossBarkEvent(Event):
+    """보스가 대사를 출력해야 할 때 발생하는 이벤트"""
+    def __init__(self, boss_entity: Any, bark_type: str, text: str = None):
+        self.boss_entity = boss_entity
+        self.bark_type = bark_type # 'ENTRANCE', 'DODGE', 'HIT_PLAYER', 'CRIT', 'SKILL', 'HP', 'DEATH'
+        self.text = text # 수동으로 대사를 지정할 경우
 
 class InteractEvent(Event):
     """문, 레버 등과 상호작용할 때 발생"""

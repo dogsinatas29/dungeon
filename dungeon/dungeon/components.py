@@ -438,15 +438,57 @@ class BossComponent(Component):
 
 class SwitchComponent(Component):
     """문, 레버 등 상호작용 가능한 스위치 (Open/Closed, On/Off)"""
-    def __init__(self, is_open: bool = False, locked: bool = False, key_name: str = None, linked_trap_id: int = None, auto_reset: bool = False):
+    def __init__(self, is_open: bool = False, locked: bool = False, key_name: str = None, linked_trap_id: int = None, auto_reset: bool = False, linked_door_pos: tuple = None):
         self.is_open = is_open
         self.locked = locked
         self.key_name = key_name # 열기 위해 필요한 열쇠 이름 (없으면 None)
         self.linked_trap_id = linked_trap_id
         self.auto_reset = auto_reset # 압력판 등 자동 복구 여부
+        self.linked_door_pos = linked_door_pos # (x, y) tuple of the door to open
 
 class BossGateComponent(Component):
     """보스 게이트: 보스를 처치해야 계단이 생성됨"""
     def __init__(self, next_region_name: str = "", stairs_spawned: bool = False):
         self.next_region_name = next_region_name  # "Catacombs", "Caves", "Hell"
         self.stairs_spawned = stairs_spawned  # 계단 생성 여부
+
+class InteractableComponent(Component):
+    """상호작용 가능한 엔티티 (예: 문, 레버, 아이템 픽업 등)"""
+    def __init__(self, interaction_type: str, data: dict = None):
+        self.interaction_type = interaction_type
+        self.data = data if data else {}
+
+class ColliderComponent(Component):
+    """충돌 범위 및 속성"""
+    def __init__(self, width: int = 1, height: int = 1, is_solid: bool = True):
+        self.width = width
+        self.height = height
+        self.is_solid = is_solid
+
+class DoorComponent(Component):
+    """문 상태 (열림/닫힘, 잠김 여부)"""
+    def __init__(self, is_open: bool = False, is_locked: bool = False, key_id: str = None):
+        self.is_open = is_open
+        self.is_locked = is_locked
+        self.key_id = key_id
+
+class KeyComponent(Component):
+    """열쇠 정보"""
+    def __init__(self, key_id: str):
+        self.key_id = key_id
+
+class NameComponent(Component):
+    """엔티티 이름"""
+    def __init__(self, name: str):
+        self.name = name
+
+class MovableComponent(Component):
+    """이동 가능 여부 (Legacy?)"""
+    def __init__(self):
+        pass
+
+class CopiedSkillComponent(Component):
+    """소환수가 주인의 스킬을 모방할 때 사용"""
+    def __init__(self, skill_id: str, skill_name: str):
+        self.skill_id = skill_id
+        self.skill_name = skill_name

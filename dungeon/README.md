@@ -150,15 +150,37 @@ Diablo like real time rogue for terminal
 - [ ] **More Character Classes** - expand beyond 4 classes
 - [ ] **Multiplayer Support** - co-op gameplay
 
-## Requirements
+## Keyboard Shortcuts
 
+### General Controls
+- **Movement**: `Arrow Keys` or `W`, `A`, `S`, `D`
+- **Wait / Pass Turn**: `.`, `X`, `Z`, or `5`
+- **Interact / Pick Up / Use Stairs**: `ENTER`
+- **Attack Mode (Toggle)**: `SPACE` (Once active, press a direction key to attack)
+- **Quick Slots**: `1` through `0` (Use bound skills or items)
+- **Character Sheet**: `C` (View stats and allocate bonus points)
+- **Inventory**: `I` (Open/Close inventory)
+- **Quit Game**: `Q`
+
+### Inventory & Menus
+- **Navigate**: `Arrow Keys` or `W`, `S`
+- **Switch Tabs**: `Left` / `Right` Arrow keys (Inside Inventory)
+- **Use / Equip**: `E` or `ENTER`
+- **Drop Item**: `X`
+- **Close Menu**: `ESC`, `Q`, or the menu's toggle key (`I`, `C`)
+
+### Character Sheet (Stat Point Allocation)
+- **Select Stat**: `UP` / `DOWN` Arrow keys or `W`, `S`
+- **Allocate Point**: `RIGHT` Arrow key, `D`, `+`, `=`, or `ENTER`
+- **Close**: `C`, `ESC`, or `Q`
+
+## Requirements
 ```bash
 sudo apt install python3-gi python3-gi-cairo python3-dbus gir1.2-gtk-3.0
 pip install readchar
 ```
 
 ## How to Play
-
 ```bash
 python3 dungeon/Start.py
 ```
@@ -166,9 +188,7 @@ python3 dungeon/Start.py
 ## Testing
 
 ### Test Environment (test_classes.py)
-
 For comprehensive testing of all game features, use the test environment script:
-
 ```bash
 python3 test_classes.py
 ```
@@ -192,9 +212,7 @@ python3 test_classes.py
 - Shop interactions
 
 ### Sandbox Environment (sandbox_test.py)
-
 For high-end game logic testing (Shrines, Bosses, Affixed items):
-
 ```bash
 python3 sandbox_test.py
 ```
@@ -210,6 +228,9 @@ python3 sandbox_test.py
 - `B`: Jump **Backward** 10 floors
 - `J`: **Jump** to a specific floor (Input required in terminal)
 - `G`: Get **1,000 Gold** immediately
+- `L`: Set **Level** (Input required in terminal)
+- `Z`: Summon **Butcher** (Boss)
+- `W`: Get **Warrior Set** (Level 21 + Full Plate/Great Axe)
 
 ### Game Mechanics
 
@@ -242,27 +263,38 @@ python3 sandbox_test.py
 ```
 dungeon/
 ├── Start.py              # Main entry point
-├── dungeon/
-│   ├── game.py          # Main game loop
-│   ├── engine.py        # Game engine and state management
-│   ├── ecs.py           # Entity Component System
-│   ├── components.py    # ECS components
-│   ├── systems.py       # ECS systems (combat, movement, etc.)
-│   ├── player.py        # Player class
-│   ├── dungeon_map.py   # Map generation
-│   ├── ui.py            # Terminal UI rendering
-│   ├── data_manager.py  # Data loading
-│   └── sound_system.py  # Audio system
 ├── test_classes.py       # Class balance test environment
 ├── sandbox_test.py       # High-end systems & sandbox environment
-├── sounds/               # Audio effect files (.wav)
-├── data/                 # Game data files
+├── dungeon/              # Core Game Package
+│   ├── engine.py        # Game engine and state management
+│   ├── systems.py       # ECS systems (combat, movement, etc.)
+│   ├── components.py    # ECS components
+│   ├── ecs.py           # Entity Component System core
+│   ├── ui.py            # Terminal UI rendering
+│   ├── map.py           # Map generation
+│   ├── player.py        # Player entity logic
+│   ├── monster.py       # Monster entity logic
+│   ├── items.py         # Item definitions and logic
+│   ├── inventory.py     # Inventory management
+│   ├── skills.py        # Skill system
+│   ├── trap.py          # Trap system
+│   ├── shrine_methods.py # Shrine interactions
+│   ├── events.py        # Event definition and handling
+│   ├── constants.py     # Game constants
+│   ├── config.py        # Configuration settings
+│   ├── data_manager.py  # Data loading utility
+│   └── sound_system.py  # Audio system
+├── data/                 # Game Data Files
 │   ├── items.csv        # Item definitions
 │   ├── skills.csv       # Skill definitions
+│   ├── monsters.csv     # Monster definitions
+│   ├── Boss.csv         # Boss stats
+│   ├── classes.csv      # Character class definitions
+│   ├── maps.csv         # Map generation parameters
 │   ├── prefixes.json    # Magic item prefixes
-│   ├── suffixes.json    # Magic item suffixes
-│   └── monster_data.txt # Monster definitions
-└── game_data/           # Save files (JSON)
+│   └── suffixes.json    # Magic item suffixes
+├── game_data/           # Save files (JSON)
+└── sounds/              # Audio effect files (.wav)
 ```
 
 ## Development

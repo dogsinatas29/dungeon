@@ -1,7 +1,7 @@
 # dungeon/entity.py
 
 from typing import Tuple # Tuple 임포트 추가
-from .component import PositionComponent, RenderComponent, ColliderComponent, DoorComponent, KeyComponent, HealthComponent, AttackComponent, DefenseComponent, MovableComponent, NameComponent, AIComponent # 필요한 컴포넌트 임포트
+from .components import PositionComponent, RenderComponent, ColliderComponent, DoorComponent, KeyComponent, MovableComponent, NameComponent, AIComponent, InteractableComponent
 from .player import Player # Player 클래스 임포트
 from .monster import Monster # Monster 클래스 임포트
 from . import data_manager

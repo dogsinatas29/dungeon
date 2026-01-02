@@ -65,24 +65,63 @@ class DungeonMap:
             self._generate_normal_map()
 
     def generate_boss_map(self):
-        """중앙에 큰 방이 하나 있는 보스 전용 맵을 생성합니다."""
-        # 중앙에 넓은 방 생성
-        room_w = 20
-        room_h = 15
-        x = (self.width - room_w) // 2
-        y = (self.height - room_h) // 2
+        """
+        보스 전용 맵 생성 (Antechamber + Lever Room + Boss Room)
+        구조:
+          [Lever Room] -- [Antechamber] --(Door)-- [Boss Room]
+        """
+        # 1. Antechamber (전실, 안전 구역)
+        ante_w, ante_h = 8, 8
+        ante_x = self.width // 2 - ante_w // 2
+        ante_y = self.height // 2 - ante_h // 2
+        ante_room = Rect(ante_x, ante_y, ante_w, ante_h)
+        self.rooms.append(ante_room)
         
-        boss_room = Rect(x, y, room_w, room_h)
+        # 2. Lever Room (레버 방, 전실 좌측)
+        lever_w, lever_h = 5, 5
+        lever_x = ante_x - lever_w - 2 # 2칸 복도
+        lever_y = ante_y + (ante_h - lever_h) // 2
+        lever_room = Rect(lever_x, lever_y, lever_w, lever_h)
+        self.rooms.append(lever_room)
+        
+        # 3. Boss Room (보스 방, 전실 우측)
+        boss_w, boss_h = 20, 15
+        boss_x = ante_x + ante_w + 2 # 2칸 복도 (Door 설치)
+        boss_y = self.height // 2 - boss_h // 2
+        boss_room = Rect(boss_x, boss_y, boss_w, boss_h)
         self.rooms.append(boss_room)
         
-        for yr in range(boss_room.y1, boss_room.y2):
-            for xr in range(boss_room.x1, boss_room.x2):
-                if 0 <= xr < self.width and 0 <= yr < self.height:
-                    self.map_data[yr][xr] = FLOOR
+        # Render Rooms
+        for r in self.rooms:
+            for yr in range(r.y1, r.y2):
+                for xr in range(r.x1, r.x2):
+                     if self.is_valid_tile(xr, yr):
+                        self.map_data[yr][xr] = FLOOR
         
-        # 시작 지점과 탈출구 설정 (입구 쪽과 보스 쪽)
-        self.start_x, self.start_y = boss_room.x1 + 2, boss_room.center[1]
-        self.exit_x, self.exit_y = boss_room.x2 - 3, boss_room.center[1]
+        # Connect: Lever Room <-> Antechamber
+        self._create_h_tunnel(lever_room.x2, ante_room.x1, ante_room.center[1])
+        
+        # Connect: Antechamber <-> Boss Room
+        self._create_h_tunnel(ante_room.x2, boss_room.x1, ante_room.center[1])
+        
+        # --- Markers for Engine to spawn entities ---
+        # 1. Start: Antechamber Center
+        self.start_x, self.start_y = ante_room.center
+        
+        # 2. Shrine: Antechamber (Top)
+        self.shrine_pos = (ante_room.center[0], ante_room.y1 + 1)
+        
+        # 3. Lever: Lever Room Center
+        self.lever_pos = lever_room.center
+        
+        # 4. Boss Door: Between Antechamber and Boss Room (in the tunnel)
+        self.boss_door_pos = (ante_room.x2 + 1, ante_room.center[1])
+        
+        # 5. Boss Spawn: Boss Room Center
+        self.boss_spawn_pos = boss_room.center
+        
+        # 6. Exit: Boss Room Far Right
+        self.exit_x, self.exit_y = boss_room.x2 - 2, boss_room.center[1]
         self.map_data[self.exit_y][self.exit_x] = self.exit_type
 
     def _generate_normal_map(self):

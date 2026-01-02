@@ -20,7 +20,7 @@ history.txt
 
 # Testing & Verification
 test_sandbox.py
-verify_*.py
+# verify_*.py (Temporarily enabled)
 debug_*.py
 sandbox_test.py
 test_*.py

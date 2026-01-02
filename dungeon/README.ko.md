@@ -117,6 +117,30 @@ Diablo like real time rogue for terminal
 - [ ] **추가 캐릭터 클래스** - 4개 이상으로 확장
 - [ ] **멀티플레이어 지원** - 협동 게임플레이
 
+## 단축키 가이드
+
+### 일반 조작
+- **이동**: `방향키` 또는 `W`, `A`, `S`, `D`
+- **대기/턴 넘기기**: `.`, `X`, `Z` 또는 `5`
+- **상호작용 / 아이템 줍기 / 계단 이용**: `ENTER`
+- **공격 모드 (토글)**: `SPACE` (활성화 후 방향키를 눌러 공격)
+- **퀵슬롯**: `1` ~ `0` (지정된 스킬이나 아이템 사용)
+- **캐릭터 정보**: `C` (능력치 확인 및 보너스 포인트 배분)
+- **인벤토리**: `I` (인벤토리 열기/닫기)
+- **게임 종료**: `Q`
+
+### 인벤토리 및 메뉴 조작
+- **이동**: `방향키` 또는 `W`, `S`
+- **탭 전환**: 인벤토리 내부에서 `왼쪽`/`오른쪽` 방향키
+- **사용 / 장착**: `E` 또는 `ENTER`
+- **아이템 버리기**: `X`
+- **메뉴 닫기**: `ESC`, `Q` 또는 해당 메뉴의 단축키(`I`, `C`)
+
+### 캐릭터 정보창 (포인트 배분)
+- **능력치 선택**: `위`/`아래` 방향키 또는 `W`, `S`
+- **포인트 투자**: `오른쪽` 방향키, `D`, `+`, `=`, 또는 `ENTER`
+- **닫기**: `C`, `ESC`, 또는 `Q`
+
 ## 요구 사항
 
 ```bash
@@ -175,15 +199,11 @@ python3 sandbox_test.py
 **디버그 단축키 (샌드박스 전용)**:
 - `F`: 앞(Forward)으로 **10층 이동**
 - `B`: 뒤(Backward)로 **10층 이동**
-- `J`: 특정 층으로 **직접 이동** (터미널에 층수 입력)
+- `J`: 특정 층으로 **차원 이동** (터미널에 층수 입력)
 - `G`: **1,000 골드** 즉시 획득
-
-### 조작법
-- **방향키**: 캐릭터 이동
-- **스페이스**: 공격 모드 전환
-- **I**: 인벤토리 열기
-- **Q**: 게임 종료
-- **1-9**: 퀵슬롯 사용
+- `L`: **레벨** 설정 (터미널에 레벨 입력)
+- `Z`: **도살자(Butcher)** 보스 소환
+- `W`: **워리어 세트** 지급 (21레벨 + 풀 플레이트/그레이트 액스)
 
 ### 게임 메커니즘
 
@@ -216,27 +236,38 @@ python3 sandbox_test.py
 ```
 dungeon/
 ├── Start.py              # 메인 진입점
-├── dungeon/
-│   ├── game.py          # 메인 게임 루프
-│   ├── engine.py        # 게임 엔진 및 상태 관리
-│   ├── ecs.py           # Entity Component System
-│   ├── components.py    # ECS 컴포넌트
-│   ├── systems.py       # ECS 시스템 (전투, 이동 등)
-│   ├── player.py        # 플레이어 클래스
-│   ├── dungeon_map.py   # 맵 생성
-│   ├── ui.py            # 터미널 UI 렌더링
-│   ├── data_manager.py  # 데이터 로딩
-│   └── sound_system.py  # 오디오 시스템
 ├── test_classes.py       # 직업별 밸런스 테스트용
 ├── sandbox_test.py       # 고급 시스템 및 샌드박스 테스트용
-├── sounds/               # 오디오 효과음 파일 (.wav)
-├── data/
+├── dungeon/              # 핵심 게임 패키지
+│   ├── engine.py        # 게임 엔진 및 상태 관리
+│   ├── systems.py       # ECS 시스템 (전투, 이동 등)
+│   ├── components.py    # ECS 컴포넌트
+│   ├── ecs.py           # Entity Component System 코어
+│   ├── ui.py            # 터미널 UI 렌더링
+│   ├── map.py           # 맵 생성
+│   ├── player.py        # 플레이어 엔티티 로직
+│   ├── monster.py       # 몬스터 엔티티 로직
+│   ├── items.py         # 아이템 정의 및 로직
+│   ├── inventory.py     # 인벤토리 관리
+│   ├── skills.py        # 스킬 시스템
+│   ├── trap.py          # 함정 시스템
+│   ├── shrine_methods.py # 신전 상호작용
+│   ├── events.py        # 이벤트 정의 및 처리
+│   ├── constants.py     # 게임 상수
+│   ├── config.py        # 설정
+│   ├── data_manager.py  # 데이터 로딩 유틸리티
+│   └── sound_system.py  # 오디오 시스템
+├── data/                 # 게임 데이터 파일
 │   ├── items.csv        # 아이템 정의
 │   ├── skills.csv       # 스킬 정의
+│   ├── monsters.csv     # 몬스터 정의
+│   ├── Boss.csv         # 보스 스탯(통계)
+│   ├── classes.csv      # 캐릭터 직업 정의
+│   ├── maps.csv         # 맵 생성 파라미터
 │   ├── prefixes.json    # 마법 아이템 접두사
-│   ├── suffixes.json    # 마법 아이템 접미사
-│   └── monster_data.txt # 몬스터 정의
-└── game_data/           # 저장 파일 (JSON)
+│   └── suffixes.json    # 마법 아이템 접미사
+├── game_data/           # 저장 파일 (JSON)
+└── sounds/              # 오디오 효과음 파일 (.wav)
 ```
 
 ## 개발

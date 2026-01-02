@@ -64,7 +64,7 @@ ELEMENT_ADVANTAGE = {
 
 # --- Rarity Colors (NEW) ---
 RARITY_NORMAL = "white"
-RARITY_MAGIC = "cyan"
+RARITY_MAGIC = "blue"
 RARITY_UNIQUE = "yellow"
 RARITY_CURSED = "red"
 

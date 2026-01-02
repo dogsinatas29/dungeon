@@ -359,22 +359,13 @@ class TrapComponent(Component):
     GAS = "GAS"
     FIREBALL = "FIREBALL_LAUNCHER"
     
-    def __init__(self, trap_type: str = "ARROW", damage_min: int = 10, damage_max: int = 20, detection_difficulty: int = 10, is_hidden: bool = True, target_selection: str = "TRIGGERER", effect: str = None, is_triggered: bool = False, source_x: int = None, source_y: int = None, is_disarmed: bool = False, reload_turns: int = 50, turns_since_trigger: int = 0):
+    def __init__(self, trap_type: str = "ARROW", damage_min: int = 10, damage_max: int = 20, detection_difficulty: int = 10, is_hidden: bool = True, target_selection: str = "TRIGGERER", effect: str = None, is_triggered: bool = False):
         self.trap_type = trap_type
         self.damage_min = damage_min
         self.damage_max = damage_max
         self.detection_difficulty = detection_difficulty
         self.is_hidden = is_hidden
         self.target_selection = target_selection # "TRIGGERER", "NEAREST", "AREA"
-        
-        # V12: Projectile source and disarm state
-        self.source_x = source_x  # Arrow trap origin (statue position)
-        self.source_y = source_y
-        self.is_disarmed = is_disarmed  # Rogue can disarm traps
-        
-        # V12.1: Reload system
-        self.reload_turns = reload_turns  # Turns needed to reload (50 for arrow, 100 for gas)
-        self.turns_since_trigger = turns_since_trigger  # Counter for reload
         
         # Legacy/Compatibility
         self.damage = (damage_min + damage_max) // 2
@@ -393,24 +384,6 @@ class PoisonComponent(Component):
         self.damage = damage
         self.duration = duration
         self.tick_timer = 1.0 # 1초마다 데미지
-
-class PoisonCloudComponent(Component):
-    """독가스 구름: 해당 타일에 있는 엔티티에게 지속 데미지"""
-    def __init__(self, damage_per_tick: int = 3):
-        self.damage_per_tick = damage_per_tick
-        self.tick_timer = 1.0  # 1초마다 데미지 적용
-
-class PressurePlateComponent(Component):
-    """압력판: 밟으면 함정 발동"""
-    def __init__(self, linked_trap_id: int = None, is_triggered: bool = False):
-        self.linked_trap_id = linked_trap_id
-        self.is_triggered = is_triggered  # 한 번 발동되면 True
-
-class BossGateComponent(Component):
-    """보스 게이트: 보스를 처치해야 계단이 생성됨"""
-    def __init__(self, next_region_name: str = "", stairs_spawned: bool = False):
-        self.next_region_name = next_region_name  # "Catacombs", "Caves", "Hell", "승리"
-        self.stairs_spawned = stairs_spawned  # 계단 생성 여부
 
 class ManaShieldComponent(Component):
     """마나 실드 상태: 데미지를 HP 대신 MP로 흡수"""
@@ -431,9 +404,11 @@ class SummonComponent(Component):
         self.duration = duration
 
 class PetrifiedComponent(Component):
-    """석화 상태: 행동 불가 및 방어력 약화 (외형 변경용)"""
-    def __init__(self, duration: float = 5.0):
+    """석화 상태: 스택에 따라 둔화 -> 약화 -> 기절"""
+    def __init__(self, duration: float = 5.0, stacks: int = 1):
         self.duration = duration
+        self.stacks = stacks
+        self.max_stacks = 3
 
 class CombatTrackerComponent(Component):
     """전투 추적 컴포넌트 - HP 바 표시용"""
@@ -459,20 +434,68 @@ class BossComponent(Component):
         self.visible_bark = "" # 현재 화면에 보이는 부분 (타이핑 효과용)
         self.bark_type_timer = 0.0 # 타이핑 간격 타이머
         self.bark_display_timer = 0.0 # 전체 대사 유지 시간
-        self.triggered_hps = set() # 이미 발동된 HP 트리거 저장
-
-    def to_dict(self):
-        """JSON 저장을 위해 set을 list로 변환"""
-        data = {k: v for k, v in vars(self).items() if not k.startswith('_')}
-        if 'triggered_hps' in data and isinstance(data['triggered_hps'], set):
-            data['triggered_hps'] = list(data['triggered_hps'])
-        return data
+        self.triggered_hps = set() # 이미 발동된 HP 트리거 저장 (0.5, 0.2 등)
 
 class SwitchComponent(Component):
     """문, 레버 등 상호작용 가능한 스위치 (Open/Closed, On/Off)"""
-    def __init__(self, is_open: bool = False, locked: bool = False, key_name: str = None, linked_trap_id: int = None, auto_reset: bool = False):
+    def __init__(self, is_open: bool = False, locked: bool = False, key_name: str = None, linked_trap_id: int = None, auto_reset: bool = False, linked_door_pos: tuple = None):
         self.is_open = is_open
         self.locked = locked
         self.key_name = key_name # 열기 위해 필요한 열쇠 이름 (없으면 None)
         self.linked_trap_id = linked_trap_id
         self.auto_reset = auto_reset # 압력판 등 자동 복구 여부
+        self.linked_door_pos = linked_door_pos # (x, y) tuple of the door to open
+
+class BossGateComponent(Component):
+    """보스 게이트: 보스를 처치해야 계단이 생성됨"""
+    def __init__(self, next_region_name: str = "", stairs_spawned: bool = False):
+        self.next_region_name = next_region_name  # "Catacombs", "Caves", "Hell"
+        self.stairs_spawned = stairs_spawned  # 계단 생성 여부
+
+class InteractableComponent(Component):
+    """상호작용 가능한 엔티티 (예: 문, 레버, 아이템 픽업 등)"""
+    def __init__(self, interaction_type: str, data: dict = None):
+        self.interaction_type = interaction_type
+        self.data = data if data else {}
+
+class ColliderComponent(Component):
+    """충돌 범위 및 속성"""
+    def __init__(self, width: int = 1, height: int = 1, is_solid: bool = True):
+        self.width = width
+        self.height = height
+        self.is_solid = is_solid
+
+class DoorComponent(Component):
+    """문 상태 (열림/닫힘, 잠김 여부)"""
+    def __init__(self, is_open: bool = False, is_locked: bool = False, key_id: str = None):
+        self.is_open = is_open
+        self.is_locked = is_locked
+        self.key_id = key_id
+
+class KeyComponent(Component):
+    """열쇠 정보"""
+    def __init__(self, key_id: str):
+        self.key_id = key_id
+
+class NameComponent(Component):
+    """엔티티 이름"""
+    def __init__(self, name: str):
+        self.name = name
+
+class MovableComponent(Component):
+    """이동 가능 여부 (Legacy?)"""
+    def __init__(self):
+        pass
+
+class BlockMapComponent(Component):
+    """이동 및 시야 차단 정보"""
+    def __init__(self, blocks_movement: bool = True, blocks_sight: bool = False):
+        self.blocks_movement = blocks_movement
+        self.blocks_sight = blocks_sight
+
+class CopiedSkillComponent(Component):
+    """소환수가 주인의 스킬을 모방할 때 사용"""
+    def __init__(self, skill_id: str, skill_name: str):
+        self.skill_id = skill_id
+        self.skill_name = skill_name
+

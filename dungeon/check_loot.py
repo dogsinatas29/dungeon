@@ -1,77 +1,91 @@
-
+import unittest
+from unittest.mock import MagicMock
 import sys
 import os
 import random
 
-sys.path.append(os.path.abspath("/home/dogsinatas/python_project/dungeon"))
+sys.path.append(os.getcwd())
 
-# Mock Engine, World, Entity, Components
-class MockEngine:
-    def _get_eligible_items(self, floor):
-        class MockItem:
-            def __init__(self):
-                self.name = "TestItem"
-                self.type = "WEAPON"
-        return [MockItem()]
+from dungeon.engine import Engine
+
+class TestLootSystem(unittest.TestCase):
+    def setUp(self):
+        self.engine = Engine(player_name="TestHero")
+        # Mock dependencies if strictly needed, but _get_rarity is pure logic mostly
         
-    def _get_rarity(self, floor):
-        return "COMMON"
+    def test_rarity_distribution_tier1(self):
+        # Lv 1-25: Normal 85%, Magic 14.5%, Unique 0.5%
+        floor = 10
+        stats = {"NORMAL": 0, "MAGIC": 0, "UNIQUE": 0}
+        n = 10000
+        for _ in range(n):
+            r = self.engine._get_rarity(floor, magic_find=0)
+            stats[r] += 1
+            
+        # Allow 2% margin
+        self.assertAlmostEqual(stats["NORMAL"]/n, 0.85, delta=0.02)
+        self.assertAlmostEqual(stats["MAGIC"]/n, 0.145, delta=0.02)
+        self.assertAlmostEqual(stats["UNIQUE"]/n, 0.005, delta=0.005)
+
+    def test_rarity_distribution_tier2(self):
+        # Lv 26-50: Normal 70%, Magic 24.5%, Unique 5.5%
+        floor = 40
+        stats = {"NORMAL": 0, "MAGIC": 0, "UNIQUE": 0}
+        n = 10000
+        for _ in range(n):
+            r = self.engine._get_rarity(floor, magic_find=0)
+            stats[r] += 1
+            
+        self.assertAlmostEqual(stats["NORMAL"]/n, 0.70, delta=0.02)
+        self.assertAlmostEqual(stats["MAGIC"]/n, 0.245, delta=0.02)
+        self.assertAlmostEqual(stats["UNIQUE"]/n, 0.055, delta=0.01)
+
+    def test_rarity_distribution_tier3(self):
+        # Lv 51+: Normal 30%, Magic 44.5%, Unique 25.5%
+        floor = 60
+        stats = {"NORMAL": 0, "MAGIC": 0, "UNIQUE": 0}
+        n = 10000
+        for _ in range(n):
+            r = self.engine._get_rarity(floor, magic_find=0)
+            stats[r] += 1
+            
+        self.assertAlmostEqual(stats["NORMAL"]/n, 0.30, delta=0.02)
+        self.assertAlmostEqual(stats["MAGIC"]/n, 0.445, delta=0.02)
+        self.assertAlmostEqual(stats["UNIQUE"]/n, 0.255, delta=0.02)
+
+    def test_affix_rolling(self):
+        # Prefix 40%, Suffix 40%, Both 20%
+        # Mock prefix_defs and suffix_defs to allow all
+        self.engine.prefix_defs = {'P1': MagicMock(allowed_types={'WEAPON'}, min_level=1)}
+        self.engine.suffix_defs = {'S1': MagicMock(allowed_types={'WEAPON'}, min_level=1)}
         
-    def _roll_magic_affixes(self, item_type, floor):
-        return None, None
-
-class MockEntity:
-    def __init__(self, e_id):
-        self.entity_id = e_id
-        self.components = {}
-    
-    def add_component(self, comp):
-        self.components[type(comp)] = comp
+        # We need to mock _create_item_with_affix or check internal logic by mocking random?
+        # Better: mock random.random to check thresholds OR run statistics.
+        # Let's run stats on _roll_magic_affixes directly.
+        # But _roll_magic_affixes returns IDs. We need to catch what it tried to roll.
         
-    def get_component(self, comp_type):
-        return self.components.get(comp_type)
-    
-    def has_component(self, comp_type):
-        return comp_type in self.components
-    
-    def remove_component(self, comp_type):
-        if comp_type in self.components:
-            del self.components[comp_type]
-
-from dungeon.components import LootComponent, StatsComponent, MonsterComponent, PositionComponent, AIComponent
-from dungeon.systems import CombatSystem
-
-def verify():
-    print("Testing Drop Logic...")
-    
-    # We need to test the logic block inside _apply_damage
-    # But since it's hard to isolate, I will just inspect the code I changed.
-    # Logic: 
-    # drop_chance = 0.6
-    # if hit: num_drops = 1
-    # if hit and rand < 0.3: num_drops = 2
-    # if hit and rand < 0.3 and rand < 0.1: num_drops = 3
-    
-    # Let's simulate statistics
-    results = {0: 0, 1: 0, 2: 0, 3: 0}
-    
-    for _ in range(10000):
-        num_drops = 0
-        if random.random() < 0.6:
-            num_drops = 1
-            if random.random() < 0.3:
-                num_drops = 2
-                if random.random() < 0.1:
-                    num_drops = 3
-        results[num_drops] += 1
+        counts = {"P": 0, "S": 0, "B": 0, "N": 0}
+        n = 10000
+        for _ in range(n):
+             # Force roll
+             pid, sid = self.engine._roll_magic_affixes('WEAPON', 10)
+             if pid and sid: counts["B"] += 1
+             elif pid: counts["P"] += 1
+             elif sid: counts["S"] += 1
+             else: counts["N"] += 1
         
-    print(f"Simulation 10000 kills:")
-    print(f"0 items: {results[0]} ({results[0]/100}%)")
-    print(f"1 item : {results[1]} ({results[1]/100}%)")
-    print(f"2 items: {results[2]} ({results[2]/100}%)")
-    print(f"3 items: {results[3]} ({results[3]/100}%)")
-    
-    print("Expected: ~40% 0 drops, ~42% 1 drop, ~16% 2 drops, ~1-2% 3 drops")
+        # Note: _roll_magic_affixes logic:
+        # roll < 0.4 -> want prefix (only prefix? wait)
+        # 0.4 <= roll < 0.8 -> want suffix
+        # roll >= 0.8 -> want both
+        
+        # However, it also checks if valid prefix/suffix exists. 
+        # With our mock, they always exist.
+        
+        self.assertAlmostEqual(counts["P"]/n, 0.40, delta=0.02)
+        self.assertAlmostEqual(counts["S"]/n, 0.40, delta=0.02)
+        self.assertAlmostEqual(counts["B"]/n, 0.20, delta=0.02)
 
-if __name__ == "__main__":
-    verify()
+
+if __name__ == '__main__':
+    unittest.main()
