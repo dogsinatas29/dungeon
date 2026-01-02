@@ -92,6 +92,7 @@ class StatsComponent(Component):
         # 실시간 액션 관련 (초 단위)
         self.last_action_time = 0.0
         self.action_delay = 0.2 # 기본 공격/이동 쿨다운 (0.2초)
+        self.last_move_time = 0.0 # 마지막 이동 시간 (이동 중 회복 제한용)
         
         # [Real-time] 행동 쿨다운
         self.last_action_time = 0.0

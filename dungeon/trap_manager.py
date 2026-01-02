@@ -111,10 +111,17 @@ class TrapSystem(System):
             if trap.trigger_type == "PROXIMITY" and not trap.is_triggered:
                 t_pos = trap_ent.get_component(PositionComponent)
                 
-                # 플레이어가 감지 범위 내에 있는지 확인
-                dist = abs(player_pos.x - t_pos.x) + abs(player_pos.y - t_pos.y)
-                if dist <= trap.detection_range:
-                    self._fire_projectile(trap_ent, player)
+                # 플레이어 및 몬스터 모두 감지 대상에 포함
+                candidates = self.world.get_entities_with_components({PositionComponent, StatsComponent})
+                
+                for candidate in candidates:
+                    c_pos = candidate.get_component(PositionComponent)
+                    dist = abs(c_pos.x - t_pos.x) + abs(c_pos.y - t_pos.y)
+                    
+                    if dist <= trap.detection_range:
+                        # 발사체 발사 (타겟 지정)
+                        self._fire_projectile(trap_ent, candidate)
+                        break # 한 번 발동하면 루프 종료
         
         # 3. 자동 리셋 함정 처리 (압력판 등)
         import time
@@ -146,8 +153,7 @@ class TrapSystem(System):
         self.event_manager.push(SoundEvent("BASH", f"철컥! 함정이 발동되었습니다! ({trap.trap_type})"))
         
         is_player = victim.entity_id == self.world.get_player_entity().entity_id
-        victim_name = "당신" if is_player else "몬스터"
-        self.event_manager.push(MessageEvent(f"{victim_name}이(가) {trap.trap_type} 함정을 밟았습니다!"))
+        victim_name = "당신" if is_player else self.world.engine._get_entity_name(victim)
         
         # 0. REMOTE 타입 처리 (압력판)
         if trap_def and trap_def.effect_type == "REMOTE":
@@ -178,7 +184,18 @@ class TrapSystem(System):
         if stats.current_hp < 0:
             stats.current_hp = 0
         
-        self.event_manager.push(MessageEvent(f"{damage}의 피해를 입었습니다! (HP {damage_pct}%)", "red"))
+        # [Visual Effect] 치명적 피해 시 화면 테두리 붉은색 효과 (20% 이상 피해)
+        if is_player and damage >= stats.max_hp * 0.2:
+            from .dungeon.ui import ConsoleUI
+            ui = getattr(self.world.engine, 'ui', None)
+            if ui:
+                ui.blood_overlay_timer = 10 # 약 1~2초간 지속
+
+        # [Log Enhancement] 플레이어와 몬스터 메시지 구분
+        if is_player:
+            self.event_manager.push(MessageEvent(f"당신은 {trap.trap_type} 함정에 걸려 최대 체력의 {damage_pct}% 피해를 입었습니다!", "red"))
+        else:
+            self.event_manager.push(MessageEvent(f"{victim_name}이(가) {trap.trap_type} 함정에 걸려 {damage}의 피해를 입었습니다!", "red"))
         
         # 상태 이상 적용
         if trap.effect == "STUN":
@@ -216,7 +233,17 @@ class TrapSystem(System):
                 
                 is_player = entity.entity_id == self.world.get_player_entity().entity_id
                 victim_name = "당신" if is_player else self.world.engine._get_entity_name(entity)
-                self.event_manager.push(MessageEvent(f"{victim_name}이(가) 폭발에 휘말려 {damage}의 피해를 입었습니다!", "red"))
+                
+                # [Log Enhancement] 범위 피해 메시지 구분
+                trap = trap_ent.get_component(TrapComponent)
+                trap_name = trap.trap_type if trap else "폭발"
+                
+                if is_player:
+                    pct = int((damage / stats.max_hp) * 100) if stats.max_hp > 0 else 0
+                    self.event_manager.push(MessageEvent(f"당신은 {trap_name} 함정의 폭발에 휘말려 최대 체력의 {pct}% 피해를 입었습니다!", "red"))
+                else:
+                    self.event_manager.push(MessageEvent(f"{victim_name}이(가) {trap_name} 폭발에 휘말려 {damage}의 피해를 입었습니다!", "red"))
+                
                 entity.add_component(HitFlashComponent())
 
     def _fire_projectile(self, trap_ent, target, damage_multiplier: float = 1.0):
@@ -296,8 +323,12 @@ class TrapSystem(System):
                         stats.current_hp = 0
                     
                     is_player = entity.entity_id == self.world.get_player_entity().entity_id
-                    victim_name = "당신" if is_player else "몬스터"
-                    self.event_manager.push(MessageEvent(f"{victim_name}이(가) 발사체에 맞아 {damage}의 피해를 입었습니다! (HP {damage_pct}%)", "red"))
+                    victim_name = "당신" if is_player else self.world.engine._get_entity_name(entity)
+                    
+                    if is_player:
+                        self.event_manager.push(MessageEvent(f"당신은 {trap.trap_type} 발사체에 맞아 최대 체력의 {damage_pct}% 피해를 입었습니다!", "red"))
+                    else:
+                        self.event_manager.push(MessageEvent(f"{victim_name}이(가) {trap.trap_type} 발사체에 맞아 {damage}의 피해를 입었습니다!", "red"))
                     
                     # 상태 이상 적용
                     if trap.effect == "STUN":

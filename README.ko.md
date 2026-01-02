@@ -13,6 +13,10 @@ Diablo like real time rogue for terminal
 
 **상태**: 현재 밸런스 테스트 진행 중...
 
+## 요구 사항
+- **오디오**: 효과음 및 BGM 재생을 위해 `ffmpeg` 또는 `aplay` (ALSA)가 필요합니다.
+    - Ubuntu/Debian: `sudo apt install ffmpeg` 또는 `sudo apt install alsa-utils`
+
 ## 주요 기능
 
 ### 핵심 게임플레이

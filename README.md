@@ -12,6 +12,10 @@ Diablo-like real-time roguelike engine for terminal
 
 **Status**: Currently undergoing balance testing.
 
+## Requirements
+- **Audio**: `ffmpeg` or `aplay` (ALSA) is required for sound effects and BGM.
+    - Ubuntu/Debian: `sudo apt install ffmpeg` or `sudo apt install alsa-utils`
+
 ## Features
 
 ### Core Gameplay

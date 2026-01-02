@@ -19,6 +19,7 @@ history.txt
 # Debug/Verification scripts
 test_sandbox.py
 verify_*.py
+!verify_immersive_traps.py
 debug_*.py
 
 # Archives, Lock files, and Media
