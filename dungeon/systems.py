@@ -2625,6 +2625,20 @@ class CombatSystem(System):
             # 가로막는 것이 없으면 이동
             pos.x, pos.y = new_x, new_y
             self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}가 뒤로 밀려났습니다!"))
+            
+            # [Knockback Trap Trigger]
+            # 넉백된 위치에 함정이 있다면 강제로 발동
+            traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
+            for trap_ent in traps:
+                t_pos = trap_ent.get_component(PositionComponent)
+                if t_pos.x == new_x and t_pos.y == new_y:
+                    t_comp = trap_ent.get_component(TrapComponent)
+                    if not t_comp.is_triggered and t_comp.trigger_type == "STEP_ON":
+                        # TrapSystem 찾기
+                        from .trap_manager import TrapSystem
+                        trap_sys = next((s for s in self.world.systems if isinstance(s, TrapSystem)), None)
+                        if trap_sys:
+                            trap_sys.trigger_trap(target, trap_ent)
         else:
             # 맵 경계 밖 (벽 취급)
             stats = target.get_component(StatsComponent)

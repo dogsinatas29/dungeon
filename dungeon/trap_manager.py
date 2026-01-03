@@ -104,16 +104,32 @@ class TrapSystem(System):
                     has_disarm = True
                     break
         
-        if has_disarm:
-            for trap_ent in traps:
-                trap = trap_ent.get_component(TrapComponent)
-                if not trap.visible and not trap.is_triggered:
-                    t_pos = trap_ent.get_component(PositionComponent)
-                    dist = abs(player_pos.x - t_pos.x) + abs(player_pos.y - t_pos.y)
+        # [Trap Detection]
+        for trap_ent in traps:
+            trap = trap_ent.get_component(TrapComponent)
+            if not trap.visible and not trap.is_triggered:
+                t_pos = trap_ent.get_component(PositionComponent)
+                dist = abs(player_pos.x - t_pos.x) + abs(player_pos.y - t_pos.y)
+                
+                if dist <= 3: # 3칸 이내 감지 시도
+                    # 감지 확률 계산
+                    detection_chance = 0
                     
-                    if dist <= 3: # 3칸 이내 감지
+                    if has_disarm:
+                        detection_chance = 100
+                    else:
+                        stats = player.get_component(StatsComponent)
+                        if stats:
+                            # 기본 10% + 민첩*3% + 레벨*2%
+                            detection_chance = 10 + (stats.dex * 3) + (stats.level * 2)
+                    
+                    # 최대 90% 제한 (Disarm 없을 시)
+                    if not has_disarm:
+                        detection_chance = min(90, detection_chance)
+                        
+                    if random.randint(1, 100) <= detection_chance:
                         trap.visible = True
-                        self.event_manager.push(MessageEvent(f"함정({trap.trap_type})을 발견했습니다!", "cyan"))
+                        self.event_manager.push(MessageEvent(f"⚠️ 근처에서 함정의 기운이 느껴집니다! ({trap.trap_type})", "cyan"))
 
         # 1. STEP_ON 함정 처리 (기존 로직)
         for entity in list(entities):
@@ -123,9 +139,14 @@ class TrapSystem(System):
                 trap = trap_ent.get_component(TrapComponent)
                 
                 # 같은 위치이고 아직 발동되지 않은 함정
+                # 같은 위치이고 아직 발동되지 않은 함정
                 if trap.trigger_type == "STEP_ON" and not trap.is_triggered:
                     if e_pos.x == t_pos.x and e_pos.y == t_pos.y:
-                        self._trigger_trap(entity, trap_ent)
+                        # [Fix] 몬스터는 스스로 발동하지 않음 (플레이어만 발동)
+                        if entity.entity_id != player.entity_id:
+                            continue
+                            
+                        self.trigger_trap(entity, trap_ent)
         
         # 2. PROXIMITY 함정 처리 (벽 함정)
         for trap_ent in traps:
@@ -157,7 +178,7 @@ class TrapSystem(System):
                     if 'HIDDEN' in self.trap_defs.get(trap.trap_type, TrapDefinition("", "", "", "", "", "", 0, 0, 0, "", 0, "", 0, 1)).flags:
                         trap.visible = False
 
-    def _trigger_trap(self, victim, trap_ent, damage_multiplier: float = 1.0):
+    def trigger_trap(self, victim, trap_ent, damage_multiplier: float = 1.0):
         """함정 발동 효과 처리 (데미지 배율 지원)"""
         trap = trap_ent.get_component(TrapComponent)
         stats = victim.get_component(StatsComponent)
@@ -190,7 +211,7 @@ class TrapSystem(System):
                         if rt_c.trigger_type == "PROXIMITY":
                             self._fire_projectile(rt_ent, victim)
                         else:
-                            self._trigger_trap(victim, rt_ent)
+                            self.trigger_trap(victim, rt_ent)
                         break
             # 압력판 자체 데미지는 없으므로 리턴
             return
