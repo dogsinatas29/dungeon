@@ -778,24 +778,14 @@ class CombatSystem(System):
         """대상을 공격자 반대 방향으로 밀어냄"""
         a_pos = attacker.get_component(PositionComponent)
         t_pos = target.get_component(PositionComponent)
-        map_ent = self.world.get_entities_with_components({MapComponent})
-        if not a_pos or not t_pos or not map_ent: return
-        map_comp = map_ent[0].get_component(MapComponent)
+        if not a_pos or not t_pos: return
 
         # 밀려날 방향 (공격자 -> 대상 방향 그대로)
         dx = 1 if t_pos.x > a_pos.x else (-1 if t_pos.x < a_pos.x else 0)
         dy = 1 if t_pos.y > a_pos.y else (-1 if t_pos.y < a_pos.y else 0)
         
-        nx, ny = t_pos.x + dx, t_pos.y + dy
-        
-        # 이동 가능한 공간(바닥)이고 다른 엔티티가 없는지 확인
-        if 0 <= nx < map_comp.width and 0 <= ny < map_comp.height and map_comp.tiles[ny][nx] == '.':
-            # 다른 엔티티 체크
-            others = [e for e in self.world.get_entities_with_components({PositionComponent}) 
-                     if e.get_component(PositionComponent).x == nx and e.get_component(PositionComponent).y == ny]
-            if not others:
-                t_pos.x, t_pos.y = nx, ny
-                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}이(가) 뒤로 밀려났습니다!"))
+        # Unified Logic using _handle_knockback
+        self._handle_knockback(target, dx, dy, attacker=attacker)
 
     def handle_directional_attack_event(self, event: DirectionalAttackEvent):
         """특정 방향으로 사거리 내의 모든 적을 공격"""
@@ -2576,7 +2566,7 @@ class CombatSystem(System):
             
             self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(target)}가 기절했습니다!"))
 
-    def _handle_knockback(self, target, dx, dy):
+    def _handle_knockback(self, target, dx, dy, attacker=None):
         """넉백 효과: 타격 방향으로 밀어냄"""
         pos = target.get_component(PositionComponent)
         if not pos: return
@@ -2638,7 +2628,7 @@ class CombatSystem(System):
                         from .trap_manager import TrapSystem
                         trap_sys = next((s for s in self.world.systems if isinstance(s, TrapSystem)), None)
                         if trap_sys:
-                            trap_sys.trigger_trap(target, trap_ent)
+                            trap_sys.trigger_trap(target, trap_ent, source_entity=attacker)
         else:
             # 맵 경계 밖 (벽 취급)
             stats = target.get_component(StatsComponent)
