@@ -16,6 +16,11 @@ COLOR_MAP = {
     "gold": "\033[33m",
     "brown": "\033[38;5;130m", # 갈색 (Door)
     "dark_grey": "\033[90m", # 어두운 회색 (Floor)
+    "white_bg": "\033[30;47m", # Black on White BG (Hit Flash)
+    "red_bg": "\033[97;41m",   # White on Red BG (Trap Trigger)
+    "gold_bg": "\033[30;43m",  # Black on Gold BG (Mimic/Treasure)
+    "invert": "\033[7m",       # Invert Message
+    "cyan": "\033[96m",        # Add Cyan (often used)
     "reset": "\033[0m"
 }
 

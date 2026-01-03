@@ -31,6 +31,16 @@ class Rect:
         return (self.x1 <= other.x2 + 1 and self.x2 >= other.x1 - 1 and # 방 사이에 1칸 여유
                 self.y1 <= other.y2 + 1 and self.y2 >= other.y1 - 1)
 
+    def to_dict(self):
+        return {
+            "x": self.x1, "y": self.y1,
+            "w": self.x2 - self.x1, "h": self.y2 - self.y1
+        }
+
+    @staticmethod
+    def from_dict(data):
+        return Rect(data["x"], data["y"], data["w"], data["h"])
+
 class DungeonMap:
     def __init__(self, width: int, height: int, rng, dungeon_level_tuple: Tuple[int, int] = (1, 0), map_type: str = "NORMAL"):
         self.width = width
@@ -50,7 +60,59 @@ class DungeonMap:
         self.visited: set[Tuple[int, int]] = set() 
         self.fog_enabled = True # 전장의 안개 기본 활성화
         
-        self.generate_map(self.map_type) 
+        # [Map Persistence] Only generate if not loading
+        if map_type != "LOADED":
+             self.generate_map(self.map_type) 
+        
+    def to_dict(self) -> Dict[str, Any]:
+        """맵 데이터를 직렬화 가능한 딕셔너리로 변환"""
+        return {
+            "width": self.width,
+            "height": self.height,
+            "dungeon_level_tuple": self.dungeon_level_tuple,
+            "map_type": self.map_type,
+            "map_data": self.map_data, # 2D List of chars
+            "rooms": [r.to_dict() for r in self.rooms],
+            "corridors": self.corridors,
+            "start_x": self.start_x,
+            "start_y": self.start_y,
+            "exit_x": self.exit_x,
+            "exit_y": self.exit_y,
+            "visited": list(self.visited), # Set -> List
+            "fog_enabled": self.fog_enabled
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], rng) -> 'DungeonMap':
+        """딕셔너리 데이터로부터 맵 복원"""
+        # Create empty instance with "LOADED" type to skip generation
+        width = data["width"]
+        height = data["height"]
+        level_tuple = tuple(data.get("dungeon_level_tuple", (1, 0)))
+        map_type = data.get("map_type", "NORMAL")
+        
+        # Initialize with LOADED type to prevent auto-generation in __init__
+        dm = cls(width, height, rng, dungeon_level_tuple=level_tuple, map_type="LOADED")
+        dm.map_type = map_type # Restore actual type
+        
+        # Restore Data
+        dm.map_data = data["map_data"]
+        dm.rooms = [Rect.from_dict(r) for r in data["rooms"]]
+        dm.corridors = [tuple(c) for c in data.get("corridors", [])]
+        
+        dm.start_x = data.get("start_x", 0)
+        dm.start_y = data.get("start_y", 0)
+        dm.exit_x = data.get("exit_x", 0)
+        dm.exit_y = data.get("exit_y", 0)
+        
+        # Restore visited set (List -> Set, Tuple conversion needed)
+        visited_list = data.get("visited", [])
+        dm.visited = {tuple(v) for v in visited_list}
+        
+        dm.fog_enabled = data.get("fog_enabled", True)
+        
+        logging.info(f"[Map] Restored map (Level {level_tuple}, Type {map_type})")
+        return dm 
         
     def generate_map(self, map_type: str = "NORMAL"):
         """지정된 타입에 따라 맵을 생성합니다."""

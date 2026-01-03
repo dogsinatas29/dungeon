@@ -164,9 +164,22 @@ class Engine:
         if getattr(self, 'dungeon', None):
             level_tuple = self.dungeon.dungeon_level_tuple
 
-        dungeon_map = DungeonMap(width, height, self.rng, 
-                                 dungeon_level_tuple=level_tuple, 
-                                 map_type=map_type)
+        # [One-Way Transition] Restore saved map if available and not transitioning levels
+        # If spawn_at is specified (START/EXIT), it usually means we just transitioned levels, 
+        # so we WANT a new map.
+        # BUT, if we are loading a save game (game_data present), we likely want the saved map.
+        # Logic: If game_data has "current_map" AND we are not explicitly directed to spawn at EXIT (which implies new floor), use saved map.
+        # Actually, if we just descended, we call _initialize_world with game_data=None.
+        # So if game_data is present, it's a LOAD from save.
+        
+        if game_data and "current_map" in game_data:
+            logging.info("[Load] Restoring saved map data...")
+            dungeon_map = DungeonMap.from_dict(game_data["current_map"], self.rng)
+        else:
+            dungeon_map = DungeonMap(width, height, self.rng, 
+                                     dungeon_level_tuple=level_tuple, 
+                                     map_type=map_type)
+            
         self.dungeon_map = dungeon_map
         map_data = dungeon_map.map_data
         
@@ -187,7 +200,17 @@ class Engine:
             self.world.add_component(player_entity.entity_id, p_level)
         elif game_data and "entities" in game_data:
             # 저장된 데이터에서 엔티티 복원 (플레이어 ID=1 가정)
+            # 저장된 데이터에서 엔티티 복원 (플레이어 ID=1 가정)
             player_data = game_data["entities"].get("1")
+            if player_data:
+                logging.info(f"[Load] Found Player Data (ID 1). Components: {list(player_data.keys())}")
+                if "InventoryComponent" in player_data:
+                    inv_data = player_data["InventoryComponent"]
+                    if isinstance(inv_data, list) and inv_data:
+                        inv_d = inv_data[0]
+                        logging.info(f"[Load] Inventory Items: {len(inv_d.get('items', {}))}, Equipped: {list(inv_d.get('equipped', {}).keys())}")
+            else:
+                logging.warning("[Load] Player Data (ID 1) NOT FOUND in saved entities!")
             
             # StatsComponent 복원 또는 초기화
             stats_list = player_data.get("StatsComponent") if player_data else None
@@ -238,8 +261,13 @@ class Engine:
                             item_info = data.get("item", {})
                             if item_info:
                                 from .data_manager import ItemDefinition
-                                item_obj = ItemDefinition(**item_info)
-                                restored_items[name] = {"item": item_obj, "qty": data.get("qty", 1)}
+                                try:
+                                    item_obj = ItemDefinition(**item_info)
+                                    restored_items[name] = {"item": item_obj, "qty": data.get("qty", 1)}
+                                except Exception as e:
+                                    logging.error(f"[Load] Failed to restore item '{name}': {e}")
+                                    # Try to salvage if possible or skip
+                                    pass
                         
                         # 장착 상태 복구
                         restored_equipped = {}
@@ -259,6 +287,9 @@ class Engine:
                             skill_levels=inv_data.get("skill_levels")
                         )
                         self.world.add_component(player_entity.entity_id, inv)
+                        
+                        # [Fix] Sanitize Loaded Items (Range Sync)
+                        self._sanitize_loaded_items(player_entity)
         elif game_data and "player_specific_data" in game_data:
             # 테스트 환경용: player_specific_data 구조 처리
             player_data = game_data["player_specific_data"]
@@ -390,10 +421,8 @@ class Engine:
                             # 장착 실행
                             if target_slot and not inv.equipped[target_slot]:
                                 inv.equipped[target_slot] = item_def
-                                # 장착했으므로 인벤토리 수량 감소 (qty=1이었으므로 제거...하지 않고 인벤토리와 장착은 별도 관리인가? 
-                                # InventoryComponent.to_dict를 보면 items와 equipped가 별도임.
-                                # 보통 장착하면 items에서 빠짐.
-                                del inv.items[item_name]
+                                # [Fix] Do not remove from inventory. Keep it consistent with normal equip.
+                                # del inv.items[item_name]
             
             # 퀵슬롯 자동 등록 (소모품)
             quick_slot_idx = 0
@@ -779,7 +808,12 @@ class Engine:
             
             # 층수에 맞는 장비/무기 추가 (3개 랜덤 선택)
             equipment_candidates = self._get_eligible_items(dungeon_map.dungeon_level_tuple[0])
-            equipment_candidates = [item for item in equipment_candidates if item.type in ['WEAPON', 'ARMOR', 'SHIELD']]
+            # [Balance] Starting Shop Nerf: Level <= 5, Standard Gear Only
+            equipment_candidates = [
+                item for item in equipment_candidates 
+                if item.type in ['WEAPON', 'ARMOR', 'SHIELD'] 
+                and item.required_level <= 5
+            ]
             if equipment_candidates:
                 selected_gear = random.sample(equipment_candidates, min(3, len(equipment_candidates)))
                 for gear in selected_gear:
@@ -870,6 +904,9 @@ class Engine:
         floor_trap_count = int(trap_count * 0.7)
         wall_trap_count = trap_count - floor_trap_count
         
+        # [Fix] Start Room Exclusion
+        start_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
+        
         # 1. 바닥 함정 배치 (STEP_ON)
         # 현재 층에서 사용 가능한 함정 필터링 (STEP_ON만)
         eligible_traps = [trap for trap in self.trap_defs.values() 
@@ -891,7 +928,11 @@ class Engine:
             # 배치 위치 타입 선택 (바닥 70%, 복도 30%)
             if random.random() < 0.7 and rooms:
                 # 방 바닥에 배치
-                room = random.choice(rooms)
+                # [Fix] 첫 번째 방(시작 방)은 제외하고 랜덤 선택
+                candidate_rooms = rooms[1:] if len(rooms) > 1 else rooms
+                if not candidate_rooms: continue
+                
+                room = random.choice(candidate_rooms)
                 x = random.randint(room.x1 + 1, room.x2 - 1)
                 y = random.randint(room.y1 + 1, room.y2 - 1)
             elif dungeon_map.corridors:
@@ -902,6 +943,14 @@ class Engine:
             
             # 중복 체크 (이미 함정이 있는 위치는 제외)
             if not self._is_trap_at(x, y):
+                # [Fix] Safe Zone Check - Don't spawn traps inside Start Room
+                if start_room and start_room.x1 <= x <= start_room.x2 and start_room.y1 <= y <= start_room.y2:
+                     continue
+                
+                # Double Check with Radius just in case
+                if (x - dungeon_map.start_x)**2 + (y - dungeon_map.start_y)**2 < 100: # 10 radius
+                    continue
+                
                 self._spawn_trap_at(x, y, eligible_traps)
                 placed += 1
         
@@ -934,6 +983,15 @@ class Engine:
         for _ in range(num_gauntlets):
             start_node = random.choice(dungeon_map.corridors)
             gx, gy = start_node
+            
+            # [Fix] Safe Zone Check (Start Room + Radius)
+            start_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
+            # Bounds check
+            if start_room and start_room.x1 <= gx <= start_room.x2 and start_room.y1 <= gy <= start_room.y2:
+                continue
+            # Radius check
+            if (gx - dungeon_map.start_x)**2 + (gy - dungeon_map.start_y)**2 < 100:
+                continue
             
             # 주변 3x3 범위 내의 모든 복도 타일에 함정 배치 시도
             traps_placed = 0
@@ -993,6 +1051,11 @@ class Engine:
                 
                 # 거리 체크 (너무 멀면 안됨)
                 dist = abs(px - t_pos.x) + abs(py - t_pos.y)
+                
+                # [Fix] Safe Zone Check
+                if (px - dungeon_map.start_x)**2 + (py - dungeon_map.start_y)**2 < 400:
+                    continue
+
                 if 2 < dist < 8 and not self._is_trap_at(px, py):
                     # 압력판 생성
                     selected_p = random.choice(pressure_defs)
@@ -1105,6 +1168,17 @@ class Engine:
             if placed >= count:
                 break
             
+            # [Fix] Safe Zone Check
+            start_room = dungeon_map.rooms[0] if dungeon_map.rooms else None
+            
+            # Start Room Bounds Check
+            if start_room and start_room.x1 <= x <= start_room.x2 and start_room.y1 <= y <= start_room.y2:
+                continue
+                
+            # Radius Check
+            if (x - dungeon_map.start_x)**2 + (y - dungeon_map.start_y)**2 < 100:
+                continue
+
             if not self._is_trap_at(x, y):
                 # 벽 함정 배치
                 trap = self.world.create_entity()
@@ -1548,8 +1622,8 @@ class Engine:
                         raise KeyboardInterrupt
                     
                     # ESC 키로 메인 메뉴 복귀
-                    if action == '\x1b':  # ESC key
-                        self.world.event_manager.push(MessageEvent("메인 메뉴로 돌아갑니다..."))
+                    if action == '\x1b' or action.lower() == 'q':  # ESC key or Q
+                        self.world.event_manager.push(MessageEvent("저장하고 메인 메뉴로 돌아갑니다..."))
                         game_result = "MENU"
                         self.is_running = False
                         continue
@@ -1576,18 +1650,21 @@ class Engine:
                         last_frame_time = current_time
                     
                     elif self.state == GameState.INVENTORY:
-                        if action_lower == 'i':
+                        if action_lower in ['i', 'b', 'q', '\x1b']:
                             self.state = GameState.PLAYING
                         else:
                             self._handle_inventory_input(action)
                         self._render()
                         last_frame_time = current_time
                     elif self.state == GameState.CHARACTER_SHEET:
-                        self._handle_character_sheet_input(action)
+                        if action_lower in ['c', 'b', 'q', '\x1b']:
+                            self.state = GameState.PLAYING
+                        else:
+                            self._handle_character_sheet_input(action)
                         self._render()
                         last_frame_time = current_time
                     elif self.state == GameState.SHOP:
-                        if action_lower == 'q':
+                        if action_lower in ['q', 'b', '\x1b']:
                             self.state = GameState.PLAYING
                         else:
                             self._handle_shop_input(action)
@@ -1595,7 +1672,7 @@ class Engine:
                         last_frame_time = current_time
                     
                     elif self.state == GameState.SHRINE:
-                        if action_lower == 'q' or action_lower == 'esc':
+                        if action_lower in ['q', 'b', 'esc', '\x1b']:
                             self.state = GameState.PLAYING
                         else:
                             self._handle_shrine_input(action)
@@ -1706,21 +1783,48 @@ class Engine:
                             # vars()가 불가능한 경우 (built-in 등) 빈 딕셔너리 또는 가능한 속성만
                             serialized_list.append({})
                 comp_data[comp_type.__name__] = serialized_list
+            
+            if str(e_id) == "1":
+                try:
+                    logging.info(f"[Save] Saving Player Entity 1. Components: {list(comp_data.keys())}")
+                    if "InventoryComponent" in comp_data:
+                        # Log item count
+                        items = comp_data["InventoryComponent"][0].get("items", {})
+                        equipped = comp_data["InventoryComponent"][0].get("equipped", {})
+                        logging.info(f"[Save] Inventory Items: {len(items)}, Equipped: {list(equipped.keys())}")
+                except Exception as log_err:
+                    logging.error(f"[Save] Logging failed: {log_err}")
+            
             entities_data[str(e_id)] = comp_data
+
+        # [Fix] Persist selected_class to avoid defaulting to WARRIOR on fallback
+        selected_class = "WARRIOR"
+        p_level = player_entity.get_component(LevelComponent)
+        if p_level and hasattr(self, 'class_defs'):
+            for c_id, c_def in self.class_defs.items():
+                if c_def.name == p_level.job:
+                    selected_class = c_id
+                    break
 
         game_state_data = {
             "entities": entities_data,
             "player_specific_data": {
                 "name": self.player_name,
-                # 필요한 다른 플레이어 데이터...
             },
+            "selected_class": selected_class,
             "current_level": self.current_level,
             "turn_number": self.turn_number,
-            "last_boss_id": self.last_boss_id  # [Boss Summon] 저장
+            "last_boss_id": self.last_boss_id,
+            "current_map": self.dungeon_map.to_dict() if self.dungeon_map else None # [Map Persistence]
         }
         
-        save_game_data(game_state_data, self.player_name)
-                
+        try:
+            save_game_data(game_state_data, self.player_name)
+            logging.info("[Save] Game saved successfully.")
+        except Exception as e:
+            logging.error(f"[Save] FAILED to save game: {e}")
+            self.ui.add_message(f"게임 저장 실패: {e}") # UI Feedback
+
     def handle_map_transition_event(self, event: MapTransitionEvent):
         """맵 이동 이벤트 처리: 새로운 층 생성"""
         old_level = self.current_level
@@ -1932,8 +2036,10 @@ class Engine:
             # 2. From Equipped Slots (UI fix: ensure equipped items are visible)
             for slot, item in inv_comp.equipped.items():
                 if item:
-                    if hasattr(item, 'type'):
-                         filtered_items.append((item.ID, {'item': item, 'qty': 1}))
+                    # [Fix] Deduplicate: Only add if NOT in inventory (Orphaned items)
+                    # Normal items are in both 'items' and 'equipped', so they are caught by step 1.
+                    if hasattr(item, 'type') and item.name not in inv_comp.items:
+                         filtered_items.append((item.name, {'item': item, 'qty': 1}))
         elif self.inventory_category_index == 2: # 스크롤
             filtered_items = [(id, data) for id, data in inv_comp.items.items() 
                              if data['item'].type == 'SCROLL']
@@ -2124,6 +2230,16 @@ class Engine:
         
         if not stats or not inv: return
 
+        # [Cooldown Check] Prevent spamming (double-consumption fix)
+        # Use simple 1.0s global item cooldown or per-item if needed.
+        # User requested: "Until cooldown ends".
+        # We use item name for cooldown tracking.
+        if hasattr(self, 'combat_system') and self.combat_system:
+            if self.combat_system.get_cooldown(player_entity.entity_id, item.name) > 0:
+                 # Silently ignore or show message? 
+                 # If spamming key, silent is better to avoid log spam.
+                 return
+
         # 레벨 및 식별 여부 확인
         is_id = getattr(item, 'is_identified', True)
         if not is_id:
@@ -2159,17 +2275,6 @@ class Engine:
                  
                  if job_name != req_job:
                       self.world.event_manager.push(MessageEvent(f"이 서적의 내용은 {req_job}만이 이해할 수 있습니다.", "red"))
-                      # 아이템 소모 방지?
-                      # 현재 구조상 함수 종료 시 True 반환하면 턴/아이템 소모됨?
-                      # Engine 내 logic임. Engine에서 return하면 소모 안되나?
-                      # 이 함수는 `_use_item`? 
-                      # 호출부 `use_item`은 return value 사용 안함? 
-                      # `_use_item`은 로직 실행만 함.
-                      # 만약 여기서 return하면, `inv.remove_item`이 호출되는지 확인 필요.
-                      # 시스템에서 호출함. 
-                      # 보통 return False 하면 소모 안함.
-                      # 하지만 보여진 `_use_item` (추정) 코드는 return type 불명확.
-                      # 일단 return 함.
                       return
             
             skill_def = self.skill_defs.get(item.skill_id)
@@ -2394,6 +2499,10 @@ class Engine:
             
             # 인덱스 보정
             self.selected_item_index = max(0, self.selected_item_index - 1)
+        
+        # [Cooldown Set] 1.0 Sec Safety Cooldown
+        if hasattr(self, 'combat_system') and self.combat_system:
+             self.combat_system.set_cooldown(player_entity.entity_id, item.name, 1.0)
 
     def _forget_skill(self, skill_name):
         """배운 스킬을 잊어버림"""
@@ -2434,6 +2543,10 @@ class Engine:
             # 양손 무기였을 경우 손2도 해제
             if already_slot == "손1" and inv.equipped.get("손2") == "(양손 점유)":
                 inv.equipped["손2"] = None
+            
+            # [Fix] Restore Orphaned Items (if not in bag list)
+            if item.name not in inv.items:
+                inv.items[item.name] = {'item': item, 'qty': 1}
             
             self.world.event_manager.push(MessageEvent(f"{item.name}의 장착을 해제했습니다."))
             self._recalculate_stats()
@@ -2496,6 +2609,63 @@ class Engine:
         
         # 능력치 재계산
         self._recalculate_stats()
+
+    def _sanitize_loaded_items(self, player_entity):
+        """저장된 아이템 데이터와 최신 CSV 정의 동기화 (사거리 버그 등 수정)"""
+        inv = player_entity.get_component(InventoryComponent)
+        if not inv: return
+        
+        # 1. 인벤토리 아이템 동기화
+        for entry in inv.items.values():
+            item = entry['item']
+            self._sync_item_definition(item)
+            
+        # 2. 장착 아이템 동기화
+        for item in inv.equipped.values():
+            if item and hasattr(item, 'name'):
+                self._sync_item_definition(item)
+                
+    def _sync_item_definition(self, item):
+        """단일 아이템 객체 동기화"""
+        if not hasattr(self, 'item_defs'): return
+
+        # 1. Base Name 찾기 (강화/수식어 제거)
+        base_name = item.name
+        
+        # +N 제거
+        if '+' in base_name:
+             parts = base_name.split(' ')
+             # +1 Sharp Dagger -> Remove +1
+             if parts[0].startswith('+'):
+                 parts.pop(0)
+             base_name = " ".join(parts)
+        
+        # Prefix/Suffix로 인해 이름이 변경되었을 수 있음 (예: Magic Dagger)
+        # item_defs 키 중 base_name에 포함된 가장 긴 키를 찾음 (단순 포함 관계)
+        # 예: "Sharp Short Bow" -> "Short Bow" (X, 한글이라 "예리한 단궁" -> "단궁")
+        # 한글의 경우 띄어쓰기로 분리가 안 될 수도 있음 (하지만 items.csv에는 띄어쓰기 없음)
+        
+        # 가장 확실한 방법: items.csv의 모든 키를 순회하며 item.name이 해당 키로 '끝나는지' 확인?
+        # 아니면 그냥 items.csv에 있는 이름이 포함되어 있는지 확인.
+        
+        target_def = None
+        if base_name in self.item_defs:
+            target_def = self.item_defs[base_name]
+        else:
+            # 매칭 실패 시, item_defs의 키들을 순회하며 부분 일치 확인
+            # (긴 이름부터 확인하여 "단궁" vs "장궁" 오매칭 방지)
+            sorted_keys = sorted(self.item_defs.keys(), key=len, reverse=True)
+            for key in sorted_keys:
+                if key in item.name: # 원래 이름에서 검색
+                    target_def = self.item_defs[key]
+                    break
+        
+        if target_def:
+            # 사거리 동기화
+            if hasattr(item, 'attack_range') and hasattr(target_def, 'attack_range'):
+                if item.attack_range != target_def.attack_range:
+                    logging.info(f"[Sanitize] Updating {item.name} range: {item.attack_range} -> {target_def.attack_range}")
+                    item.attack_range = target_def.attack_range
 
     def _recalculate_stats(self):
         """장착된 아이템 및 버프를 기반으로 플레이어 능력치 재계산"""
@@ -2606,9 +2776,11 @@ class Engine:
                         # 사거리 보정: +1
                         stats.weapon_range += 1
                         
-                    # [Class Bonus] Warrior Cleave (SPLASH)
-                    if level_comp and level_comp.job in ["워리어", "WARRIOR"] and "RANGED" not in getattr(item, 'flags', []):
-                        stats.flags.add("SPLASH")
+                        # [Class Bonus] Warrior Cleave (SPLASH)
+                        if level_comp and level_comp.job in ["워리어", "WARRIOR"] and "RANGED" not in getattr(item, 'flags', []):
+                            stats.flags.add("SPLASH")
+        
+        # logging.info(f"[Stats] Recalculated Weapon Range: {stats.weapon_range}")
         
         # [Affix Final Calculation]
         # 1. Damage Max Bonus (of Carnage)
@@ -3079,25 +3251,26 @@ class Engine:
                 # HP Bar
                 hp_per = max(0, min(1, stats.current_hp / stats.max_hp)) if stats.max_hp > 0 else 0
                 hp_filled = int(hp_per * 15)
+                # HP Bar (Left)
                 self.renderer.draw_text(2, current_y, "HP  :", "white")
                 self.renderer.draw_text(8, current_y, "[", "white")
                 self.renderer.draw_text(9, current_y, "=" * hp_filled, "red")
                 self.renderer.draw_text(9 + hp_filled, current_y, "-" * (15 - hp_filled), "dark_grey")
                 self.renderer.draw_text(9 + 15, current_y, "]", "white")
                 self.renderer.draw_text(26, current_y, f"{int(stats.current_hp)}/{int(stats.max_hp)}", "white")
-                current_y += 1
-                current_y += 1
                 
-                # MP Bar (Restored)
+                # MP Bar (Right - Side by Side)
+                mp_x_offset = 40
                 mp_per = max(0, min(1, stats.current_mp / stats.max_mp)) if stats.max_mp > 0 else 0
                 mp_filled = int(mp_per * 15)
-                self.renderer.draw_text(2, current_y, "MP  :", "white")
-                self.renderer.draw_text(8, current_y, "[", "white")
-                self.renderer.draw_text(9, current_y, "=" * mp_filled, "blue")
-                self.renderer.draw_text(9 + mp_filled, current_y, "-" * (15 - mp_filled), "dark_grey")
-                self.renderer.draw_text(9 + 15, current_y, "]", "white")
-                self.renderer.draw_text(26, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
+                self.renderer.draw_text(2 + mp_x_offset, current_y, "MP  :", "white")
+                self.renderer.draw_text(8 + mp_x_offset, current_y, "[", "white")
+                self.renderer.draw_text(9 + mp_x_offset, current_y, "=" * mp_filled, "blue")
+                self.renderer.draw_text(9 + mp_filled + mp_x_offset, current_y, "-" * (15 - mp_filled), "dark_grey")
+                self.renderer.draw_text(9 + 15 + mp_x_offset, current_y, "]", "white")
+                self.renderer.draw_text(26 + mp_x_offset, current_y, f"{int(stats.current_mp)}/{int(stats.max_mp)}", "white")
                 current_y += 1
+
                 
                 # Level info
                 if level_comp:
@@ -3246,7 +3419,48 @@ class Engine:
         
         # 4-4. 스킬 (Skill Slots 6-0)
         skill_start_y = qs_start_y + 7
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y, "[ SKILLS ]", "gold")
+        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y, "[ SKILLS ] (6-0)", "gold")
+        skill_y = skill_start_y + 1
+        if player_entity:
+            inv_comp = player_entity.get_component(InventoryComponent)
+            if inv_comp and hasattr(inv_comp, 'skill_slots'):
+                 for i, skill in enumerate(inv_comp.skill_slots):
+                    skill_name = skill if skill else "----"
+                    
+                    # [Skill Cooldown] Display
+                    cd_str = ""
+                    if hasattr(self, 'combat_system') and skill:
+                        current_cd = self.combat_system.get_cooldown(player_entity.entity_id, skill)
+                        if current_cd > 0:
+                            cd_str = f" ({int(current_cd)}s)"
+                    
+                    key_char = str((i + 6) % 10)
+                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_y + i, f"{key_char}: {skill_name}{cd_str}", "white")
+
+        # 4-5. 활성 효과 (Active Effects / Buffs) - User Request: "Count down for items"
+        buff_start_y = skill_y + 6 # After 5 skill slots
+        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, buff_start_y, "[ ACTIVE EFFECTS ]", "gold")
+        buff_y = buff_start_y + 1
+        
+        if player_entity:
+             stat_modifiers = player_entity.get_components(StatModifierComponent)
+             # Filter for temporary buffs only
+             active_buffs = [mod for mod in stat_modifiers if mod.duration > 0]
+             
+             if not active_buffs:
+                 self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, buff_y, "None", "dark_grey")
+             else:
+                 for i, buff in enumerate(active_buffs):
+                     if buff_y + i >= MAP_HEIGHT: break # Prevent overflow
+                     
+                     # Format: Source (Duration s)
+                     # Color logic: Red if < 10s, Yellow if < 30s, Green otherwise
+                     time_color = "green"
+                     if buff.duration <= 10: time_color = "red"
+                     elif buff.duration <= 30: time_color = "yellow"
+                     
+                     display_str = f"{buff.source} ({int(buff.duration)}s)"
+                     self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, buff_y + i, display_str, time_color)
         sk_y = skill_start_y + 1
         if player_entity:
             # 1. 활성화된 버프 확인 및 Duration 매핑
@@ -3636,6 +3850,9 @@ class Engine:
 
     def _render_shop_popup(self):
         """상점 UI 팝업 렌더링"""
+        shopkeeper_id = getattr(self, "active_shopkeeper_id", None)
+        shopkeeper = self.world.get_entity(shopkeeper_id) if shopkeeper_id else None
+        
         MAP_WIDTH = 80
         POPUP_WIDTH = 66
         POPUP_HEIGHT = 24
@@ -3675,10 +3892,14 @@ class Engine:
         # 4. 물품 목록 표시
         items_to_display = []
         if self.shop_category_index == 0: # 사기
-            shopkeeper = self.world.get_entity(self.active_shop_id)
             if shopkeeper:
                 shop_comp = shopkeeper.get_component(ShopComponent)
-                if shop_comp: items_to_display = shop_comp.items
+                if shop_comp:
+                    # [Fix] Filter out BOSS items
+                    items_to_display = [
+                        i for i in shop_comp.items 
+                        if "BOSS" not in getattr(i['item'], 'flags', [])
+                    ]
         else: # 팔기
             if player_entity:
                 inv_comp = player_entity.get_component(InventoryComponent)
@@ -3722,7 +3943,7 @@ class Engine:
                 self.renderer.draw_text(start_x + POPUP_WIDTH - 12, item_y, price_text, color)
         
         # 5. 하단 도움말
-        guide_text = "[←/→] 탭 전환  [↑/↓] 선택  [ENTER] " + ("구매" if self.shop_category_index == 0 else "판매") + "  [Q/ESC] 나가기"
+        guide_text = "[←/→] 탭 전환  [↑/↓] 선택  [ENTER] " + ("구매" if self.shop_category_index == 0 else "판매") + "  [B] 뒤로/닫기"
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(guide_text)) // 2, start_y + POPUP_HEIGHT - 2, guide_text, "dark_grey")
     def _handle_oil_selection_input(self, action):
         """오일 사용 시 장비 선택 입력 처리"""
@@ -4245,7 +4466,7 @@ class Engine:
                 ui.draw_text(sx + 2, y, f"{prefix}{loc_str} {item.name}{enh_str}", color)
                 y += 1
             
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 나가기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 닫기", "dark_grey")
 
         elif self.shrine_enhance_step == 2:
             ui.draw_text(sx + 2, sy + 3, "사용할 오일을 선택하세요:", "cyan")
@@ -4260,7 +4481,7 @@ class Engine:
                     ui.draw_text(sx + 4, y, f"{prefix}{oil.name}", color)
                     ui.draw_text(sx + 25, y, f"- {oil.description}", "dark_grey")
 
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 나가기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 닫기", "dark_grey")
 
         elif self.shrine_enhance_step == 3:
             ui.draw_text(sx + 2, sy + 3, "특별한 제물을 바치시겠습니까?", "cyan")
@@ -4275,7 +4496,7 @@ class Engine:
             ui.draw_text(sx + 2, sy + 10, "제물을 바치면 강화 성공률이 오르거나", "dark_grey")
             ui.draw_text(sx + 2, sy + 11, "아이템 파괴를 방지할 수 있습니다.", "dark_grey")
 
-            ui.draw_text(sx + 2, sy + h - 2, "[←/→] 선택  [ENTER] 확인  [B] 뒤로  [Q] 나가기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, "[←/→] 선택  [ENTER] 확인  [B] 뒤로  [Q] 닫기", "dark_grey")
 
         elif self.shrine_enhance_step == 4:
             ui.draw_text(sx + 2, sy + 3, "봉납할 제물을 선택하세요:", "cyan")
@@ -4291,7 +4512,7 @@ class Engine:
                     ui.draw_text(sx + 4, y, f"{prefix}{sac.name}", color)
                     ui.draw_text(sx + 25, y, f"- {sac.description}", "dark_grey")
 
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 강화 실행  [B] 뒤로  [Q] 나가기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 강화 실행  [B] 뒤로  [Q] 닫기", "dark_grey")
 
     def _get_eligible_items(self, floor, item_pool=None):
         """현재 층수에서 획득 가능한 아이템 목록을 반환합니다."""

@@ -397,8 +397,13 @@ class MapConfigDefinition:
 # -----------------------------------------------------------------------
 # [추가] load_data_from_csv 헬퍼 함수
 # -----------------------------------------------------------------------
-def load_data_from_csv(file_name, definition_class, data_path="data", key_field=None):
+def load_data_from_csv(file_name, definition_class, data_path=None, key_field=None):
     DATA_DEFINITIONS = {}
+    
+    # [Fix] Default to internal dungeon/data directory if not specified or if default "data" was passed
+    if data_path is None or data_path == "data":
+        data_path = os.path.join(os.path.dirname(__file__), "data")
+        
     file_path = os.path.join(data_path, file_name)
     
     if not os.path.exists(file_path):

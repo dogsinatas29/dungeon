@@ -21,7 +21,7 @@ history.txt
 # Testing & Verification
 test_sandbox.py
 # verify_*.py (Temporarily enabled)
-debug_*.py
+# debug_*.py (Temporarily enabled)
 sandbox_test.py
 test_*.py
 

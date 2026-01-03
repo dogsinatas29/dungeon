@@ -114,29 +114,30 @@ def main_menu():
                  break
         
         elif choice == 1:  # 이어하기
-            from dungeon.data_manager import list_save_files
-            save_files = list_save_files()
-            action, selected_name = ui.show_save_list(save_files)
-            
-            if action == "LOAD":
-                game_state_data = load_game_data(selected_name)
-                if game_state_data:
-                    result = start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
-                    if result == "MENU":
-                        continue  # 메인 메뉴로 복귀
-                    elif result == "QUIT":
-                        break  # 게임 종료
+            while True:
+                from dungeon.data_manager import list_save_files
+                save_files = list_save_files()
+                action, selected_name = ui.show_save_list(save_files)
+                
+                if action == "LOAD":
+                    game_state_data = load_game_data(selected_name)
+                    if game_state_data:
+                        result = start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
+                        if result == "QUIT":
+                            return
+                        break # Main Menu (MENU, DEATH)
+                    else:
+                        ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
+                        ui._clear_screen()
+                        print(f"\n  [오류] {selected_name} 파일을 로드하는 중 문제가 발생했습니다.")
+                        print("  데이터가 손상되었거나 형식이 맞지 않습니다.")
+                        print("\n  아무 키나 눌러 목록으로 돌아갑니다.")
+                        ui.get_key_input()
+                elif action == "DELETE":
+                    delete_save_data(selected_name)
+                    # Loop continues, refreshing list
                 else:
-                    ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
-                    ui._clear_screen()
-                    print(f"\n  [오류] {selected_name} 파일을 로드하는 중 문제가 발생했습니다.")
-                    print("  데이터가 손상되었거나 형식이 맞지 않습니다.")
-                    print("\n  아무 키나 눌러 메인 메뉴로 돌아갑니다.")
-                    ui.get_key_input()
-            elif action == "DELETE":
-                delete_save_data(selected_name)
-                ui.add_message(f"{selected_name}의 저장 데이터를 삭제했습니다.")
-            # action이 None이면 다시 루프로 돌아감
+                    break # Back to Main Menu
         
         elif choice == 2:  # 게임 종료
             break

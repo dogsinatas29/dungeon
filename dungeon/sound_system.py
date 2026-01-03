@@ -34,6 +34,19 @@ class SoundSystem(System):
             "COIN": "coin.wav"
         }
         self.sound_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds")
+        
+        # [Fix] Sound Cooldowns to prevent overlap spam
+        self.last_played = {}
+        self.cooldowns = {
+            "STEP": 0.3,       # 발소리는 0.3초마다
+            "HIT": 0.1,        # 타격음은 0.1초
+            "ATTACK": 0.1,
+            "HEAL": 0.5,
+            "COIN": 0.1,
+            "LEVEL_UP": 2.0,   # 레벨업은 길게
+            "BGM_BOSS": 10.0,
+            "default": 0.1
+        }
 
     def handle_sound_event(self, event):
         self._play_sound(event.sound_type, event.message)
@@ -72,6 +85,18 @@ class SoundSystem(System):
 
     def _play_sound(self, sound_type, message=""):
         """시각적 피드백 출력 및 실제 파일 재생 시도"""
+        import time
+        current_time = time.time()
+        
+        # [Fix] Check Cooldown
+        last_time = self.last_played.get(sound_type, 0)
+        cooldown = self.cooldowns.get(sound_type, self.cooldowns["default"])
+        
+        if current_time - last_time < cooldown:
+            return # Skip sound if triggered too recently
+            
+        self.last_played[sound_type] = current_time
+
         # 1. 시각적 피드백 (로그)
         if message:
             sound_msg = f"[🔊] {message}"
@@ -97,7 +122,25 @@ class SoundSystem(System):
                     # 운영체제별 재생 명령어 분기
                     system_os = platform.system()
                     if system_os == "Linux":
-                        subprocess.Popen(["aplay", "-q", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        # [Fix] Limit duration for short sounds to prevent long silence padding
+                        # Use self.cooldowns as a rough guide, or a specific max_duration dict
+                        # COIN sound was reported to be ~8s long. Force limit it.
+                        cmd = ["aplay", "-q", file_path]
+                        
+                        # Duration limits (in seconds)
+                        duration_limits = {
+                            "COIN": "1",
+                            "STEP": "0.5",
+                            "HIT": "0.5",
+                            "ATTACK": "0.5",
+                            "BLOCK": "0.5",
+                            "MISS": "0.5"
+                        }
+                        limit = duration_limits.get(sound_type)
+                        if limit:
+                            cmd = ["aplay", "-q", "-d", limit, file_path]
+                            
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     elif system_os == "Darwin": # macOS
                         subprocess.Popen(["afplay", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     elif system_os == "Windows":

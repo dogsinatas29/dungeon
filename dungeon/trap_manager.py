@@ -93,6 +93,28 @@ class TrapSystem(System):
         # 함정 엔티티
         traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
         
+        # [New] Passive Trap Detection (DISARM Skill)
+        from .components import InventoryComponent
+        p_inv = player.get_component(InventoryComponent)
+        has_disarm = False
+        if p_inv:
+            # Check learned skills
+            for s_name in p_inv.skills:
+                if s_name == "함정 해제" or s_name == "DISARM":
+                    has_disarm = True
+                    break
+        
+        if has_disarm:
+            for trap_ent in traps:
+                trap = trap_ent.get_component(TrapComponent)
+                if not trap.visible and not trap.is_triggered:
+                    t_pos = trap_ent.get_component(PositionComponent)
+                    dist = abs(player_pos.x - t_pos.x) + abs(player_pos.y - t_pos.y)
+                    
+                    if dist <= 3: # 3칸 이내 감지
+                        trap.visible = True
+                        self.event_manager.push(MessageEvent(f"함정({trap.trap_type})을 발견했습니다!", "cyan"))
+
         # 1. STEP_ON 함정 처리 (기존 로직)
         for entity in list(entities):
             e_pos = entity.get_component(PositionComponent)
@@ -186,7 +208,7 @@ class TrapSystem(System):
         
         # [Visual Effect] 치명적 피해 시 화면 테두리 붉은색 효과 (20% 이상 피해)
         if is_player and damage >= stats.max_hp * 0.2:
-            from .dungeon.ui import ConsoleUI
+            from .ui import ConsoleUI
             ui = getattr(self.world.engine, 'ui', None)
             if ui:
                 ui.blood_overlay_timer = 10 # 약 1~2초간 지속

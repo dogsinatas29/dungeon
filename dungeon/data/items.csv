@@ -113,7 +113,7 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 천사의 깃털,SACRIFICE,강화 실패 시 아이템 파괴를 1회 막아주는 제물.,%,#FFF0F5,1,0,0,0,0,0,0,None,SAC_FEATHER,0,0,0,0,0,0,1
 룬석,SACRIFICE,아이템의 접두사(Prefix)를 무작위로 새로 고침합니다.,%,#4682B4,1,0,0,0,0,0,0,None,SAC_RUNE,0,0,0,0,0,0,1
 어둠의 수정,SACRIFICE,아이템 등급을 노멀에서 매직으로 승급시킵니다.,%,#4B0082,1,0,0,0,0,0,0,None,SAC_CRYSTAL,0,0,0,0,0,0,1
-도살자의 식칼,WEAPON,도살자가 사용하던 피 묻은 거대한 식칼.,/,#8B0000,20,10-25,0,0,0,2,1,None,BLEEDING,50,0,0,0,0,50,1
+도살자의 식칼,WEAPON,도살자가 사용하던 피 묻은 거대한 식칼.,/,#8B0000,20,10-25,0,0,0,2,1,None,"BLEEDING,BOSS",50,0,0,0,0,50,1
 언데드 왕관,ARMOR,죽은 자들의 왕이 썻던 왕관.,[,#FFD700,20,0,10,0,0,1,0,None,"LIFE_STEAL,UNDEAD_RESIST",0,0,0,0,0,50,20
 영혼석,ACCESSORY,공포의 군주 디아블로의 영혼이 갇힌 붉은 보석.,*,#DC143C,1,0,0,0,0,0,0,None,"VICTORY_TOKEN,FIRE_RESIST",0,50,0,50,0,100,99
 화살,CONSUMABLE,함정이나 궁수에게서 수거한 투사체입니다.,{,#8B4513,1,0,0,0,0,0,0,None,,0,0,0,0,0,0,1

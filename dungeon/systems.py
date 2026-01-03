@@ -15,6 +15,7 @@ from .components import (
 import readchar
 import random
 import time
+import logging
 from .ui import COLOR_MAP
 from .events import (
     MoveSuccessEvent, CollisionEvent, MessageEvent, MapTransitionEvent,
@@ -416,6 +417,15 @@ class MovementSystem(System):
         if switch_comp and not switch_comp.is_open:
             return collided_entity.entity_id, "SWITCH"
             
+        # [Debug] OTHER collision identification
+        col_name = self.world.engine._get_entity_name(collided_entity)
+        # Fix: World.get_components doesn't exist. Use entity._components directly or iterate.
+        # Entity stores components in self._components dict {Type: List[Instance]}
+        comp_types = [t.__name__ for t in collided_entity._components.keys()]
+        msg = f"[Debug] Collision OTHER with {col_name} (ID: {collided_entity.entity_id}, Comps: {comp_types})"
+        self.event_manager.push(MessageEvent(msg, color="red"))
+        logging.info(msg)
+            
         return collided_entity.entity_id, "OTHER"
 
 
@@ -490,6 +500,13 @@ class MonsterAISystem(System):
                     target_pos = player_pos
 
             if not target or not target_pos: continue
+            
+            # [Fix] Friendly Fire Prevention
+            # Ensure we don't target same faction (unless it's Berserk/Confused, which we don't have yet)
+            if target.has_component(AIComponent):
+                t_ai = target.get_component(AIComponent)
+                if t_ai and t_ai.faction == ai.faction:
+                    continue
             
             # 맨해튼 거리 계산
             dist = abs(target_pos.x - pos.x) + abs(target_pos.y - pos.y)
@@ -681,6 +698,34 @@ class MonsterAISystem(System):
 
 class CombatSystem(System):
     """엔티티 간 충돌 시 전투(데미지 계산)를 처리합니다."""
+    def __init__(self, world):
+        super().__init__(world)
+        self.cooldowns = {} # Dict[entity_id, Dict[skill_name, expiry_time]]
+
+    def get_cooldown(self, entity_id, skill_name):
+        """남은 쿨타임(초)을 반환합니다."""
+        import time
+        if entity_id not in self.cooldowns: return 0
+        if skill_name not in self.cooldowns[entity_id]: return 0
+        
+        expiry = self.cooldowns[entity_id][skill_name]
+        remaining = expiry - time.time()
+        
+        if remaining <= 0:
+            del self.cooldowns[entity_id][skill_name]
+            return 0
+        return remaining
+
+    def set_cooldown(self, entity_id, skill_name, duration):
+        """쿨타임을 설정합니다."""
+        import time
+        if duration <= 0: return
+        
+        if entity_id not in self.cooldowns:
+            self.cooldowns[entity_id] = {}
+        
+        self.cooldowns[entity_id][skill_name] = time.time() + duration
+
     def process(self):
         """매 턴 지속형 스킬 효과(오라) 처리"""
         aura_entities = self.world.get_entities_with_components({SkillEffectComponent, PositionComponent})
@@ -770,6 +815,7 @@ class CombatSystem(System):
 
         attacker_name = self._get_entity_name(attacker)
         self.event_manager.push(MessageEvent(f'"{attacker_name}"의 원거리 공격!'))
+        self.event_manager.push(MessageEvent(f"[Debug] Range Hit: {event.range_dist}", "yellow"))
 
         # 사거리만큼 일직선상 조사 (애니메이션 효과 포함)
         for dist in range(1, event.range_dist + 1):
@@ -789,7 +835,7 @@ class CombatSystem(System):
             # 즉시 렌더링 호출 (애니메이션 느낌 유도)
             if hasattr(self.world, 'engine'):
                 self.world.engine._render()
-                time.sleep(0.03) # 30ms 대기
+                time.sleep(0.08) # 80ms 대기 (User fedback: animation not visible)
 
             if map_comp.tiles[target_y][target_x] == '#':
                 self.event_manager.push(MessageEvent("공격이 벽에 막혔습니다."))
@@ -1322,7 +1368,6 @@ class CombatSystem(System):
                     # 1. 전리품 및 경험치 계산을 위해 몬스터 정의 가져오기
                     m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
                     m_def = m_defs.get(m_type)
-                    m_def = m_defs.get(m_type)
                     # print(f"DEBUG: m_type={m_type}, m_def flags={getattr(m_def, 'flags', 'None')}")
                     
                     # 2. 경험치 보상 (플레이어에게)
@@ -1333,6 +1378,7 @@ class CombatSystem(System):
                             if level_sys:
                                 xp_gained = int(m_def.xp_value * 0.9) # [Balance] Nerf XP by 10%
                                 level_sys.gain_exp(player_entity, xp_gained)
+                                self.event_manager.push(MessageEvent(f"경험치 {xp_gained}를 획득했습니다.", "yellow"))
                                 
                                 # [Bonus Points] Boss Reward
                                 if "BOSS" in getattr(m_def, 'flags', []):
@@ -1592,13 +1638,20 @@ class CombatSystem(System):
             self.event_manager.push(ShopOpenEvent(shopkeeper_id=target.entity_id))
             return
         
-        # [Shrine] 신전 상호작용
         if target.has_component(ShrineComponent) and attacker.entity_id == self.world.get_player_entity().entity_id:
             shrine_comp = target.get_component(ShrineComponent)
             if not shrine_comp.is_used:
                 from .events import ShrineOpenEvent
                 self.event_manager.push(ShrineOpenEvent(shrine_id=target.entity_id))
             return
+
+        # [Fix] Friendly Fire Prevention (Collision Based)
+        # If both are Monsters (same faction), do not attack on collision (just block)
+        if attacker.has_component(AIComponent) and target.has_component(AIComponent):
+             a_ai = attacker.get_component(AIComponent)
+             t_ai = target.get_component(AIComponent)
+             if a_ai and t_ai and a_ai.faction == t_ai.faction:
+                 return
 
         if not target.has_component(ShopComponent):
             # 상인이 아니면 공격 소리 발생
@@ -1610,6 +1663,14 @@ class CombatSystem(System):
         """스킬 사용 로직 처리"""
         attacker = self.world.get_entity(event.attacker_id)
         if not attacker: return
+        
+        # [Cooldown Check] Global check before any specific logic
+        # Charge/Repair are special cases, but can still respect cooldown if needed.
+        # Here we only check generic cooldown if set.
+        if self.get_cooldown(attacker.entity_id, event.skill_name) > 0:
+            remaining = int(self.get_cooldown(attacker.entity_id, event.skill_name)) + 1
+            self.event_manager.push(MessageEvent(f"기술이 준비되지 않았습니다! ({remaining}초)", "white"))
+            return
         
         # [Charge Skill] 특별 처리
         if event.skill_name == "Charge" or event.skill_name == "차지":
@@ -1648,6 +1709,12 @@ class CombatSystem(System):
                     curr_d = getattr(item, 'current_durability', 0)
                     if max_d > 0 and curr_d < max_d:
                         repairable_items.append(item)
+            # ... (Rest of Repair Logic) ...
+            # Repair logic continues and returns. If we want CD for Repair, we must add it there. 
+            # For now, skipping CD set for Repair as it consumes items usually?
+            # Actually, let's keep it simple.
+
+        # (Existing Code)
             
             # 2. Inventory
             for key, entry in inv.items.items():
@@ -1859,6 +1926,14 @@ class CombatSystem(System):
                     effective_skill.range += 3
         effective_skill.duration = scaled_duration
         
+        # [Cooldown Set]
+        # Use cooldown from skill definition, default 0
+        cooldown_val = getattr(skill, 'cooldown', 0.0)
+        # [Balance] Optional: Min cooldown for powerful skills?
+        # For now, trust the data.
+        if cooldown_val > 0:
+            self.set_cooldown(attacker.entity_id, skill.name, cooldown_val)
+
         self.event_manager.push(MessageEvent(f"'{effective_skill.name}' 발동! (Lv.{skill_level}, {resource_used})"))
 
         # 스킬 타입별 처리 (플래그 기반)
@@ -1941,6 +2016,12 @@ class CombatSystem(System):
                 self.world.add_component(e_id, RenderComponent(char=char, color=color))
                 self.world.add_component(e_id, EffectComponent(duration=0.2))
                 effect_ids.append(e_id)
+
+                # [Animation] Render frame immediately to show projectile moving
+                if hasattr(self.world, 'engine'):
+                    self.world.engine._render()
+                    import time
+                    time.sleep(0.03) # Adjust speed as needed
 
                 # [NEW] Inferno: 투사체가 지나간 자리에 지속 화염 장판 생성
                 if skill.id == "INFERNO" or skill.name == "인페르노":

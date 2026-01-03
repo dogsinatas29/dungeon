@@ -159,7 +159,12 @@ Diablo-like real-time roguelike engine for terminal
 - **Safe Zones**: Enhanced monster spawning to ensure a 20-tile safe zone around the player's starting position.
 - **Sandbox Features**: Added interactive Level Setting (`L`) and Floor Jumping (`J`) with terminal input handling.
 
-
+### 7. Stability & Bug Fixes (2026-01-03)
+- **Start Room Safety**: Guaranteed safe start by preventing traps in the starting room.
+- **Shop Fixes**: Fixed empty shop inventory bug and balanced starting shop items (Level <= 5).
+- **Map Persistence**: Implemented save/load logic for DungeonMap to prevent regeneration on load.
+- **Friendly Fire**: Fixed monsters attacking each other by adding faction checks.
+- **Sound**: Optimized sound effect duration for better audio experience.
 ## TODO List
 
 ### High Priority
