@@ -397,6 +397,8 @@ class MovementSystem(System):
             and e.get_component(MapComponent) is None  # 맵 엔티티 제외
             and e.get_component(MessageComponent) is None # 메시지 엔티티 제외
             and e.get_component(LootComponent) is None # 루팅 가능한 엔티티(시체, 상자)는 통과 가능
+            and e.get_component(CorpseComponent) is None # 시체는 통과 가능
+            and e.get_component(TrapComponent) is None # 함정도 통과 가능
         ]
         
         if not entities_at_position:
@@ -1357,27 +1359,40 @@ class CombatSystem(System):
                 if pos:
                     # 1. 전리품 및 경험치 계산을 위해 몬스터 정의 가져오기
                     m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
-                    m_def = m_defs.get(m_type)
-                    # print(f"DEBUG: m_type={m_type}, m_def flags={getattr(m_def, 'flags', 'None')}")
+                    # [Fix] ID 기반으로 우선 탐색 (m_comp.monster_id), 실패 시 type_name 사용
+                    m_def = m_defs.get(m_comp.monster_id) if m_comp.monster_id else m_defs.get(m_type)
                     
                     # 2. 경험치 보상 (플레이어에게)
-                    if player_entity and attacker.entity_id == player_entity.entity_id:
+                    # [Fix] 1번 엔티티(플레이어)를 확실히 가져옴
+                    player_entity = self.world.get_player_entity() # Ensure it's current
+                    
+                    # [Fix] 공격자가 플레이어거나, 공격자가 없더라도(DoT 등) 플레이어가 사망 시점에 존재하면 XP 지급
+                    is_player_kill = player_entity and attacker and attacker.entity_id == player_entity.entity_id
+                    
+                    if player_entity and (is_player_kill or not attacker):
                         if m_def:
                             # LevelSystem을 통해 경험치 획득
                             level_sys = self.world.get_system(LevelSystem)
                             if level_sys:
-                                xp_gained = int(m_def.xp_value * 0.9) # [Balance] Nerf XP by 10%
+                                xp_gained = int(m_def.xp_value * 0.9)
+                                if xp_gained < 1: xp_gained = 1 # 최소 1은 보장
+                                
                                 level_sys.gain_exp(player_entity, xp_gained)
                                 self.event_manager.push(MessageEvent(f"경험치 {xp_gained}를 획득했습니다.", "yellow"))
+                            else:
+                                logging.error("LevelSystem NOT FOUND during death handling")
+
+                            # [Bonus Points] Boss Reward
+                            if "BOSS" in getattr(m_def, 'flags', []):
+                                points = 1
+                                if "DIABLO" in getattr(m_def, 'flags', []):
+                                    points = 2
                                 
-                                # [Bonus Points] Boss Reward
-                                if "BOSS" in getattr(m_def, 'flags', []):
-                                    points = 1
-                                    if "DIABLO" in getattr(m_def, 'flags', []):
-                                        points = 2
-                                    
-                                    boss_name = getattr(m_def, 'name', 'Boss')
+                                boss_name = getattr(m_def, 'name', 'Boss')
+                                if level_sys: # Re-use level_sys
                                     level_sys.grant_stat_points(player_entity, points, reason=f"{boss_name} 처치")
+                        else:
+                            logging.warning(f"m_def NOT FOUND for {m_comp.monster_id or m_type}")
                     
                     # 3. 컴포넌트 정리
                     target.remove_component(AIComponent)
@@ -1851,6 +1866,12 @@ class CombatSystem(System):
                 a_stats.current_hp -= hp_cost
                 a_stats.current_mp -= mp_cost
                 resource_used = f"HP -{hp_cost}, MP -{mp_cost}"
+            elif "COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"):
+                if a_stats.current_mp < cost_val:
+                    self.event_manager.push(MessageEvent("마력이 부족하여 기술을 사용할 수 없습니다!"))
+                    return
+                a_stats.current_mp -= cost_val
+                resource_used = f"MP -{cost_val}"
 
         # [Buff] 능력치 버프 스킬 처리
         if any(v != 0 for v in [getattr(skill, 'str_bonus', 0), getattr(skill, 'mag_bonus', 0), 
@@ -2977,8 +2998,15 @@ class TimeSystem(System):
                         stats.current_hp = 0
                         entity_name = self.world.engine._get_entity_name(entity)
                         self.event_manager.push(MessageEvent(f"{entity_name}이(가) 독에 의해 쓰러졌습니다!"))
-                        # 실제 사망 처리는 CombatSystem에서 수행되거나 여기서 직접 트리거 가능 (최소한 시체로 변하는 로직 필요)
-                        # 여기서는 단순하게 Message만 발생시키고, 실제 삭제/변환은 다음 턴 Combat 로직이 잡도록 하거나 직접 수행
+                        
+                        # [Fix] DoT 사망 시에도 정식 사망 로직 트리거
+                        combat_sys = self.world.get_system(CombatSystem)
+                        if combat_sys:
+                            # attacker=None으로 전달하여 플레이어 존재 시 XP 부여되게 함
+                            combat_sys._handle_death(None, entity)
+                        else:
+                            # Fallback: 직접 삭제 (시스템 부재 시)
+                            self.world.delete_entity(entity.entity_id)
                         # 안전을 위해 시체 변환 로직은 CombatSystem의 로직을 재사용하는 것이 좋음.
             
             if poison.duration <= 0:
@@ -3013,6 +3041,13 @@ class TimeSystem(System):
                     if stats.current_hp <= 0:
                         stats.current_hp = 0
                         self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}이(가) 과다출혈로 사망했습니다!", "red"))
+                        
+                        # [Fix] Bleeding 사망 시에도 정식 사망 로직 트리거
+                        combat_sys = self.world.get_system(CombatSystem)
+                        if combat_sys:
+                            combat_sys._handle_death(None, entity)
+                        else:
+                            self.world.delete_entity(entity.entity_id)
             
             if bleed.duration <= 0:
                 entity.remove_component(BleedingComponent)

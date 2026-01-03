@@ -116,6 +116,7 @@ class StatsComponent(Component):
         # 특수 상태
         self.sees_hidden = False
         self.sees_hidden_expires_at = 0.0
+        self.vision_expires_at = 0.0
         
         # [Boss Hook]
         self.has_summoned_help = False

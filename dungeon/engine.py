@@ -803,7 +803,6 @@ class Engine:
                 {'item': self.item_defs.get('체력 물약'), 'price': 20},
                 {'item': self.item_defs.get('마력 물약'), 'price': 20},
                 {'item': self.item_defs.get('확인 스크롤'), 'price': 50},
-                {'item': self.item_defs.get('마을 차원문 스크롤'), 'price': 100},
             ]
             
             # 층수에 맞는 장비/무기 추가 (3개 랜덤 선택)
@@ -1972,11 +1971,12 @@ class Engine:
 
         if stats.gold >= price:
             stats.gold -= price
-            # 인벤토리에 추가
+            # 인벤토리에 추가 (상점 원본과 독립된 객체로 생성)
+            item_copy = copy.deepcopy(item)
             if item.name in inv.items:
                 inv.items[item.name]['qty'] += 1
             else:
-                inv.items[item.name] = {'item': item, 'qty': 1}
+                inv.items[item.name] = {'item': item_copy, 'qty': 1}
             self.world.event_manager.push(MessageEvent(f"{item.name}을(를) {price} 골드에 구매했습니다!"))
         else:
             self.world.event_manager.push(MessageEvent("골드가 부족합니다!"))
@@ -2248,7 +2248,8 @@ class Engine:
 
         level_comp = player_entity.get_component(LevelComponent)
         if level_comp and item.required_level > level_comp.level:
-            self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 사용할 수 없습니다. (필요: Lv.{item.required_level})"))
+            # [Fix] 피드백 강화 (노란색으로 강조, 무엇이 부족한지 명시)
+            self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 '{item.name}'을(를) 읽을 수 없습니다. (필요: Lv.{item.required_level}, 현재: Lv.{level_comp.level})", "yellow"))
             return
 
         old_hp = stats.current_hp
@@ -2357,9 +2358,6 @@ class Engine:
                 stats.gold += qty
                 msg = f"금화 {qty}개를 지갑에 넣었습니다. (현재: {stats.gold})"
 
-            # [TOWN_PORTAL]
-            if "TOWN_PORTAL" in item.flags:
-                msg = "귀환 스크롤을 사용했습니다. (아직 마을이 구현되지 않아 제자리에서 맴돕니다.)"
 
             # [IDENTIFY] 
             if "IDENTIFY" in item.flags:
@@ -2838,6 +2836,12 @@ class Engine:
         stats.attack_max += str_dmg_bonus
         stats.attack = stats.attack_max
         
+        # [Fix] Clamp Current HP/MP to calculated Max (Prevents bar from staying full if Max drops)
+        if stats.current_hp > stats.max_hp:
+             stats.current_hp = stats.max_hp
+        if stats.current_mp > stats.max_mp:
+             stats.current_mp = stats.max_mp
+        
         # Ensure current doesn't exceed max
         stats.current_hp = min(stats.current_hp, stats.max_hp)
         stats.current_mp = min(stats.current_mp, stats.max_mp)
@@ -2923,6 +2927,9 @@ class Engine:
 
     def _render(self):
         """World 상태를 기반으로 Renderer를 사용하여 화면을 그립니다."""
+        from .data_manager import ItemDefinition
+        
+        # 1. 사이드바 영역 계산
         self.renderer.clear_buffer()
         
         RIGHT_SIDEBAR_X = 81
@@ -3375,7 +3382,6 @@ class Engine:
                     color = "white"
                     
                     # 아이템이 ItemDefinition 객체이면 이름을 가져오고, 아니면 그대로 사용 (---- 혹은 양손점유)
-                    from .data_manager import ItemDefinition
                     if isinstance(item, ItemDefinition):
                         item_display = item.name
                         
@@ -3391,7 +3397,6 @@ class Engine:
                                 color = "red"
                             elif durability_ratio <= 0.5:  # 50% or below - Warning (Yellow + Blink)
                                 # Blink effect: alternate between yellow and white every 0.5s
-                                import time
                                 if int(time.time() * 2) % 2 == 0:
                                     color = "yellow"
                                 else:
@@ -3411,11 +3416,32 @@ class Engine:
         self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_start_y, "[ QUICK SLOTS ]", "gold")
         qs_y = qs_start_y + 1
         if player_entity:
+            # 1. 활성화된 버프 확인 및 Duration 매핑 (Item Slots 용)
+            active_item_buffs = {}
+            if hasattr(player_entity, 'components'):
+                 for comp in player_entity.components.values():
+                     if isinstance(comp, StatModifierComponent) and comp.source.startswith("ITEM_"):
+                         item_source_name = comp.source.replace("ITEM_", "")
+                         active_item_buffs[item_source_name] = comp.expires_at - time.time()
+            
+            # 특수 효과 (VISION_UP 등)
+            stats = player_entity.get_component(StatsComponent)
+            if stats:
+                if "VISION_UP" in stats.flags and hasattr(stats, 'vision_expires_at'):
+                    active_item_buffs["횃불"] = stats.vision_expires_at - time.time()
+
             inv_comp = player_entity.get_component(InventoryComponent)
             if inv_comp and hasattr(inv_comp, 'item_slots'):
                 for i, item in enumerate(inv_comp.item_slots):
                     item_name = item if item else "----"
-                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_y + i, f"{i+1}: {item_name}", "white")
+                    display_text = f"{i+1}: {item_name}"
+                    
+                    if item_name in active_item_buffs:
+                        seconds = int(active_item_buffs[item_name])
+                        if seconds > 0:
+                            display_text += f" ({seconds}s)"
+                    
+                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_y + i, display_text, "white")
         
         # 4-4. 스킬 (Skill Slots 6-0)
         skill_start_y = qs_start_y + 7
@@ -3753,18 +3779,26 @@ class Engine:
                      # 상세 정보 시작 위치 (구분선 바로 아래)
                      detail_y = info_y + 1
                      self.renderer.draw_text(start_x + 1, detail_y, "-" * (POPUP_WIDTH - 2), "dark_grey")
-                     
                      # 아이템/스킬 이름 표시 (상세 영역 최상단)
                      is_id = getattr(sel_item, 'is_identified', True) # Moved up for name display
                      disp_name = sel_item.name if is_id else sel_id if isinstance(sel_id, str) else "?"
-                     self.renderer.draw_text(start_x + 2, detail_y + 1, f"이름: {disp_name}", "gold")
                      
-                     # 상세 정보 텍스트 (아이템/스킬 공통 필드)
-                     req_met = True
+                     # [Fix] 필요 레벨 정보 가져오기 및 이름 옆에 표시
+                     req_lvl = getattr(sel_item, 'required_level', 1)
                      p_lvl = 1
                      if player_entity:
                          l_comp = player_entity.get_component(LevelComponent)
                          if l_comp: p_lvl = l_comp.level
+                     
+                     req_met = p_lvl >= req_lvl
+                     req_color = "gold" if req_met else "red"
+                     
+                     # 이름과 레벨 표시
+                     self.renderer.draw_text(start_x + 2, detail_y + 1, f"이름: {disp_name}", "gold")
+                     if req_lvl > 1:
+                         self.renderer.draw_text(start_x + 25, detail_y + 1, f"[필요 레벨: {req_lvl}]", req_color)
+                     
+                     # 상세 정보 텍스트 (아이템/스킬 공통 필드)
                      
                      if hasattr(sel_item, 'required_level') and sel_item.required_level > p_lvl:
                          req_met = False
@@ -3829,6 +3863,12 @@ class Engine:
                          if getattr(sel_item, 'res_all', 0) != 0: line += f"모든저항+{sel_item.res_all}% "
                          if getattr(sel_item, 'res_fire', 0) != 0: line += f"화염저항+{sel_item.res_fire}% "
                          if line: bonus_lines.append(line.strip())
+                        
+                         # [Fix] 수치적 보너스 표시 (Life Leech, Magic Find 등)
+                         line = ""
+                         if getattr(sel_item, 'life_leech', 0) != 0: line += f"생명력 흡수+{sel_item.life_leech}% "
+                         if getattr(sel_item, 'magic_find', 0) != 0: line += f"마법 아이템 발견+{sel_item.magic_find}% "
+                         if line: bonus_lines.append(line.strip())
                      elif is_id and not req_met:
                          bonus_lines.append("보너스: ??????????")
  
@@ -3836,10 +3876,13 @@ class Engine:
                          self.renderer.draw_text(start_x + 2, detail_y + 4 + i, b_line, "cyan")
 
                      # 4. 요구 사항 (항상 표시하되 충족 여부에 따라 색상 변경)
+                     # (이미 이름 옆에 표시되므로 여기서는 간단히 강조 또는 생략 가능, 일단 유지하되 위치 조정)
                      req_y = start_y + POPUP_HEIGHT - 2
-                     if hasattr(sel_item, 'required_level') and sel_item.required_level > 0:
+                     if hasattr(sel_item, 'required_level') and sel_item.required_level > 1:
                          color = "white" if req_met else "red"
-                         self.renderer.draw_text(start_x + 2, req_y, f"필요 레벨: {sel_item.required_level}", color)
+                         text = f"필요 레벨: {sel_item.required_level}"
+                         if not req_met: text += " (현재 레벨 부족!)"
+                         self.renderer.draw_text(start_x + 2, req_y, text, color)
         
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
@@ -3850,7 +3893,7 @@ class Engine:
 
     def _render_shop_popup(self):
         """상점 UI 팝업 렌더링"""
-        shopkeeper_id = getattr(self, "active_shopkeeper_id", None)
+        shopkeeper_id = getattr(self, "active_shop_id", None)
         shopkeeper = self.world.get_entity(shopkeeper_id) if shopkeeper_id else None
         
         MAP_WIDTH = 80
@@ -3936,7 +3979,12 @@ class Engine:
                 
                 # 수량 표시 (팔기 탭에서 유용)
                 qty_str = f" x{qty}" if self.shop_category_index == 1 else ""
-                name_text = f"{prefix}{icon}{item.name}{qty_str}"
+                
+                # [Fix] 상점에서도 필요 레벨 표시
+                req_lvl = getattr(item, 'required_level', 1)
+                lvl_str = f" [Lv.{req_lvl}]" if req_lvl > 1 else ""
+                
+                name_text = f"{prefix}{icon}{item.name}{qty_str}{lvl_str}"
                 self.renderer.draw_text(start_x + 2, item_y, name_text, color)
                 
                 price_text = f"{price:>5} G"

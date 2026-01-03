@@ -92,7 +92,6 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 민첩의 엘릭서,CONSUMABLE,영구적으로 민첩(DEX) +1.,!,#006400,1,0,0,0,0,0,0,None,PERMANENT_STAT,0,0,1,0,0,0,1
 활력의 엘릭서,CONSUMABLE,영구적으로 활력(VIT) +1.,!,#DAA520,1,0,0,0,0,0,0,None,PERMANENT_STAT,0,0,0,1,0,0,1
 금화,CURRENCY,상점 이용에 필요한 재화.,$,#FFD700,1,0,0,0,0,0,0,None,,0,0,0,0,0,0,1
-마을 차원문 스크롤,SCROLL,마을로 귀환하는 차원문을 엽니다.,?,#00BFFF,1,0,0,0,0,0,0,None,TOWN_PORTAL,0,0,0,0,0,0,1
 확인 스크롤,SCROLL,아이템의 숨겨진 능력을 식별합니다.,?,#FF00FF,1,0,0,0,0,0,0,None,IDENTIFY,0,0,0,0,0,0,1
 날카로움의 오일,CONSUMABLE,무기의 공격력을 강화합니다.,!,#FF4500,1,0,0,0,0,0,0,None,OIL_SHARPNESS,0,0,0,0,0,0,1
 정밀함의 오일,CONSUMABLE,무기의 명중률을 강화합니다.,!,#00BFFF,1,0,0,0,0,0,0,None,OIL_ACCURACY,0,0,0,0,0,0,1
@@ -116,5 +115,4 @@ name,type,description,symbol,color,required_level,attack,defense,hp_effect,mp_ef
 도살자의 식칼,WEAPON,도살자가 사용하던 피 묻은 거대한 식칼.,/,#8B0000,20,10-25,0,0,0,2,1,None,"BLEEDING,BOSS",50,0,0,0,0,50,1
 언데드 왕관,ARMOR,죽은 자들의 왕이 썻던 왕관.,[,#FFD700,20,0,10,0,0,1,0,None,"LIFE_STEAL,UNDEAD_RESIST",0,0,0,0,0,50,20
 영혼석,ACCESSORY,공포의 군주 디아블로의 영혼이 갇힌 붉은 보석.,*,#DC143C,1,0,0,0,0,0,0,None,"VICTORY_TOKEN,FIRE_RESIST",0,50,0,50,0,100,99
-화살,CONSUMABLE,함정이나 궁수에게서 수거한 투사체입니다.,{,#8B4513,1,0,0,0,0,0,0,None,,0,0,0,0,0,0,1
 기계 부품,CONSUMABLE,함정에서 추출한 정밀한 부품입니다. 강화나 수리에 쓰일 수 있습니다.,*,#C0C0C0,1,0,0,0,0,0,0,None,,0,0,0,0,0,0,1

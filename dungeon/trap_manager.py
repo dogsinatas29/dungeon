@@ -7,7 +7,9 @@ from typing import Dict, List
 from .ecs import System
 from .components import (
     PositionComponent, StatsComponent, TrapComponent, 
-    StunComponent, PoisonComponent, HitFlashComponent
+    StunComponent, PoisonComponent, HitFlashComponent,
+    AIComponent, MonsterComponent, RenderComponent,
+    EffectComponent, MapComponent, InventoryComponent
 )
 from .events import MessageEvent, SoundEvent
 
@@ -94,7 +96,6 @@ class TrapSystem(System):
         traps = self.world.get_entities_with_components({PositionComponent, TrapComponent})
         
         # [New] Passive Trap Detection (DISARM Skill)
-        from .components import InventoryComponent
         p_inv = player.get_component(InventoryComponent)
         has_disarm = False
         if p_inv:
@@ -223,46 +224,50 @@ class TrapSystem(System):
         # 최소 데미지 보장
         damage = max(1, damage)
         
+        # [Fix] 중복 데미지 적용 방지: 데미지는 여기서 한 번만 적용
         stats.current_hp -= damage
+        if stats.current_hp < 0:
+            stats.current_hp = 0
+            
         self.event_manager.push(MessageEvent(f"{victim_name}에게 {damage}의 피해! (남은 HP: {stats.current_hp})", "red"))
         
         # [Trap Kill XP & Death Handling]
         if stats.current_hp <= 0:
-            stats.current_hp = 0
             self.event_manager.push(MessageEvent(f"{victim_name}이(가) 쓰러졌습니다!", "red"))
             
-            # 플레이어가 원인(넉백)인 경우 XP 지급
+            # [Fix] 플레이어에게 항상 XP 지급 (함정 킬 포함)
             player = self.world.get_player_entity()
-            if source_entity and player and source_entity.entity_id == player.entity_id:
+            if player:
                 # 몬스터 XP 계산
                 if victim.has_component(MonsterComponent):
+                    # [Fix] CombatSystem의 정식 사망 처리 로직 호출 시도
+                    # (가능하다면 systems.py의 _handle_death를 호출하는 것이 가장 좋으나, 여기선 독립성을 위해 간소화된 XP 지급 수행)
                     m_comp = victim.get_component(MonsterComponent)
                     m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
-                    m_def = m_defs.get(m_comp.type_name)
+                    
+                    # ID 기반 탐색 우선
+                    m_def = m_defs.get(m_comp.monster_id) if m_comp.monster_id else m_defs.get(m_comp.type_name)
                     
                     if m_def:
-                        # LevelSystem 찾기 및 XP 지급
                         from .systems import LevelSystem
-                        level_sys = next((s for s in self.world.systems if isinstance(s, LevelSystem)), None)
+                        level_sys = self.world.get_system(LevelSystem)
                         if level_sys:
                             xp_gained = int(m_def.xp_value) # 함정 킬은 100% 지급
                             level_sys.gain_exp(player, xp_gained)
-                            
-            # 시체 처리 (간단하게 컴포넌트 제거)
-            # CombatSystem의 복잡한 로직(전리품 등)을 완벽히 복제하긴 어려우므로 중요 컴포넌트 제거로 사망 처리
-            if victim.has_component(AIComponent):
-                victim.remove_component(AIComponent)
-            if victim.has_component(MonsterComponent):
-                victim.remove_component(MonsterComponent)
-                victim.add_component(RenderComponent(char='%', color='dark_red')) # 시체 표시
+                            self.event_manager.push(MessageEvent(f"함정이 처치한 적의 경험치 {xp_gained}를 획득했습니다.", "yellow"))
+            
+            # [Fix] 정식 사망 처리 연계
+            from .systems import CombatSystem
+            combat_sys = self.world.get_system(CombatSystem)
+            if combat_sys:
+                # source_entity가 없더라도 _handle_death 호출 (None 전달)
+                combat_sys._handle_death(None, victim)
+            else:
+                # 만약 CombatSystem이 없으면 수동 정리 (Fallback)
+                if victim.has_component(AIComponent): victim.remove_component(AIComponent)
+                if victim.has_component(MonsterComponent): victim.remove_component(MonsterComponent)
+                victim.add_component(RenderComponent(char='%', color='dark_red'))
                 victim.name = f"죽은 {victim_name}"
-        
-        # 최소 데미지 보장
-        if damage < 5 and damage_pct > 0: damage = 5
-        
-        stats.current_hp -= damage
-        if stats.current_hp < 0:
-            stats.current_hp = 0
         
         # [Visual Effect] 치명적 피해 시 화면 테두리 붉은색 효과 (20% 이상 피해)
         if is_player and damage >= stats.max_hp * 0.2:
@@ -329,7 +334,6 @@ class TrapSystem(System):
     def _fire_projectile(self, trap_ent, target, damage_multiplier: float = 1.0):
         """벽 함정에서 발사체 발사 (데미지 배율 지원)"""
         import time
-        from .components import RenderComponent, EffectComponent
         
         trap = trap_ent.get_component(TrapComponent)
         t_pos = trap_ent.get_component(PositionComponent)
@@ -367,7 +371,6 @@ class TrapSystem(System):
             # 맵 경계 체크
             map_entities = self.world.get_entities_with_components({MapComponent})
             if map_entities:
-                from .components import MapComponent
                 map_comp = map_entities[0].get_component(MapComponent)
                 if not (0 <= proj_x < map_comp.width and 0 <= proj_y < map_comp.height):
                     break
