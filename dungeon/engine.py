@@ -3610,7 +3610,7 @@ class Engine:
         # 3. Stats List
         stat_names = [_("STR (힘)"), _("MAG (마력)"), _("DEX (민첩)"), _("VIT (활력)")]
         stat_vals = [stats.base_str, stats.base_mag, stats.base_dex, stats.base_vit]
-        stat_desc = ["공격력 / 무기효율", "최대마력 / 마법효율", "방어력 / 명중률 / 치명타", "최대체력 / 생존력"]
+        stat_desc = [_("공격력 / 무기효율"), _("최대마력 / 마법효율"), _("방어력 / 명중률 / 치명타"), _("최대체력 / 생존력")]
         
         base_y = start_y + 6
         for i in range(4):
@@ -3630,7 +3630,7 @@ class Engine:
         self.renderer.draw_text(start_x + 4, base_y + 11, atk_def, "cyan")
         
         # 5. Footer
-        help_text = "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기"
+        help_text = _("​[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기")
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
     def _render_inventory_popup(self):
@@ -3659,7 +3659,7 @@ class Engine:
                 self.renderer.draw_char(x, y, char, "white")
                 
         # 2. 카테고리 탭 표시
-        categories = ["아이템", "장비", "스크롤", "스킬"]
+        categories = [_("아이템"), _("장비"), _("스크롤"), _("스킬")]
         tab_x = start_x + 2
         for i, cat in enumerate(categories):
             color = "yellow" if i == self.inventory_category_index else "dark_grey"
@@ -3899,9 +3899,9 @@ class Engine:
         
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
-            help_text = "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기"
+            help_text = _("​[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기")
         else:
-            help_text = "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기"
+            help_text = _("​[←/→] 탭  [↑/↓] 선택  [E] 퀴슬롯 등록  [ENTER] 사용/장착  [B] 닫기")
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
     def _render_shop_popup(self):

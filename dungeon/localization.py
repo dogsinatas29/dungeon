@@ -77,6 +77,23 @@ TRANSLATIONS = {
         # Shrine UI
         "강화할 장비 선택": "강화할 장비 선택",
         "[ENTER] 강화  [ESC] 취소": "[ENTER] 강화  [ESC] 취소",
+        
+        # Inventory Tabs
+        "아이템": "아이템",
+        "장비": "장비",
+        "스크롤": "스크롤",
+        "스킬": "스킬",
+        
+        # Stat Descriptions
+        "공격력 / 무기효율": "공격력 / 무기효율",
+        "최대마력 / 마법효율": "최대마력 / 마법효율",
+        "방어력 / 명중률 / 치명타": "방어력 / 명중률 / 치명타",
+        "최대체력 / 생존력": "최대체력 / 생존력",
+        
+        # Control Guides
+        "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기": "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기",
+        "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기": "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기",
+        "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기": "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기",
     },
     "en": {
         "Level": "Level", "Exp": "Exp", "Job": "Job", "Gold": "Gold", "Floor": "Floor",
@@ -147,6 +164,23 @@ TRANSLATIONS = {
         # Shrine UI
         "강화할 장비 선택": "Select Equipment to Enhance",
         "[ENTER] 강화  [ESC] 취소": "[ENTER] Enhance  [ESC] Cancel",
+        
+        # Inventory Tabs
+        "아이템": "Items",
+        "장비": "Equipment",
+        "스크롤": "Scrolls",
+        "스킬": "Skills",
+        
+        # Stat Descriptions
+        "공격력 / 무기효율": "Attack / Weapon Efficiency",
+        "최대마력 / 마법효율": "Max Mana / Magic Efficiency",
+        "방어력 / 명중률 / 치명타": "Defense / Accuracy / Critical",
+        "최대체력 / 생존력": "Max HP / Survivability",
+        
+        # Control Guides
+        "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기": "[↑/↓] Select  [→/ENTER] Invest  [C/ESC] Close",
+        "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기": "[←/→] Tab  [↑/↓] Select  [ENTER/E] Assign  [X] Forget  [B] Close",
+        "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기": "[←/→] Tab  [↑/↓] Select  [E] Quickslot  [ENTER] Use/Equip  [B] Close",
         
         # System Messages (Dynamic)
         "전신이 석화되어 움직일 수 없습니다!": "You are petrified and cannot move!",
