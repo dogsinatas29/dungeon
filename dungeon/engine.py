@@ -607,7 +607,7 @@ class Engine:
             else:
                 num = random.randint(5, 12)
                 
-            for _ in range(num):
+            for _i in range(num):
                 mx = random.randint(room.x1 + 1, room.x2 - 1)
                 my = random.randint(room.y1 + 1, room.y2 - 1)
                 
@@ -834,7 +834,7 @@ class Engine:
         other_rooms = dungeon_map.rooms[1:] if len(dungeon_map.rooms) > 1 else dungeon_map.rooms
         floor = dungeon_map.dungeon_level_tuple[0]
             
-        for _ in range(chest_count):
+        for _i in range(chest_count):
             room = random.choice(other_rooms)
             cx = random.randint(room.x1 + 1, room.x2 - 1)
             cy = random.randint(room.y1 + 1, room.y2 - 1)
@@ -981,7 +981,7 @@ class Engine:
         if random.random() > 0.3: # 30% 확률로만 생성 (너무 자주 나오면 고통스러움)
             num_gauntlets = 0
             
-        for _ in range(num_gauntlets):
+        for _i in range(num_gauntlets):
             start_node = random.choice(dungeon_map.corridors)
             gx, gy = start_node
             
@@ -1045,7 +1045,7 @@ class Engine:
             
             # 압력판 위치 선정 (벽 함정 근처 방 바닥)
             found_pos = False
-            for _ in range(10): # 최대 10번 시도
+            for _i in range(10): # 최대 10번 시도
                 room = random.choice(rooms)
                 px = random.randint(room.x1 + 1, room.x2 - 1)
                 py = random.randint(room.y1 + 1, room.y2 - 1)
@@ -4166,7 +4166,7 @@ class Engine:
             for name, entry in inv.items.items():
                 item = entry['item']
                 if item.type in ["WEAPON", "ARMOR", "SHIELD", "ACCESSORY"]:
-                    for _ in range(entry['qty']):
+                    for _i in range(entry['qty']):
                         eligible_items.append(('INVENTORY', name, item))
             
             if action in [readchar.key.UP, '\x1b[A']:
@@ -4511,7 +4511,7 @@ class Engine:
             for name, entry in inv.items.items():
                 item = entry['item']
                 if item.type in ["WEAPON", "ARMOR", "SHIELD", "ACCESSORY"]:
-                    for _ in range(entry['qty']):
+                    for _i in range(entry['qty']):
                         eligible_items.append(('INVENTORY', name, item))
             
             y = sy + 5
