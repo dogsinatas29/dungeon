@@ -748,7 +748,7 @@ class ConsoleUI:
             
             print("-" * 60)
             print(f"  HP: {stats.current_hp}/{stats.max_hp}  MP: {stats.current_mp}/{stats.max_mp}")
-            print(f"  " + _("공격력") + f": {stats.attack_min}-{stats.attack_max}  " + _("방어력") + f": {stats.defense}")
+            print(f"  " + _("공격력") + f": {stats.attack_min}-{stats.attack_max}  " + _("방어력") + f": {stats.defense}  " + _("사거리") + f": {stats.weapon_range}")
             print("="*60)
             print("\n  " + _("[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기"))
 

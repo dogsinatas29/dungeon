@@ -9,7 +9,8 @@ from .components import (
     PositionComponent, StatsComponent, TrapComponent, 
     StunComponent, PoisonComponent, HitFlashComponent,
     AIComponent, MonsterComponent, RenderComponent,
-    EffectComponent, MapComponent, InventoryComponent
+    EffectComponent, MapComponent, InventoryComponent,
+    LevelComponent
 )
 from .events import MessageEvent, SoundEvent
 

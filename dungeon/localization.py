@@ -12,6 +12,7 @@ TRANSLATIONS = {
         "Shop": "상점", "Main Menu": "메인 메뉴", "Name": "이름", "Experience": "경험치",
         "Stat Points": "스탯 포인트", "Select your class:": "당신의 직업을 선택하세요:",
         "Detail Stats": "상세 능력치", "Basic Skill": "기본 스킬", "Log": "로그",
+        "ATT": "공격", "DEF": "방어", "RNG": "사거리",
         "Move": "이동", "Wait": "대기", "Quickslot": "퀵슬롯", "Close": "닫기",
         "Enter your name": "당신의 이름은 무엇입니까?", "(Max 10 chars)": "(최대 10자)",
         "Equipment": "장비", "Items": "아이템", "No items": "아이템 없음",
@@ -232,6 +233,7 @@ TRANSLATIONS = {
         "Shop": "Shop", "Main Menu": "Main Menu", "Name": "Name", "Experience": "Experience",
         "Stat Points": "Stat Points", "Select your class:": "Select your class:",
         "Detail Stats": "Detail Stats", "Basic Skill": "Basic Skill", "Log": "Log",
+        "ATT": "ATK", "DEF": "DEF", "RNG": "RNG",
         "Move": "Move", "Wait": "Wait", "Quickslot": "Quickslot", "Close": "Close",
         "Enter your name": "What is your name?", "(Max 10 chars)": "(Max 10 chars)",
         "Equipment": "Equipment", "Items": "Items", "No items": "No items",
@@ -634,6 +636,10 @@ TRANSLATIONS = {
         "폭발로 인해 {}의 피해를 입었습니다! (HP {}%)": "Took {} damage from explosion! (HP {}%)",
         "공격 방향을 선택하세요... [Space] 취소": "Select attack direction... [Space] to cancel",
         "공격 모드 해제.": "Attack mode disabled.",
+        "'{}'의 공격이 '{}'에게 빗나갔습니다! (확률: {}%)": "'{}'s attack missed '{}'! (Chance: {}%)",
+        "'{}'이(가) '{}'의 공격을 가뿐히 받아냈습니다!": "'{}' easily blocked '{}'s attack!",
+        "'{}'의 {}! '{}'에게 {} 데미지!{}": "'{}'s {}! Dealt {} damage to '{}'!{}",
+        "'{}'의 공격! '{}'에게 {} 데미지!{}": "'{}' attacks! Dealt {} damage to '{}'!{}",
     }
 }
 

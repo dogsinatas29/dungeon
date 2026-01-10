@@ -3317,9 +3317,9 @@ class Engine:
                     atk_color = "red"
                     def_color = "red"
 
-                atk_str = f"ATK: {stats.attack}"
-                def_str = f"DEF: {stats.defense}"
-                rng_str = f"RNG: {stats.weapon_range} (LINE)"
+                atk_str = _("ATT") + f": {stats.attack}"
+                def_str = _("DEF") + f": {stats.defense}"
+                rng_str = _("RNG") + f": {stats.weapon_range}"
                 
                 self.renderer.draw_text(2, current_y, f"{atk_str:<10}", atk_color)
                 self.renderer.draw_text(13, current_y, f"{def_str:<10}", def_color)
@@ -3624,7 +3624,7 @@ class Engine:
         
         # 4. Summary
         hp_mp = f"HP: {int(stats.current_hp)}/{int(stats.max_hp)}  MP: {int(stats.current_mp)}/{int(stats.max_mp)}"
-        atk_def = f"ATK: {stats.attack}  DEF: {stats.defense}"
+        atk_def = _("공격력") + f": {stats.attack}  " + _("방어력") + f": {stats.defense}  " + _("사거리") + f": {stats.weapon_range}"
         
         self.renderer.draw_text(start_x + 4, base_y + 10, hp_mp, "cyan")
         self.renderer.draw_text(start_x + 4, base_y + 11, atk_def, "cyan")

@@ -653,21 +653,21 @@ class MonsterAISystem(System):
                     if "BUTCHER" in stats.flags:
                         self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("도살자가 분노하여 지원군을 부릅니다!") + f"{COLOR_MAP['reset']}", "red"))
                         # Summon Goblins as "Small Demons"
-                        for _ in range(3):
+                        for _i in range(3):
                             mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
                             if hasattr(self.world.engine, '_spawn_minion'):
                                 self.world.engine._spawn_minion(mx, my, "GOBLIN")
                     elif "LEORIC" in stats.flags:
                         self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("해골 왕이 영원한 충성을 요구합니다!") + f"{COLOR_MAP['reset']}", "red"))
                         # Summon Skeletons
-                        for _ in range(4):
+                        for _i in range(4):
                             mx, my = pos.x + random.randint(-2, 2), pos.y + random.randint(-2, 2)
                             if hasattr(self.world.engine, '_spawn_minion'):
                                 self.world.engine._spawn_minion(mx, my, "SKELETON")
                     else:
                         self.event_manager.push(MessageEvent(_("{}가 지원군을 부릅니다!").format(self.world.engine._get_entity_name(entity))))
                         # 주변에 미니언 소환 (2-3마리)
-                        for _ in range(random.randint(2, 3)):
+                        for _i in range(random.randint(2, 3)):
                             mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
                             if hasattr(self.world.engine, '_spawn_minion'):
                                 self.world.engine._spawn_minion(mx, my, "GOBLIN")
@@ -697,6 +697,17 @@ class MonsterAISystem(System):
                          damage = random.randint(10, 20)
                          t_stats.current_hp -= damage
                          self.event_manager.push(MessageEvent(_("화염이 {}을 덮쳐 {}의 피해를 입혔습니다!").format(self.world.engine._get_entity_name(target), damage), "red"))
+                         
+                         if t_stats.current_hp <= 0:
+                             combat_sys = self.world.get_system(CombatSystem)
+                             if combat_sys:
+                                 combat_sys._handle_death(entity, target)
+                         
+                         # 사망 체크
+                         if t_stats.current_hp <= 0:
+                             combat_sys = self.world.get_system(CombatSystem)
+                             if combat_sys:
+                                 combat_sys._handle_death(entity, target)
 
 
 class CombatSystem(System):
@@ -1085,7 +1096,7 @@ class CombatSystem(System):
             to_hit = max(5, min(95, to_hit))
             
             if random.random() * 100 > to_hit:
-                msg = f"'{attacker_name}'의 공격이 '{target_name}'에게 빗나갔습니다! (확률: {int(to_hit)}%)"
+                msg = _("'{}'의 공격이 '{}'에게 빗나갔습니다! (확률: {}%)").format(attacker_name, target_name, int(to_hit))
                 self.event_manager.push(MessageEvent(msg, color="dark_grey"))
                 self.event_manager.push(SoundEvent("MISS"))
                 # [Boss] Combat Result Event for barks
@@ -1114,7 +1125,7 @@ class CombatSystem(System):
         # 4. 데미지 적용 및 메시지
         if final_damage <= 0 and not is_magic:
             # 물리 공격인데 데미지가 0 이하인 경우 (거의 없겠지만 방어 판정 느낌으로)
-            msg = f"'{target_name}'이(가) '{attacker_name}'의 공격을 가뿐히 받아냈습니다!"
+            msg = _("'{}'이(가) '{}'의 공격을 가뿐히 받아냈습니다!").format(target_name, attacker_name)
             self.event_manager.push(MessageEvent(msg, color="green"))
             self.event_manager.push(SoundEvent("BLOCK"))
         else:
@@ -1128,9 +1139,9 @@ class CombatSystem(System):
                  log_color = "red"
             
             if skill:
-                msg = f"'{attacker_name}'의 {skill.name}! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+                msg = _("'{}'의 {}! '{}'에게 {} 데미지!{}").format(attacker_name, skill.name, target_name, final_damage, advantage_msg)
             else:
-                msg = f"'{attacker_name}'의 공격! '{target_name}'에게 {final_damage} 데미지!{advantage_msg}"
+                msg = _("'{}'의 공격! '{}'에게 {} 데미지!{}").format(attacker_name, target_name, final_damage, advantage_msg)
             self.event_manager.push(MessageEvent(msg, color=log_color))
             
             # [BUTCHER] Screen Shake & Bleeding Effect on Hit
@@ -1300,29 +1311,6 @@ class CombatSystem(System):
             # 공격자 플래그 또는 스킬 플래그에 SPLASH가 있으면 발동
             if "SPLASH" in a_flags or "SPLASH" in s_flags:
                 t_pos = target.get_component(PositionComponent)
-                if t_pos:
-                    # 주변 8칸
-                    for dx in [-1, 0, 1]:
-                        for dy in [-1, 0, 1]:
-                            if dx == 0 and dy == 0: continue
-                            
-                            # 타겟 탐색
-                            splash_targets = [
-                                e for e in self.world.get_entities_with_components({PositionComponent, StatsComponent})
-                                if e.get_component(PositionComponent).x == t_pos.x + dx 
-                                and e.get_component(PositionComponent).y == t_pos.y + dy
-                                and e.entity_id != attacker.entity_id # 자해 방지
-                                and e.entity_id != target.entity_id   # 원본 타겟 중복 방지
-                            ]
-                            
-                            if splash_targets:
-                                first = True
-                                for s_target in splash_targets:
-                                    # 스플래쉬 데미지는 50% (0.5), range=1, 스플래쉬 전파 X
-                                    self._apply_damage(attacker, s_target, distance=1, skill=skill, damage_factor=0.5, allow_splash=False)
-                                    if first and attacker.entity_id == player_entity.entity_id:
-                                        self.event_manager.push(MessageEvent(_("주변의 적들이 공격에 휘말립니다!"), "cyan"))
-                                        first = False
         
 
         # 3.5 주변 동료 분노 (Angry AI)
@@ -1350,233 +1338,214 @@ class CombatSystem(System):
         # 4. 사망 처리
         if t_stats.current_hp <= 0:
             t_stats.current_hp = 0
-            self.event_manager.push(MessageEvent(_("{}이(가) 쓰러졌습니다!").format(target_name)))
+            self._handle_death(attacker, target)
+
+    def _handle_death(self, attacker: Entity | None, target: Entity):
+        """사망 처리 (경험치, 드랍, 상태제거 등)"""
+        t_stats = target.get_component(StatsComponent)
+        if not t_stats: return
+
+        target_name = self.world.engine._get_entity_name(target)
+        self.event_manager.push(MessageEvent(_("{}이(가) 쓰러졌습니다!").format(target_name)))
+        
+        if target.has_component(MonsterComponent):
+            m_comp = target.get_component(MonsterComponent)
+            m_type = m_comp.type_name
             
-            if target.has_component(MonsterComponent):
-                m_comp = target.get_component(MonsterComponent)
-                m_type = m_comp.type_name
+            # 몬스터 사망 시 시체로 변환 (영구적 죽음)
+            pos = target.get_component(PositionComponent)
+            if pos:
+                # 1. 전리품 및 경험치 계산을 위해 몬스터 정의 가져오기
+                m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
+                m_def = m_defs.get(m_comp.monster_id) if m_comp.monster_id else m_defs.get(m_type)
                 
-                # 몬스터 사망 시 시체로 변환 (영구적 죽음)
-                pos = target.get_component(PositionComponent)
-                if pos:
-                    # 1. 전리품 및 경험치 계산을 위해 몬스터 정의 가져오기
-                    m_defs = self.world.engine.monster_defs if hasattr(self.world.engine, 'monster_defs') else {}
-                    # [Fix] ID 기반으로 우선 탐색 (m_comp.monster_id), 실패 시 type_name 사용
-                    m_def = m_defs.get(m_comp.monster_id) if m_comp.monster_id else m_defs.get(m_type)
-                    
-                    # 2. 경험치 보상 (플레이어에게)
-                    # [Fix] 1번 엔티티(플레이어)를 확실히 가져옴
-                    player_entity = self.world.get_player_entity() # Ensure it's current
-                    
-                    # [Fix] 공격자가 플레이어거나, 공격자가 없더라도(DoT 등) 플레이어가 사망 시점에 존재하면 XP 지급
-                    is_player_kill = player_entity and attacker and attacker.entity_id == player_entity.entity_id
-                    
-                    if player_entity and (is_player_kill or not attacker):
-                        if m_def:
-                            # LevelSystem을 통해 경험치 획득
-                            level_sys = self.world.get_system(LevelSystem)
+                # 2. 경험치 보상 (플레이어에게)
+                player_entity = self.world.get_player_entity() 
+                
+                # 공격자가 플레이어거나, 공격자가 없더라도(DoT 등) 플레이어가 사망 시점에 존재하면 XP 지급
+                is_player_kill = player_entity and attacker and attacker.entity_id == player_entity.entity_id
+                
+                if player_entity and (is_player_kill or not attacker):
+                    if m_def:
+                        # LevelSystem을 통해 경험치 획득
+                        level_sys = self.world.get_system(LevelSystem)
+                        if level_sys:
+                            xp_gained = int(m_def.xp_value * 0.9)
+                            if xp_gained < 1: xp_gained = 1
+                            
+                            level_sys.gain_exp(player_entity, xp_gained)
+                            self.event_manager.push(MessageEvent(_("경험치 {}를 획득했습니다.").format(xp_gained), "yellow"))
+                        else:
+                            logging.error("LevelSystem NOT FOUND during death handling")
+
+                        # [Bonus Points] Boss Reward
+                        if "BOSS" in getattr(m_def, 'flags', []):
+                            points = 1
+                            if "DIABLO" in getattr(m_def, 'flags', []):
+                                points = 2
+                            
+                            boss_name = getattr(m_def, 'name', 'Boss')
                             if level_sys:
-                                xp_gained = int(m_def.xp_value * 0.9)
-                                if xp_gained < 1: xp_gained = 1 # 최소 1은 보장
-                                
-                                level_sys.gain_exp(player_entity, xp_gained)
-                                self.event_manager.push(MessageEvent(_("경험치 {}를 획득했습니다.").format(xp_gained), "yellow"))
-                            else:
-                                logging.error("LevelSystem NOT FOUND during death handling")
+                                level_sys.grant_stat_points(player_entity, points, reason=f"{boss_name} 처치")
+                    else:
+                        logging.warning(f"m_def NOT FOUND for {m_comp.monster_id or m_type}")
+                
+                # 3. 컴포넌트 정리
+                target.remove_component(AIComponent)
+                target.remove_component(MonsterComponent)
+                # StatsComponent는 시체에도 남겨둘 수 있지만, 여기선 제거 (재사용 방지) - 단, 시체 루팅 로직에서 Stats가 필요하면 유지해야 함? 
+                # Corpse doesn't strictly need Stats, but removing it is safer for "death".
+                target.remove_component(StatsComponent) 
+                
+                # [Fix] Remove all existing status effect components
+                status_components = [
+                    StunComponent, PoisonComponent, SleepComponent, BleedingComponent,
+                    PetrifiedComponent, ManaShieldComponent, StatModifierComponent,
+                    SkillEffectComponent, CombatTrackerComponent, HitFlashComponent
+                ]
+                for comp_type in status_components:
+                    target.remove_component(comp_type)
 
-                            # [Bonus Points] Boss Reward
-                            if "BOSS" in getattr(m_def, 'flags', []):
-                                points = 1
-                                if "DIABLO" in getattr(m_def, 'flags', []):
-                                    points = 2
-                                
-                                boss_name = getattr(m_def, 'name', 'Boss')
-                                if level_sys: # Re-use level_sys
-                                    level_sys.grant_stat_points(player_entity, points, reason=f"{boss_name} 처치")
-                        else:
-                            logging.warning(f"m_def NOT FOUND for {m_comp.monster_id or m_type}")
-                    
-                    # 3. 컴포넌트 정리
-                    target.remove_component(AIComponent)
-                    target.remove_component(MonsterComponent)
-                    target.remove_component(StatsComponent)
-                    
-                    # [Fix] Remove all existing status effect components to prevent ghost events
-                    status_components = [
-                        StunComponent, PoisonComponent, SleepComponent, BleedingComponent,
-                        PetrifiedComponent, ManaShieldComponent, StatModifierComponent,
-                        SkillEffectComponent, CombatTrackerComponent, HitFlashComponent
-                    ]
-                    for comp_type in status_components:
-                        if target.has_component(comp_type):
-                            target.remove_component(comp_type)
-                    
-                    # [Boss] Handle Boss Death Patterns
-                    boss_comp = target.get_component(BossComponent)
-                    if boss_comp:
-                        boss_id = boss_comp.boss_id
-                        self.world.engine.last_boss_id = boss_id # [Boss Summon] 처치한 보스 기록
-                        pattern = self.world.engine.boss_patterns.get(boss_id)
-                        if pattern:
-                            # Death Bark
-                            death_bark = pattern.get("death_bark")
-                            if death_bark:
-                                from .events import BossBarkEvent
-                                self.event_manager.push(BossBarkEvent(target, "DEATH", death_bark))
-                            
-                            # Prepare Boss Loot from Pattern
-                            if pattern.get("loot_table"):
-                                if not target.has_component(LootComponent):
-                                    target.add_component(LootComponent())
-                                loot = target.get_component(LootComponent)
-                                for item_name, chance in pattern["loot_table"].items():
-                                    if random.random() < chance:
-                                        item_def = self.world.engine.item_defs.get(item_name)
-                                        if item_def:
-                                            loot.items.append({"item": item_def, "qty": 1})
-                                            self.event_manager.push(MessageEvent(_("{}의 전리품: {}이(가) 떨어졌습니다!").format(boss_id, item_name), "gold"))
-
-                        # [Boss Gate] 계단 생성 로직
-                        map_ents = self.world.get_entities_with_components({MapComponent, BossGateComponent})
-                        if map_ents:
-                            map_ent = map_ents[0]
-                            map_comp = map_ent.get_component(MapComponent)
-                            boss_gate = map_ent.get_component(BossGateComponent)
-                            
-                            if not boss_gate.stairs_spawned:
-                                boss_gate.stairs_spawned = True
-                                # 저장된 출구 위치 가져오기 (engine.dungeon_map에 저장됨)
-                                d_map = getattr(self.world.engine, 'dungeon_map', None)
-                                if d_map:
-                                    ex, ey = d_map.exit_x, d_map.exit_y
-                                    if 0 <= ex < map_comp.width and 0 <= ey < map_comp.height:
-                                        from .constants import EXIT_NORMAL
-                                        map_comp.tiles[ey][ex] = EXIT_NORMAL
-                                        
-                                        # 메시지 출력
-                                        region = boss_gate.next_region_name
-                                        if region == "승리":
-                                             self.event_manager.push(MessageEvent(_("!!! 던전을 정복했습니다 !!!"), "gold"))
-                                        else:
-                                             self.event_manager.push(MessageEvent(_("!!! {}(으)로 가는 계단이 나타났습니다 !!!").format(region), "light_cyan"))
-                                        
-                                        self.event_manager.push(SoundEvent("LEVEL_UP")) # 보상 사운드
-
-                    # 4. 시각 효과 변경 (Moved color logic to after loot generation)
-                    render = target.get_component(RenderComponent)
-                    if render:
-                        render.char = '%'
-                        # Color will be set based on loot rarity below
-
-                    
-                    # 5. 시체 컴포넌트 추가
-                    target.add_component(CorpseComponent(original_name=m_type))
-                    
-                    # 6. 일반 전리품 설정 (보스가 아니거나 추가 드랍)
-                    if not target.has_component(LootComponent):
-                        loot_items = []
-                        dungeon = getattr(self.world.engine, 'dungeon', None)
-                        floor = dungeon.dungeon_level_tuple[0] if dungeon else 1
-                        eligible = self.world.engine._get_eligible_items(floor)
+                # [Boss] Handle Boss Death Patterns
+                boss_comp = target.get_component(BossComponent)
+                if boss_comp:
+                    boss_id = boss_comp.boss_id
+                    self.world.engine.last_boss_id = boss_id
+                    pattern = self.world.engine.boss_patterns.get(boss_id)
+                    if pattern:
+                        # Death Bark
+                        death_bark = pattern.get("death_bark")
+                        if death_bark:
+                            from .events import BossBarkEvent
+                            self.event_manager.push(BossBarkEvent(target, "DEATH", death_bark))
                         
-                        # [Hack & Slash] Loot Explosion Logic
-                        # [Themed Drop Rates]
-                        # Lv 1-25: 15-25% (Avg 20%)
-                        # Lv 26-50: 30-50% (Avg 40%) - Peak
-                        # Lv 51+: 15-25% (Avg 20%)
-                        
-                        drop_chance = 0.0
-                        if floor <= 25:
-                            drop_chance = random.uniform(0.15, 0.25)
-                        elif floor <= 50:
-                            drop_chance = random.uniform(0.30, 0.50)
-                        else:
-                            drop_chance = random.uniform(0.15, 0.25)
+                        # Prepare Boss Loot from Pattern
+                        if pattern.get("loot_table"):
+                            if not target.has_component(LootComponent):
+                                target.add_component(LootComponent())
+                            loot = target.get_component(LootComponent)
+                            for item_name, chance in pattern["loot_table"].items():
+                                if random.random() < chance:
+                                    item_def = self.world.engine.item_defs.get(item_name)
+                                    if item_def:
+                                        loot.items.append({"item": item_def, "qty": 1})
+                                        self.event_manager.push(MessageEvent(_("{}의 전리품: {}이(가) 떨어졌습니다!").format(boss_id, item_name), "gold"))
 
-                        is_boss = (m_def and 'BOSS' in m_def.flags) or boss_comp is not None
+                    # [Boss Gate]
+                    map_ents = self.world.get_entities_with_components({MapComponent, BossGateComponent})
+                    if map_ents:
+                        map_ent = map_ents[0]
+                        map_comp = map_ent.get_component(MapComponent)
+                        boss_gate = map_ent.get_component(BossGateComponent)
+                        
+                        if not boss_gate.stairs_spawned:
+                            boss_gate.stairs_spawned = True
+                            d_map = getattr(self.world.engine, 'dungeon_map', None)
+                            if d_map:
+                                ex, ey = d_map.exit_x, d_map.exit_y
+                                if 0 <= ex < map_comp.width and 0 <= ey < map_comp.height:
+                                    from .constants import EXIT_NORMAL
+                                    map_comp.tiles[ey][ex] = EXIT_NORMAL
+                                    
+                                    region = boss_gate.next_region_name
+                                    if region == "승리":
+                                            self.event_manager.push(MessageEvent(_("!!! 던전을 정복했습니다 !!!"), "gold"))
+                                    else:
+                                            self.event_manager.push(MessageEvent(_("!!! {}(으)로 가는 계단이 나타났습니다 !!!").format(region), "light_cyan"))
+                                    
+                                    self.event_manager.push(SoundEvent("LEVEL_UP"))
+
+                # 4. 시체 컴포넌트 추가
+                target.add_component(CorpseComponent(original_name=target_name))
+                render = target.get_component(RenderComponent)
+                if render:
+                    render.char = '%'
+                    render.color = 'dark_grey'
+                    render.z_index = 0
+
+                # 5. 아이템 드랍 (Loot)
+                if not target.has_component(LootComponent):
+                    loot_items = []
+                    dungeon = getattr(self.world.engine, 'dungeon', None)
+                    floor = dungeon.dungeon_level_tuple[0] if dungeon else 1
+                    eligible = self.world.engine._get_eligible_items(floor)
+                    
+                    drop_chance = 0.0
+                    if floor <= 25:
+                        drop_chance = random.uniform(0.15, 0.25)
+                    elif floor <= 50:
+                        drop_chance = random.uniform(0.30, 0.50)
+                    else:
+                        drop_chance = random.uniform(0.15, 0.25)
+
+                    is_boss = (m_def and 'BOSS' in m_def.flags) or boss_comp is not None
+                    if is_boss:
+                        drop_chance = 1.0
+                    
+                    num_drops = 0
+                    if eligible and random.random() < drop_chance:
                         if is_boss:
-                            drop_chance = 1.0
-                        
-                        num_drops = 0
-                        
-                        # If not already handled by boss pattern, or for normal mobs
-                        if eligible and random.random() < drop_chance:
-                            if is_boss:
-                                num_drops = random.randint(5, 10) # Bosses drop massive loot
+                            num_drops = random.randint(5, 10) 
+                        else:
+                            if random.random() < 0.2:
+                                num_drops = random.randint(3, 5)
                             else:
-                                if random.random() < 0.2: # 20% chance for Loot Explosion
-                                    num_drops = random.randint(3, 5)
-                                else:
-                                    num_drops = random.randint(1, 3)
+                                num_drops = random.randint(1, 3)
+                    
+                    for _i in range(num_drops):
+                        item = random.choice(eligible)
+                        if not item: continue
                         
-                        for _ in range(num_drops):
-                            item = random.choice(eligible)
-                            
-                            # Skip if item is None
-                            if not item:
-                                continue
-                            
-                            # [Rarity & Affix System] (Monster Drop)
-                            # 1. Calculate Player's Magic Find
-                            player_mf = 0
-                            if player_entity:
-                                p_stats = player_entity.get_component(StatsComponent)
-                                if p_stats:
-                                    player_mf += p_stats.magic_find
+                        player_mf = 0
+                        if player_entity:
+                            p_stats = player_entity.get_component(StatsComponent)
+                            if p_stats:
+                                player_mf += p_stats.magic_find
+                            p_inv = player_entity.get_component(InventoryComponent)
+                            if p_inv:
+                                for eq_item in p_inv.equipped.values():
+                                    if eq_item:
+                                        player_mf += getattr(eq_item, 'magic_find', 0)
+                        
+                        rarity = self.world.engine._get_rarity(floor, magic_find=player_mf)
+                        if rarity == "MAGIC" or rarity == "UNIQUE":
+                            prefix_id, suffix_id = self.world.engine._roll_magic_affixes(item.type, floor)
+                            if prefix_id or suffix_id:
+                                affixed = self.world.engine._create_item_with_affix(item.name, prefix_id, suffix_id, floor)
+                                if affixed: item = affixed
                                 
-                                # Check Equipment for added MF (if not already integrated into p_stats)
-                                # (Assuming stats might not be auto-recalculated every frame, or MF is a special stat)
-                                p_inv = player_entity.get_component(InventoryComponent)
-                                if p_inv:
-                                    for eq_item in p_inv.equipped.values():
-                                        if eq_item:
-                                            player_mf += getattr(eq_item, 'magic_find', 0)
-                            
-                            rarity = self.world.engine._get_rarity(floor, magic_find=player_mf)
-                            
-                            if rarity == "MAGIC" or rarity == "UNIQUE":
-                                prefix_id, suffix_id = self.world.engine._roll_magic_affixes(item.type, floor)
-                                if prefix_id or suffix_id:
-                                    affixed = self.world.engine._create_item_with_affix(item.name, prefix_id, suffix_id, floor)
-                                    if affixed:
-                                        item = affixed
-                                        
-                            # [Update] Even normal items can be unidentified sometimes (20% chance)
-                            # Identify scrolls and Currency should always be identified
-                            is_essential = "IDENTIFY" in getattr(item, 'flags', []) or getattr(item, 'type', '') == "CURRENCY"
-                            if not is_essential and getattr(item, 'is_identified', True) and random.random() < 0.2:
-                                item.is_identified = False
+                        is_essential = "IDENTIFY" in getattr(item, 'flags', []) or getattr(item, 'type', '') == "CURRENCY"
+                        if not is_essential and getattr(item, 'is_identified', True) and random.random() < 0.2:
+                            item.is_identified = False
 
-                            loot_items.append({'item': item, 'qty': 1})
+                        loot_items.append({'item': item, 'qty': 1})
+                    
+                    target.add_component(LootComponent(items=loot_items, gold=random.randint(50, 250)))
+                    
+                    # [Visual] Set corpse color based on loot
+                    if render:
+                        from .constants import RARITY_COLORS
+                        max_rarity_val = 0
+                        rarity_map = {"NORMAL": 1, "MAGIC": 2, "UNIQUE": 3}
+                        best_rarity = "NORMAL"
+                        has_items = False
+                        for li in loot_items:
+                            item_obj = li['item']
+                            has_items = True
+                            r = getattr(item_obj, 'rarity', 'NORMAL')
+                            val = rarity_map.get(r, 0)
+                            if val > max_rarity_val:
+                                max_rarity_val = val
+                                best_rarity = r
                         
-                        # [Hack & Slash] Increased Gold: 50-250
-                        target.add_component(LootComponent(items=loot_items, gold=random.randint(50, 250)))
-                        
-                        # [Visual] Set corpse color based on max rarity
-                        if render:
-                            from .constants import RARITY_COLORS
-                            
-                            # Determine max rarity
-                            max_rarity_val = 0
-                            rarity_map = {"NORMAL": 1, "MAGIC": 2, "UNIQUE": 3}
-                            best_rarity = "NORMAL"
-                            
-                            has_items = False
-                            for li in loot_items:
-                                item_obj = li['item']
-                                has_items = True
-                                r = getattr(item_obj, 'rarity', 'NORMAL')
-                                val = rarity_map.get(r, 0)
-                                if val > max_rarity_val:
-                                    max_rarity_val = val
-                                    best_rarity = r
-                            
-                            if has_items:
-                                render.color = RARITY_COLORS.get(best_rarity, 'white')
-                            else:
-                                render.color = 'dark_grey' # No items (only gold or empty)
-                        # print(f"DEBUG: Added LootComponent to {target.entity_id}. items={loot_items}")
-                # 더 이상 delete_entity를 하지 않음
+                        if has_items:
+                            render.color = RARITY_COLORS.get(best_rarity, 'white')
+                        else:
+                            render.color = 'dark_grey'
+
+        elif target.entity_id == self.world.get_player_entity().entity_id:
+            # 플레이어 사망
+            self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("당신은 죽었습니다...") + f"{COLOR_MAP['reset']}", "red"))
 
     def _trigger_boss_summon(self, attacker: Entity, target: Entity, specific_boss_id: str = None):
         """보스의 체력이 낮아지면 지원군을 소환합니다. specific_boss_id가 있으면 해당 보스 소환."""
@@ -1622,7 +1591,7 @@ class CombatSystem(System):
         if not map_ent: return x, y
         mc = map_ent[0].get_component(MapComponent)
         
-        for _ in range(15): # 15번 시도
+        for _i in range(15): # 15번 시도
             tx, ty = x + random.randint(-3, 3), y + random.randint(-3, 3)
             if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
                 return tx, ty
@@ -2162,7 +2131,7 @@ class CombatSystem(System):
             
         # 가장 가까운 적 선택
         candidates.sort()
-        next_dist, _, next_target = candidates[0]
+        next_dist, _i, next_target = candidates[0]
         nt_pos = next_target.get_component(PositionComponent)
         
         # 시각적 이펙트 (직선 연결)
@@ -2568,7 +2537,7 @@ class CombatSystem(System):
             pos = target.get_component(PositionComponent)
             if pos and hasattr(self.world, 'engine'):
                 old_x = pos.x
-                for _ in range(3): # 3번 흔들림
+                for _i in range(3): # 3번 흔들림
                     pos.x = old_x + 1
                     self.world.engine._render()
                     time.sleep(0.03)
@@ -3306,7 +3275,7 @@ class BossSystem(System):
         if not map_ent: return x, y
         mc = map_ent[0].get_component(MapComponent)
         
-        for _ in range(15): # 15번 시도
+        for _i in range(15): # 15번 시도
             tx, ty = x + random.randint(-3, 3), y + random.randint(-3, 3)
             if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
                 return tx, ty
@@ -3627,7 +3596,7 @@ class BossSystem(System):
             hit_player = False
             
             # 최대 10칸 돌진
-            for _ in range(10):
+            for _i in range(10):
                 nx, ny = curr_x + dx, curr_y + dy
                 if map_comp.tiles[ny][nx] == '#':
                     hit_wall = True
@@ -3687,7 +3656,7 @@ class BossSystem(System):
             # 부족한 만큼 또는 최대 5마리 소환
             num_to_spawn = min(5, 15 - len(skeletons))
             spawned_any = False
-            for _ in range(num_to_spawn):
+            for _i in range(num_to_spawn):
                 tx, ty = self._find_spawn_pos(pos.x, pos.y)
                 if self.world.engine._spawn_monster_at(tx, ty, pool=["SKELETON"]):
                     spawned_any = True
@@ -3823,7 +3792,7 @@ class BossSystem(System):
         if not map_ent: return x, y
         mc = map_ent[0].get_component(MapComponent)
         
-        for _ in range(15): # 15번 시도
+        for _i in range(15): # 15번 시도
             tx, ty = x + random.randint(-4, 4), y + random.randint(-4, 4)
             if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
                 return tx, ty
