@@ -1,5 +1,6 @@
 # trap.py
 from . import data_manager
+from .localization import _
 
 class Trap:
     def __init__(self, x, y, trap_id):
@@ -9,7 +10,7 @@ class Trap:
         
         definition = data_manager.get_trap_definition(trap_id)
         if not definition:
-            raise ValueError(f"Trap ID '{trap_id}'에 해당하는 함정 정의를 찾을 수 없습니다.")
+            raise ValueError(_("Trap ID '{}'에 해당하는 함정 정의를 찾을 수 없습니다.").format(trap_id))
             
         self.name = definition.name
         self.symbol = definition.symbol

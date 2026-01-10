@@ -1,6 +1,14 @@
 # constants.py
 # 게임 전반에 사용되는 상수 정의
 
+# --- Game States ---
+class GameState:
+    PLAYING = 0
+    INVENTORY = 1
+    SHOP = 2
+    SHRINE = 3
+    CHARACTER_SHEET = 4
+
 # --- Tile Definitions ---
 BORDER_WALL = '#'
 INNER_WALL = '#'
@@ -77,4 +85,3 @@ RARITY_COLORS = {
 
 # --- Boss Mechanics ---
 BOSS_SEQUENCE = ["BUTCHER", "SKELETON_KING", "DIABLO"]
-

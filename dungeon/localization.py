@@ -640,6 +640,19 @@ TRANSLATIONS = {
         "'{}'이(가) '{}'의 공격을 가뿐히 받아냈습니다!": "'{}' easily blocked '{}'s attack!",
         "'{}'의 {}! '{}'에게 {} 데미지!{}": "'{}'s {}! Dealt {} damage to '{}'!{}",
         "'{}'의 공격! '{}'에게 {} 데미지!{}": "'{}' attacks! Dealt {} damage to '{}'!{}",
+        
+        # Shrine
+        "신성한 힘이 당신을 완전히 회복시켰습니다!": "Divine power has fully restored you!",
+        "이미 최대 강화 등급입니다!": "Already at maximum enhancement level!",
+        "강화 성공! {}": "Enhancement Successful! {}",
+        "강화 실패... {}의 내구도가 감소했습니다.": "Enhancement Failed... {} durability decreased.",
+        "강화 실패! {}이(가) 파손되었습니다!": "Enhancement Failed! {} is broken!",
+        "강화 실패! {}이(가) 산산조각 났습니다...": "Enhancement Failed! {} shattered...",
+        
+        # UI & Misc
+        "필요 레벨:": "Req Level:",
+        "소지 골드:": "Gold:",
+        "Trap ID '{}'에 해당하는 함정 정의를 찾을 수 없습니다.": "Trap definition for ID '{}' not found.",
     }
 }
 

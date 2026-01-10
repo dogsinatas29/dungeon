@@ -203,7 +203,7 @@ Diablo-like real-time roguelike engine for terminal
 - [x] **More Character Classes** - 4 classes implemented (Warrior, Rogue, Sorcerer, Barbarian)
 - [x] **Localization System Completion** - 100% of user-facing strings externalized
 
-## Localization & Multi-Language System
+### Localization & Multi-Language System
 
 The game features a fully integrated localization system that supports multiple languages. Currently, **English** and **Korean** are fully supported.
 
@@ -212,21 +212,30 @@ The game features a fully integrated localization system that supports multiple 
 - **`_()` Function**: The code uses a standard `_("Source Text")` function (with an alias `L()`) to look up translations based on the `config.LANGUAGE` setting.
 - **Dynamic Messages**: Supports dynamic content using Python's `.format()` method:
   `_("{} has been poisoned!").format(entity_name)`
-- **Data-Driven Localization**: Large text blocks like boss dialogues are stored in language-specific CSV files:
-  - Korean: `dungeon/data/boss_dialogues.csv`
-  - English: `dungeon/data/en/boss_dialogues.csv`
-  The `get_data_path()` utility ensures the correct file is loaded based on the current language.
 
-### Language Pack Guide (Adding a New Language)
-To add a new language (e.g., Japanese `ja`):
-1. **Update `localization.py`**:
+### Language Pack Guide (Adding/Modifying Languages)
+
+To add a new language (e.g., Japanese `ja`) or modify:
+
+1. **Update `dungeon/localization.py`**:
    - Add a new `"ja"` key to the `TRANSLATIONS` dictionary.
-   - Copy the keys from the `"ko"` (source) section and provide translated values.
-2. **Translate Data Files**:
+   - Copy key-value pairs from `"ko"` (Korean) or English, then replace values with translated text.
+   - *Example*:
+     ```python
+     "ja": {
+         "Hello": "こんにちは",
+         "Firebolt": "ファイアボルト",
+         # ...
+     }
+     ```
+
+2. **Translate Data Files (CSVs)**:
    - Create a subfolder `dungeon/data/ja/`.
-   - Copy and translate the content of `boss_dialogues.csv` into this folder.
+   - Copy `boss_dialogues.csv` (and any other localized CSVs) there.
+   - Translate the text columns while keeping the IDs intact.
+
 3. **Register Language in Startup**:
-   - Update `ConsoleUI.show_language_selection()` in `dungeon/ui.py` to include the new language option.
+   - Update `ConsoleUI.show_language_selection()` in `dungeon/ui.py` to add "Japanese".
    - Update `Start.py` to handle the new selection index and set `config.LANGUAGE = "ja"`.
 
 ## Keyboard Shortcuts

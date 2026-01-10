@@ -41,12 +41,8 @@ from .constants import (
 
 import enum
 
-class GameState:
-    PLAYING = 0
-    INVENTORY = 1
-    SHOP = 2
-    SHRINE = 3
-    CHARACTER_SHEET = 4
+from .constants import GameState
+from .config import MAP_HEIGHT
 
 class Engine:
     """게임 루프, 초기화, 시스템 관리를 담당하는 메인 클래스"""
@@ -3893,7 +3889,7 @@ class Engine:
                      req_y = start_y + POPUP_HEIGHT - 2
                      if hasattr(sel_item, 'required_level') and sel_item.required_level > 1:
                          color = "white" if req_met else "red"
-                         text = f"필요 레벨: {sel_item.required_level}"
+                         text = f"{_('필요 레벨:')} {sel_item.required_level}"
                          if not req_met: text += " (현재 레벨 부족!)"
                          self.renderer.draw_text(start_x + 2, req_y, text, color)
         

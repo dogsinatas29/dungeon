@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from . import config
-config.LANGUAGE = "ko" # 한국어 자원 사용 (maps.csv와 불일치 해결)
+# config.LANGUAGE = "en" # English mode for verifying logs
 
 from .engine import Engine, GameState
 # ... imports ...
@@ -17,7 +17,7 @@ from .engine import Engine, GameState
 # ... (omitted code) ...
 
 
-from .components import PositionComponent, StatsComponent, MapComponent, MonsterComponent, InventoryComponent, LevelComponent, LootComponent
+from .components import PositionComponent, StatsComponent, MapComponent, MonsterComponent, InventoryComponent, LevelComponent, LootComponent, PlayerComponent
 from .data_manager import ItemDefinition
 from .constants import ELEMENT_NONE
 
@@ -492,53 +492,179 @@ def run_test_scenario(floor: int, player_level: int, iterations: int = 5):
         avg_turns = total_turns / iterations
         print(f"    Result: {stats_log} | Win: {win_rate:.0f}% | Avg Turns: {avg_turns:.1f}")
 
-def run_drop_rate_test(floor: int, iterations: int = 10):
-    print(f"\n[Drop Rate Test] Floor {floor} - {iterations} trials")
+
+def run_enhancement_test(iterations: int = 1000):
+    print(f"\n[Enhancement Test] Simulating {iterations} enhancement attempts per level")
+    
+    # Mock Engine for Shrine Methods
+    class MockShrineEngine(HeadlessEngine):
+        def _recalculate_stats(self): pass
+
+    engine = MockShrineEngine()
+    # engine.world is initialized in super().__init__
+    engine.world.engine = engine # Link back
+    
+    # Mock Player to hold item
+    p_ent = engine.world.create_entity()
+    engine.world.add_component(p_ent.entity_id, PositionComponent(x=0,y=0))
+    engine.world.add_component(p_ent.entity_id, InventoryComponent())
+    engine.world.add_component(p_ent.entity_id, PlayerComponent())
+    engine.player_id = p_ent.entity_id
+    
+    # Import Shrine Methods dynamically to bind them
+    from .shrine_methods import _shrine_enhance_item
+    # Bind method to engine instance
+    engine._shrine_enhance_item = _shrine_enhance_item.__get__(engine, MockShrineEngine)
+    
+    stats = {
+        "success": {},
+        "fail_durability": {},
+        "fail_break": {},
+        "fail_destroy": {},
+        "max_reached": 0
+    }
+    
+    for _ in range(iterations):
+        # Create a fresh item
+        item = ItemDefinition("Test Sword", "WEAPON", "Desc", "|", "white", 1, 5, 0, 0, 0, enhancement_level=0)
+        item.max_durability = 100
+        item.current_durability = 100
+        item.enhancement_level = 0
+        
+        # Equip it so logic works (destruction check uses equipped)
+        p_inv = p_ent.get_component(InventoryComponent)
+        p_inv.equipped["손1"] = item
+        
+        while item.enhancement_level < 10: # Try to go to +10 (+11 is max usually?) logic says up to 10
+            lvl = item.enhancement_level
+            
+            # Init stats for this level
+            if lvl not in stats["success"]: stats["success"][lvl] = 0
+            if lvl not in stats["fail_durability"]: stats["fail_durability"][lvl] = 0
+            if lvl not in stats["fail_break"]: stats["fail_break"][lvl] = 0
+            if lvl not in stats["fail_destroy"]: stats["fail_destroy"][lvl] = 0
+            
+            prev_durability = item.current_durability
+            
+            # Attempt Enhance
+            engine._shrine_enhance_item(item)
+            
+            # Check result
+            if item.enhancement_level > lvl:
+                stats["success"][lvl] += 1
+            else:
+                # Failed
+                if "손1" not in p_inv.equipped or p_inv.equipped["손1"] is None:
+                    stats["fail_destroy"][lvl] += 1
+                    break # Item gone
+                elif item.current_durability == 0:
+                    stats["fail_break"][lvl] += 1
+                    item.current_durability = 100 # Repair for next try to simulate persistent user?
+                    # Or stop this run? Usually broken item can't be enhanced.
+                    break 
+                elif item.current_durability < prev_durability:
+                    stats["fail_durability"][lvl] += 1
+                    item.current_durability = 100 # Repair
+                else:
+                     # Should not happen based on logic (always penalty)
+                     pass
+        
+        if item.enhancement_level >= 10:
+             stats["max_reached"] += 1
+
+    print(f"  Max Level (+10) Reached: {stats['max_reached']} / {iterations} ({stats['max_reached']/iterations*100:.1f}%)")
+    
+    levels = sorted(stats["success"].keys())
+    print("  Level | Success | Fail(Dur) | Fail(Brk) | Fail(Dest)")
+    print("  ------+---------+-----------+-----------+-----------")
+    for lvl in levels:
+        s = stats["success"].get(lvl, 0)
+        fd = stats["fail_durability"].get(lvl, 0)
+        fb = stats["fail_break"].get(lvl, 0)
+        fdest = stats["fail_destroy"].get(lvl, 0)
+        total = s + fd + fb + fdest
+        if total == 0: continue
+        print(f"   +{lvl}  |  {s/total*100:5.1f}% |   {fd/total*100:5.1f}%   |   {fb/total*100:5.1f}%   |   {fdest/total*100:5.1f}%")
+
+def run_drop_rate_test(floor: int, iterations: int = 50):
+    print(f"\n[Drop Rate Test] Floor {floor} - {iterations} monster kills")
     total_items = 0
     rarity_counts = {"NORMAL": 0, "MAGIC": 0, "UNIQUE": 0}
-    skill_book_counts = 0
+    gold_total = 0
+    drop_count_dist = {}
+    
+    engine = HeadlessEngine()
+    engine.current_level = floor
+    engine._initialize_world()
+    
+    # Mock Player for Magic Find check
+    p_ent = engine.world.get_player_entity()
+    p_inv = p_ent.get_component(InventoryComponent)
+    # Give some MF gear?
+    p_inv.equipped["머리"] = ItemDefinition("MF Helm", "ARMOR", "머리", "|", "white", 1, 0, 0, 0, 0)
+    p_inv.equipped["머리"].magic_find = 500 # Extreme MF for testing
+    
+    combat_sys = engine.world.get_system(CombatSystem)
+    
+    zero_drops = 0
+    gold_only = 0
     
     for i in range(iterations):
-        engine = HeadlessEngine()
-        engine.current_level = floor
+        # Create a dummy monster
+        m_ent = engine.world.create_entity()
+        engine.world.add_component(m_ent.entity_id, PositionComponent(x=1, y=1))
+        engine.world.add_component(m_ent.entity_id, MonsterComponent(monster_id="TEST_MOB", type_name="TestMob"))
+        engine.world.add_component(m_ent.entity_id, StatsComponent(hp=10, max_hp=10, attack=5, defense=0, current_hp=0)) # Dead
         
-        # [Fix] Force empty item pool in map config for testing diversity
-        map_config = engine.map_defs.get(str(floor))
-        if map_config:
-            map_config.item_pool = [] # Clear restriction for test
+        # Kill it using _handle_death logic
+        combat_sys._handle_death(p_ent, m_ent)
+        
+        # Check drops
+        has_loot = False
+        if m_ent.has_component(LootComponent):
+            loot = m_ent.get_component(LootComponent)
+            if loot.gold > 0: has_loot = True
+            gold_total += loot.gold
             
-        engine._initialize_world(spawn_at="START")
-        
-        # Count Items
-        loot_entities = engine.world.get_entities_with_components({LootComponent})
-        for ent in loot_entities:
-            loot = ent.get_component(LootComponent)
-            if loot.items:
+            n_items = len(loot.items)
+            drop_count_dist[n_items] = drop_count_dist.get(n_items, 0) + 1
+            
+            if n_items > 0:
+                has_loot = True
                 for item_data in loot.items:
                     item = item_data['item']
                     rarity = getattr(item, 'rarity', 'NORMAL')
-                    rarity_counts[rarity] += 1
+                    rarity_counts[rarity] = rarity_counts.get(rarity, 0) + 1
                     total_items += 1
-                    if item.type == "SKILLBOOK":
-                        skill_book_counts += 1
-                        
-    print(f"  Total: {total_items} (Avg {total_items/iterations:.1f})")
+            elif loot.gold > 0:
+                gold_only += 1
+        
+        if not has_loot:
+             zero_drops += 1
+             drop_count_dist[0] = drop_count_dist.get(0, 0) + 1
+
+    print(f"  Total Items: {total_items} (Avg {total_items/iterations:.2f} per kill)")
+    print(f"  Avg Gold: {gold_total/iterations:.1f}")
+    print(f"  Zero Loot Kills: {zero_drops}")
+    print(f"  Gold Only Kills: {gold_only}")
     print(f"  Rarity: {rarity_counts}")
-    print(f"  Skillbooks: {skill_book_counts} ({(skill_book_counts/total_items*100) if total_items else 0:.1f}%)")
-    
-    total = sum(rarity_counts.values()) or 1
-    print(f"  Ratios: N {rarity_counts['NORMAL']/total*100:.1f}% | M {rarity_counts['MAGIC']/total*100:.1f}% | U {rarity_counts['UNIQUE']/total*100:.1f}%")
+    total_r = sum(rarity_counts.values()) or 1
+    print(f"  Ratios: N {rarity_counts['NORMAL']/total_r*100:.1f}% | M {rarity_counts.get('MAGIC',0)/total_r*100:.1f}% | U {rarity_counts.get('UNIQUE',0)/total_r*100:.1f}%")
+    print(f"  Item Count Dist: {dict(sorted(drop_count_dist.items()))}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.CRITICAL)
-    print("Starting Dungeon Crawler Balance Simulation...")
+    print("Starting Dungeon Crawler Integrated Balance Simulation...")
     
-    # Drop Rate Tests (Prioritize first)
-    run_drop_rate_test(10, 50)
-    # run_drop_rate_test(50, 50)
-    # run_drop_rate_test(90, 50)
+    from .systems import CombatSystem # Import here to avoid circular imports if any
     
-    # Boss Tests (All Classes)
-    run_test_scenario(25, 20, 3)  # Butcher
-    run_test_scenario(50, 45, 3)  # Leoric
-    # run_test_scenario(75, 65, 3)  # Lich King (Optional)
+    # 1. Enhancement Tests
+    run_enhancement_test(1000)
+    
+    # 2. Drop Rate Tests
+    run_drop_rate_test(1, 100)   # Early Game
+    run_drop_rate_test(30, 100)  # Mid Game (Peak Drop)
+    run_drop_rate_test(70, 100)  # Late Game
+    
+    # 3. Combat Tests
+    # run_test_scenario(25, 20, 2)  

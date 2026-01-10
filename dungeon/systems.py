@@ -1421,9 +1421,14 @@ class CombatSystem(System):
                         
                         # Prepare Boss Loot from Pattern
                         if pattern.get("loot_table"):
+                            from . import config
+                            bg_min = getattr(config, 'BOSS_GOLD_MIN', 1000)
+                            bg_max = getattr(config, 'BOSS_GOLD_MAX', 3000)
+                            
                             if not target.has_component(LootComponent):
-                                target.add_component(LootComponent())
+                                target.add_component(LootComponent(gold=random.randint(bg_min, bg_max)))
                             loot = target.get_component(LootComponent)
+                            if loot.gold == 0: loot.gold = random.randint(bg_min, bg_max) # Ensure boss has gold
                             for item_name, chance in pattern["loot_table"].items():
                                 if random.random() < chance:
                                     item_def = self.world.engine.item_defs.get(item_name)
@@ -1467,30 +1472,41 @@ class CombatSystem(System):
                 if not target.has_component(LootComponent):
                     loot_items = []
                     dungeon = getattr(self.world.engine, 'dungeon', None)
-                    floor = dungeon.dungeon_level_tuple[0] if dungeon else 1
+                    if dungeon:
+                        floor = dungeon.dungeon_level_tuple[0]
+                    else:
+                        floor = getattr(self.world.engine, 'current_level', 1)
                     eligible = self.world.engine._get_eligible_items(floor)
                     
+                    from . import config
+                    
                     drop_chance = 0.0
-                    if floor <= 25:
-                        drop_chance = random.uniform(0.15, 0.25)
-                    elif floor <= 50:
-                        drop_chance = random.uniform(0.30, 0.50)
-                    else:
-                        drop_chance = random.uniform(0.15, 0.25)
-
+                    loot_ranges = getattr(config, 'LOOT_DROP_CHANCE', [])
+                    for limit, min_c, max_c in loot_ranges:
+                        if floor <= limit:
+                            drop_chance = random.uniform(min_c, max_c)
+                            break
+                    
                     is_boss = (m_def and 'BOSS' in m_def.flags) or boss_comp is not None
                     if is_boss:
-                        drop_chance = 1.0
+                        drop_chance = getattr(config, 'BOSS_DROP_CHANCE', 1.0)
                     
                     num_drops = 0
                     if eligible and random.random() < drop_chance:
                         if is_boss:
-                            num_drops = random.randint(5, 10) 
+                            b_min = getattr(config, 'BOSS_DROP_COUNT_MIN', 5)
+                            b_max = getattr(config, 'BOSS_DROP_COUNT_MAX', 10)
+                            num_drops = random.randint(b_min, b_max)
                         else:
-                            if random.random() < 0.2:
-                                num_drops = random.randint(3, 5)
+                            lucky_chance = getattr(config, 'NORMAL_DROP_LUCKY_CHANCE', 0.2)
+                            if random.random() < lucky_chance:
+                                n_min = getattr(config, 'NORMAL_DROP_LUCKY_MIN', 3)
+                                n_max = getattr(config, 'NORMAL_DROP_LUCKY_MAX', 5)
+                                num_drops = random.randint(n_min, n_max)
                             else:
-                                num_drops = random.randint(1, 3)
+                                n_min = getattr(config, 'NORMAL_DROP_COUNT_MIN', 1)
+                                n_max = getattr(config, 'NORMAL_DROP_COUNT_MAX', 3)
+                                num_drops = random.randint(n_min, n_max)
                     
                     for _i in range(num_drops):
                         item = random.choice(eligible)
@@ -1520,7 +1536,16 @@ class CombatSystem(System):
 
                         loot_items.append({'item': item, 'qty': 1})
                     
-                    target.add_component(LootComponent(items=loot_items, gold=random.randint(50, 250)))
+                    # Gold Drop (Guaranteed + Floor Scaling)
+                    # Gold Drop (Guaranteed + Floor Scaling)
+                    from . import config
+                    g_base = getattr(config, 'GOLD_DROP_BASE', 10)
+                    g_scale = getattr(config, 'GOLD_DROP_SCALING', 5)
+                    g_var = getattr(config, 'GOLD_VARIANCE', 2.0)
+                    
+                    base_gold = g_base + (floor * g_scale)
+                    random_gold = random.randint(base_gold, int(base_gold * g_var))
+                    target.add_component(LootComponent(items=loot_items, gold=random_gold))
                     
                     # [Visual] Set corpse color based on loot
                     if render:

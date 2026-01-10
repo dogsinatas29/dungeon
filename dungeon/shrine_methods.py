@@ -1,3 +1,9 @@
+import readchar
+from .events import MessageEvent, SoundEvent
+from .constants import GameState
+from .components import ShrineComponent, StatsComponent, InventoryComponent
+from .localization import _
+
 def _handle_shrine_input(self, action: str):
         """신전 상태에서의 입력 처리"""
         player_entity = self.world.get_player_entity()
@@ -91,20 +97,16 @@ def _shrine_enhance_item(self, item):
         """강화: 아이템 등급 +1, 성공/실패 처리"""
         import random
         
+        from . import config
+        
         current_level = getattr(item, 'enhancement_level', 0)
         
-        # 성공률 계산
-        if current_level <= 3:
-            success_rate = 0.9 - (current_level * 0.1)  # 90%, 80%, 70%
-        elif current_level <= 6:
-            success_rate = 0.5 - ((current_level - 4) * 0.1)  # 50%, 40%, 30%
-        elif current_level <= 9:
-            success_rate = 0.2 - ((current_level - 7) * 0.05)  # 20%, 15%, 10%
-        elif current_level == 10:
-            success_rate = 0.05  # 5%
-        else:
-            self.world.event_manager.push(MessageEvent(_("이미 최대 강화 등급입니다!")))
-            return
+        # 성공률 계산 (config 사용)
+        success_rate = config.ENHANCE_SUCCESS_RATES.get(current_level, 0.0)
+        
+        if current_level >= 10:
+             self.world.event_manager.push(MessageEvent(_("이미 최대 강화 등급입니다!")))
+             return
         
         roll = random.random()
         
@@ -141,12 +143,12 @@ def _shrine_enhance_item(self, item):
             self.world.event_manager.push(SoundEvent("LEVEL_UP"))
         else:
             # 실패!
-            if current_level <= 3:
+            if current_level <= config.ENHANCE_SAFE_LIMIT:
                 # 안전: 내구도 절반 감소
                 if hasattr(item, 'current_durability') and item.max_durability > 0:
                     item.current_durability = max(0, item.current_durability // 2)
                 self.world.event_manager.push(MessageEvent(_("강화 실패... {}의 내구도가 감소했습니다.").format(item.name)))
-            elif current_level <= 6:
+            elif current_level <= config.ENHANCE_BREAK_LIMIT:
                 # 파손: 내구도 0
                 if hasattr(item, 'current_durability'):
                     item.current_durability = 0
