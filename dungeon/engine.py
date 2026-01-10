@@ -470,7 +470,7 @@ class Engine:
         zone_color = theme_info.get("wall_color", "white")
         if theme_info['name'] == "Cathedral": zone_color = "gold" # Cathedral은 금색으로 강조
         
-        message_comp.add_message(f"던전 {self.current_level}층 [{theme_info['name']}]에 입장했습니다.", zone_color)
+        message_comp.add_message(_("던전 {}층 [{}]에 입장했습니다.").format(self.current_level, theme_info['name']), zone_color)
         
         # [Visual Effect] 신규 구역 진입 시 대형 배너 트리거 (1, 26, 51, 76, 99층)
         if self.current_level in [1, 26, 51, 76, 99]:
@@ -483,7 +483,7 @@ class Engine:
             self.banner_timer = 4.0 if self.current_level in [1, 99] else 3.0
             
         if map_type == "BOSS":
-            message_comp.add_message("[경고] 강력한 보스의 기운이 느껴집니다!", "red")
+            message_comp.add_message(_("​[경고] 강력한 보스의 기운이 느껴집니다!"), "red")
         else:
             message_comp.add_message(_("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요."))
         self.world.add_component(message_entity.entity_id, message_comp)
@@ -512,8 +512,8 @@ class Engine:
                     boss_ent = self._spawn_boss(spawn_x, spawn_y, attacker_pool, boss_name=b_id)
                     if boss_ent:
                         m_comp = boss_ent.get_component(MonsterComponent)
-                        name = m_comp.type_name if m_comp else "강력한 적"
-                        message_comp.add_message(f"[경고] {name}이(가) 나타났습니다!", "red")
+                        name = m_comp.type_name if m_comp else _("강력한 적")
+                        message_comp.add_message(_("​[경고] {}이(가) 나타났습니다!").format(name), "red")
                         
                 # 주변 호위병 몇 기
                 for _i in range(3):
@@ -761,7 +761,7 @@ class Engine:
         # [Fix] 이름 설정 로직 수정
         monster_name = boss_def.name
         if is_summoned:
-            monster_name = f"{boss_def.name}의 환영"
+            monster_name = _("{}의 환영").format(boss_def.name)
             
         self.world.add_component(boss.entity_id, MonsterComponent(type_name=monster_name, monster_id=boss_def.ID, is_summoned=is_summoned))
 
@@ -824,7 +824,7 @@ class Engine:
 
             shop_items = [si for si in shop_items if si['item'] is not None]
             self.world.add_component(shop.entity_id, ShopComponent(items=shop_items))
-            self.world.add_component(shop.entity_id, MonsterComponent(type_name="상인"))
+            self.world.add_component(shop.entity_id, MonsterComponent(type_name=_("상인")))
 
         # 보물 상자 (CSV 설정 기반)
         chest_count = map_config.chest_count if map_config and map_config.chest_count != -1 else 2

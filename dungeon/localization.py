@@ -94,6 +94,22 @@ TRANSLATIONS = {
         "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기": "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기",
         "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기": "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기",
         "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기": "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기",
+        
+        # Dungeon Messages
+        "던전 {}층 [{}]에 입장했습니다.": "던전 {}층 [{}]에 입장했습니다.",
+        "[경고] 강력한 보스의 기운이 느껴집니다!": "[경고] 강력한 보스의 기운이 느껴집니다!",
+        "[경고] {}이(가) 나타났습니다!": "[경고] {}이(가) 나타났습니다!",
+        "강력한 적": "강력한 적",
+        "{}의 환영": "{}의 환영",
+        
+        # Entity Types
+        "상인": "상인",
+        "신전": "신전",
+        
+        # Item Names (for shop defaults)
+        "체력 물약": "체력 물약",
+        "마력 물약": "마력 물약",
+        "확인 스크롤": "확인 스크롤",
     },
     "en": {
         "Level": "Level", "Exp": "Exp", "Job": "Job", "Gold": "Gold", "Floor": "Floor",
@@ -181,6 +197,22 @@ TRANSLATIONS = {
         "[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기": "[↑/↓] Select  [→/ENTER] Invest  [C/ESC] Close",
         "[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기": "[←/→] Tab  [↑/↓] Select  [ENTER/E] Assign  [X] Forget  [B] Close",
         "[←/→] 탭  [↑/↓] 선택  [E] 퀵슬롯 등록  [ENTER] 사용/장착  [B] 닫기": "[←/→] Tab  [↑/↓] Select  [E] Quickslot  [ENTER] Use/Equip  [B] Close",
+        
+        # Dungeon Messages
+        "던전 {}층 [{}]에 입장했습니다.": "Entered Dungeon Floor {} [{}].",
+        "[경고] 강력한 보스의 기운이 느껴집니다!": "[WARNING] A powerful boss presence detected!",
+        "[경고] {}이(가) 나타났습니다!": "[WARNING] {} has appeared!",
+        "강력한 적": "Powerful Enemy",
+        "{}의 환영": "{}'s Illusion",
+        
+        # Entity Types
+        "상인": "Merchant",
+        "신전": "Shrine",
+        
+        # Item Names (for shop defaults)
+        "체력 물약": "Health Potion",
+        "마력 물약": "Mana Potion",
+        "확인 스크롤": "Identify Scroll",
         
         # System Messages (Dynamic)
         "전신이 석화되어 움직일 수 없습니다!": "You are petrified and cannot move!",
