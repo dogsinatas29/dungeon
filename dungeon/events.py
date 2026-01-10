@@ -1,7 +1,7 @@
 # dungeon/events.py - 모든 게임 이벤트를 정의하는 모듈
 
 from typing import Any, Tuple
-from .ecs import Event
+from ecs import Event
 
 class MoveSuccessEvent(Event):
     """엔티티가 성공적으로 새 위치로 이동했을 때 발생"""

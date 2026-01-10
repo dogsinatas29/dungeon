@@ -1,9 +1,16 @@
 import csv
 import os
+import json
 
 # -----------------------------------------------------------------------
 # ItemDefinition 클래스 정의 (기존 내용 유지)
-# -----------------------------------------------------------------------
+        self.to_hit_bonus_min = data.get("to_hit_bonus_min", 0)
+        self.to_hit_bonus_max = data.get("to_hit_bonus_max", 0)
+        
+        self.damage_percent_min = data.get("damage_percent_min", 0)
+        self.damage_percent_max = data.get("damage_percent_max", 0)
+        
+        self.mp_bonus_min = data.ge# -----------------------------------------------------------------------
 def parse_damage_range(value):
     """'10-20' 또는 '15' 같은 값을 (min, max) 튜플로 변환"""
     if isinstance(value, (int, float)):
@@ -30,25 +37,12 @@ def parse_damage_range(value):
 class PrefixDefinition:
     def __init__(self, id, data):
         self.id = id
-        self.name_en = data.get("name_en", id)
         self.name_kr = data.get("name_kr", id)
         self.allowed_types = set(data.get("allowed_types", []))
         self.min_level = data.get("min_level", 1)
         
-    @property
-    def name(self):
-        from localization import config
-        lang = getattr(config, "LANGUAGE", "ko")
-        return self.name_en if lang == "en" else self.name_kr
-
         # Stats Ranges (Min, Max)
-        self.to_hit_bonus_min = data.get("to_hit_bonus_min", 0)
-        self.to_hit_bonus_max = data.get("to_hit_bonus_max", 0)
-        
-        self.damage_percent_min = data.get("damage_percent_min", 0)
-        self.damage_percent_max = data.get("damage_percent_max", 0)
-        
-        self.mp_bonus_min = data.get("mp_bonus_min", 0)
+t("mp_bonus_min", 0)
         self.mp_bonus_max = data.get("mp_bonus_max", 0)
         
         self.res_lightning_min = data.get("res_lightning_min", 0)
@@ -74,8 +68,7 @@ class PrefixDefinition:
 
 def load_prefixes():
     import json
-    from localization import get_data_path
-    filepath = get_data_path('prefixes.json')
+    filepath = os.path.join(os.path.dirname(__file__), '..', 'data', 'prefixes.json')
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -93,17 +86,10 @@ class SuffixDefinition:
         self.id = id
         self.name_kr = data.get("name_kr", id)
         self.allowed_types = set(data.get("allowed_types", []))
-        self.name_en = data.get("name_en", id)
         self.min_level = data.get("min_level", 1)
         
         # Stat Ranges
         self.str_bonus_min = data.get("str_bonus_min", 0)
-    @property
-    def name(self):
-        from localization import config
-        lang = getattr(config, "LANGUAGE", "ko")
-        return self.name_en if lang == "en" else self.name_kr
-
         self.str_bonus_max = data.get("str_bonus_max", 0)
         
         self.dex_bonus_min = data.get("dex_bonus_min", 0)
@@ -132,8 +118,7 @@ class SuffixDefinition:
 
 def load_suffixes():
     import json
-    from localization import get_data_path
-    filepath = get_data_path('suffixes.json')
+    filepath = os.path.join(os.path.dirname(__file__), '..', 'data', 'suffixes.json')
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -413,16 +398,9 @@ class MapConfigDefinition:
 # -----------------------------------------------------------------------
 # [추가] load_data_from_csv 헬퍼 함수
 # -----------------------------------------------------------------------
-def load_data_from_csv(file_name, definition_class, data_path=None, key_field=None):
+def load_data_from_csv(file_name, definition_class, data_path="data", key_field=None):
     DATA_DEFINITIONS = {}
-    
-    from localization import get_data_path
-    
-    # [Fix] Default to internal dungeon/data directory if not specified or if default "data" was passed
-    if data_path is None or data_path == "data":
-        data_path = os.path.join(os.path.dirname(__file__), "data")
-        
-    file_path = get_data_path(file_name, data_path)
+    file_path = os.path.join(data_path, file_name)
     
     if not os.path.exists(file_path):
         print(f"WARNING: Data file not found at {file_path}")
@@ -483,73 +461,35 @@ def get_item_definition(item_id):
     defs = load_item_definitions()
     return defs.get(item_id)
 
-def load_monster_definitions(data_path="data"):
+def load_monster_definitions(data_path=None):
     """monsters.csv 및 Boss.csv 파일에서 몬스터 정의 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     defs = load_data_from_csv('monsters.csv', MonsterDefinition, data_path, key_field='ID')
     bosses = load_data_from_csv('Boss.csv', MonsterDefinition, data_path, key_field='ID')
     defs.update(bosses)
     return defs
 
-def load_skill_definitions(data_path="data"):
+def load_skill_definitions(data_path=None):
     """skills.csv 파일에서 스킬 정의 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     return load_data_from_csv('skills.csv', SkillDefinition, data_path, key_field='이름')
 
-def load_map_definitions(data_path="data"):
+def load_map_definitions(data_path=None):
     """maps.csv 파일에서 층별 맵 설정 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     return load_data_from_csv('maps.csv', MapConfigDefinition, data_path, key_field='floor')
 
-def load_class_definitions(data_path="data"):
+def load_class_definitions(data_path=None):
     """classes.csv 파일에서 캐릭터 직업 정의 로드"""
+    if data_path is None:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     return load_data_from_csv('classes.csv', ClassDefinition, data_path, key_field='class_id')
-
-def save_game_data(data, name):
-    """플레이어 이름을 기반으로 게임 데이터 저장"""
-    import json
-    save_dir = "game_data"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    
-    filename = f"{name}.json"
-    file_path = os.path.join(save_dir, filename)
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-    # print(f"Game saved to {file_path}")
-
-def load_game_data(name):
-    """플레이어 이름을 기반으로 저장된 게임 데이터 로드 (JSON)"""
-    import json
-    filename = f"{name}.json"
-    file_path = os.path.join("game_data", filename)
-    if not os.path.exists(file_path):
-        return None
-    
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Failed to load save file: {e}")
-        return None
-
-def delete_save_data(name):
-    """플레이어 이름을 기반으로 저장 데이터 삭제"""
-    filename = f"{name}.json"
-    file_path = os.path.join("game_data", filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        # print(f"Save file {filename} deleted.")
-
-def list_save_files():
-    """game_data 디렉토리의 모든 세이브 파일(.json) 목록을 반환"""
-    save_dir = "game_data"
-    if not os.path.exists(save_dir) or not os.path.isdir(save_dir):
-        return []
-    
-    files = [f.replace('.json', '') for f in os.listdir(save_dir) if f.endswith('.json')]
-    return sorted(files)
 
 def load_boss_patterns(data_path=None):
     """boss_patterns.json (패턴) 및 boss_dialogues.csv (대사)를 로드하여 병합합니다."""
-    import json
     if data_path is None:
         data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
     
@@ -598,5 +538,50 @@ def load_boss_patterns(data_path=None):
             
             
     return patterns
+
+def save_game_data(data, name):
+    """플레이어 이름을 기반으로 게임 데이터 저장"""
+    import json
+    save_dir = "game_data"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
+    filename = f"{name}.json"
+    file_path = os.path.join(save_dir, filename)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+    # print(f"Game saved to {file_path}")
+
+def load_game_data(name):
+    """플레이어 이름을 기반으로 저장된 게임 데이터 로드 (JSON)"""
+    import json
+    filename = f"{name}.json"
+    file_path = os.path.join("game_data", filename)
+    if not os.path.exists(file_path):
+        return None
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Failed to load save file: {e}")
+        return None
+
+def delete_save_data(name):
+    """플레이어 이름을 기반으로 저장 데이터 삭제"""
+    filename = f"{name}.json"
+    file_path = os.path.join("game_data", filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        # print(f"Save file {filename} deleted.")
+
+def list_save_files():
+    """game_data 디렉토리의 모든 세이브 파일(.json) 목록을 반환"""
+    save_dir = "game_data"
+    if not os.path.exists(save_dir) or not os.path.isdir(save_dir):
+        return []
+    
+    files = [f.replace('.json', '') for f in os.listdir(save_dir) if f.endswith('.json')]
+    return sorted(files)
 
 

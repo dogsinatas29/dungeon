@@ -1,7 +1,7 @@
 # dungeon/components.py - 게임 데이터를 정의하는 모듈
 
 # NOTE: 이 파일은 ECS 코어(.ecs)를 임포트해야 합니다.
-from .ecs import Component
+from ecs import Component
 from typing import List, Dict
 
 # --- 플레이어/몬스터 기본 정보 ---

@@ -66,6 +66,19 @@ Diablo-like real-time roguelike engine for terminal
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
 
+## Recent Updates (2026-01-10)
+
+### 1. English Localization
+- **Full Localization System**: Centralized `localization.py` handling all UI and system messages.
+- **Language Selection**: New startup sequence allows players to choose between English and Korean.
+- **Data Localization**: Translated all game data (items, monsters, skills, classes) into English.
+- **Localized Affixes**: Dynamic translations for item prefixes/suffixes based on active language.
+
+### 2. Project Restoration & Script Support
+- **Start.py Entry Point**: Reconstructed the main entry point for standard execution.
+- **Absolute Imports**: Converted relative imports to absolute across all core files to support direct Python script execution.
+- **Bug Fixes**: Resolved various syntax and import errors discovered during verification.
+
 ## Recent Updates (2026-01-02)
 
 ### 1. Boss Room Redesign & Interaction System

@@ -1,8 +1,8 @@
 import subprocess
 import os
 import platform
-from .ecs import System
-from .events import Event, MessageEvent, SkillUseEvent, SoundEvent
+from ecs import System
+from events import Event, MessageEvent, SkillUseEvent, SoundEvent
 
 class SoundSystem(System):
     """

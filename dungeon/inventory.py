@@ -1,5 +1,5 @@
 # inventory.py
-from .items import Item, Equipment, Consumable
+from items import Item, Equipment, Consumable
 
 class Inventory:
     def __init__(self):

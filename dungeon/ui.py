@@ -5,6 +5,7 @@ import sys
 import logging
 import readchar # readchar 임포트 추가
 import shutil
+from localization import _
 
 # 터미널 색상 코드를 사용한 렌더링을 위한 딕셔너리
 COLOR_MAP = {
@@ -53,7 +54,7 @@ class ConsoleUI:
             선택된 skill_name 또는 None
         """
         if not known_skills:
-            self.add_message("사용 가능한 스킬이 없습니다!")
+            self.add_message(_("No skills available!"))
             return None
             
         selected_idx = 0
@@ -73,7 +74,7 @@ class ConsoleUI:
             print(f"\033[{start_y};{start_x}H", end="")
             print("┌" + "─" * (menu_width - 2) + "┐")
             
-            header = f" 충전할 스킬 선택 "
+            header = _("Select skill to recharge")
             padding = (menu_width - len(header) - 2) // 2
             print(f"\033[{start_y + 1};{start_x}H", end="")
             print("│" + " " * padding + header + " " * (menu_width - len(header) - padding - 2) + "│")
@@ -125,7 +126,7 @@ class ConsoleUI:
             선택된 ItemDefinition 또는 None
         """
         if not repairable_items:
-            self.add_message("수리할 아이템이 없습니다!")
+            self.add_message(_("No items to repair!"))
             return None
             
         selected_idx = 0
@@ -145,7 +146,7 @@ class ConsoleUI:
             print(f"\033[{start_y};{start_x}H", end="")
             print("┌" + "─" * (menu_width - 2) + "┐")
             
-            header = f" 수리할 장비 선택 (성공확률 불명) "
+            header = _("Select equipment to repair")
             padding = (menu_width - len(header) - 2) // 2
             print(f"\033[{start_y + 1};{start_x}H", end="")
             print("│" + " " * padding + header + " " * (menu_width - len(header) - padding - 2) + "│")
@@ -232,7 +233,7 @@ class ConsoleUI:
             print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
         
         # Prompt (centered)
-        prompt_text = "당신의 이름은 무엇입니까? (최대 10자)"
+        prompt_text = _("Enter your name") + " " + _("(Max 10 chars)")
         prompt_padding = (terminal_width - len(prompt_text) - 4) // 2
         prompt = f"{' ' * prompt_padding}{prompt_text} > "
         
@@ -299,9 +300,9 @@ class ConsoleUI:
         menu_lines = [
             "",
             "═" * 40,
-            "  1. 새 게임",
-            "  2. 이어하기",
-            "  3. 게임 종료",
+            "  1. " + _("New Game"),
+            "  2. " + _("Continue"),
+            "  3. " + _("Exit Game"),
             "═" * 40,
             ""
         ]
@@ -310,7 +311,7 @@ class ConsoleUI:
             padding = (terminal_width - len(line)) // 2
             print(f"{' ' * padding}{line}")
         
-        print(f"{COLOR_MAP['green']}[선택] 1, 2, 3을 입력하세요.{COLOR_MAP['reset']}", end='', flush=True)
+        print(f"{COLOR_MAP['green']}[{_('Select')}] 1, 2, 3...{COLOR_MAP['reset']}", end='', flush=True)
 
         while True:
             choice = self.get_key_input()
@@ -328,15 +329,15 @@ class ConsoleUI:
         """게임 종료 화면을 표시합니다."""
         self._clear_screen()
         print(f"{COLOR_MAP['red']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['red']}        G A M E  O V E R           {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['red']}        {_('GAME OVER')}           {COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['red']}==================================={COLOR_MAP['reset']}")
         print(f"\n    {message}\n")
-        print("    아무 키나 눌러 메인 메뉴로 돌아갑니다.")
+        print("    " + _("Press any key to return to Main Menu."))
         self.get_key_input()
 
     def show_death_screen(self):
         """플레이어 사망 화면을 표시합니다."""
-        self.show_game_over_screen("장렬히 전사하셨습니다...")
+        self.show_game_over_screen(_("You died..."))
 
     def show_confirmation_dialog(self, message):
         """사용자에게 예/아니오 확인을 받습니다."""
@@ -349,7 +350,7 @@ class ConsoleUI:
             # Message Box
             lines = [
                 "╔═════════════════════════════════════╗",
-                "║               확  인               ║",
+                f"║               {_('Confirm'):^13}               ║",
                 "╠═════════════════════════════════════╣",
                 f"║ {message:^35} ║",
                 "╚═════════════════════════════════════╝",
@@ -360,7 +361,7 @@ class ConsoleUI:
                 padding = (terminal_width - len(line)) // 2
                 print(f"{' ' * padding}{line}")
                 
-            options = ["아니오 (No)", "예 (Yes)"]
+            options = [_("No") + " (No)", _("Yes") + " (Yes)"]
             
             for i, option in enumerate(options):
                 prefix = "> " if i == selected_index else "  "
@@ -419,13 +420,14 @@ class ConsoleUI:
                 print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
             
             # Class list
-            prompt = "당신의 직업을 선택하세요:"
+            prompt = _("Select your class:")
             prompt_padding = (terminal_width - len(prompt)) // 2
             print(f"{' ' * prompt_padding}{prompt}\n")
             
             for i, cls in enumerate(class_list):
                 prefix = "> " if i == selected_index else "  "
                 color = COLOR_MAP['green'] if i == selected_index else COLOR_MAP['white']
+                # Class name/description are already localized via data_manager redirection
                 line = f"{prefix}{cls.name} - {cls.description}"
                 line_padding = (terminal_width - len(line)) // 2
                 print(f"{color}{' ' * line_padding}{line}{COLOR_MAP['reset']}")
@@ -433,7 +435,7 @@ class ConsoleUI:
             # Selected class details
             sel_cls = class_list[selected_index]
             print()
-            detail_title = f"--- [ {sel_cls.name} ] 상세 능력치 ---"
+            detail_title = f"--- [ {sel_cls.name} ] {_('Detail Stats')} ---"
             detail_padding = (terminal_width - len(detail_title)) // 2
             print(f"{COLOR_MAP['blue']}{' ' * detail_padding}{detail_title}{COLOR_MAP['reset']}")
             
@@ -445,7 +447,7 @@ class ConsoleUI:
             attrs_padding = (terminal_width - len(attrs_line)) // 2
             print(f"{' ' * attrs_padding}{attrs_line}")
             
-            skill_line = f" 기본 스킬: {sel_cls.base_skill}"
+            skill_line = f" {_('Basic Skill')}: {sel_cls.base_skill}"
             skill_padding = (terminal_width - len(skill_line)) // 2
             print(f"{' ' * skill_padding}{skill_line}")
             
@@ -495,11 +497,11 @@ class ConsoleUI:
                 print(f"{COLOR_MAP['yellow']}{' ' * padding}{line}{COLOR_MAP['reset']}")
             
             if not save_files:
-                no_save_msg = "저장된 게임이 없습니다."
+                no_save_msg = _("No saved games.")
                 msg_padding = (terminal_width - len(no_save_msg)) // 2
                 print(f"{' ' * msg_padding}{no_save_msg}")
                 
-                back_msg = "[B] 뒤로 가기"
+                back_msg = "[B] " + _("Back")
                 back_padding = (terminal_width - len(back_msg)) // 2
                 print(f"\n{COLOR_MAP['green']}{' ' * back_padding}{back_msg}{COLOR_MAP['reset']}")
             else:
@@ -512,7 +514,7 @@ class ConsoleUI:
                     print(f"{color}{' ' * line_padding}{line}{COLOR_MAP['reset']}")
                 
                 # Controls (centered)
-                controls = "[↑/↓] 이동 | [ENTER/L] 불러오기 | [D/DEL] 삭제 | [B] 뒤로 가기"
+                controls = f"[↑/↓] {_('Move')} | [ENTER/L] {_('Load')} | [D/DEL] {_('Delete')} | [B] {_('Back')}"
                 controls_padding = (terminal_width - len(controls)) // 2
                 print(f"\n{COLOR_MAP['green']}{' ' * controls_padding}{controls}{COLOR_MAP['reset']}")
 
@@ -596,7 +598,7 @@ class ConsoleUI:
             buffer.append("\n")
         
         # 4. 입력 가이드
-        add_line(f"\n{COLOR_MAP['green']}[이동] 방향키 | [5/.] 대기 | [I] 인벤토리 | [1-0] 퀵슬롯{COLOR_MAP['reset']}\n")
+        add_line(f"\n{COLOR_MAP['green']}[{_('Move')}] 방향키 | [5/.] {_('Wait')} | [I] {_('Inventory')} | [1-0] {_('Quickslot')}{COLOR_MAP['reset']}\n")
         
         # \033[J: 커서 아래의 남은 잔상들을 지움
         buffer.append("\033[J")
@@ -609,10 +611,10 @@ class ConsoleUI:
         """인벤토리 화면을 렌더링합니다."""
         self._clear_screen()
         print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
-        print(f"{COLOR_MAP['yellow']}           인 벤 토 리           {COLOR_MAP['reset']}")
+        print(f"{COLOR_MAP['yellow']}           {_('Inventory'):^13}           {COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
         
-        print("\n--- 장비 --- ")
+        print("\n--- " + _("Equipment") + " --- ")
         if player_equipped_items:
             for slot, item_obj in player_equipped_items.items():
                 # item_obj가 문자열(ID)일 수도 있고 객체일 수도 있음. 객체라면 이름 사용
@@ -621,26 +623,26 @@ class ConsoleUI:
                     display_name = item_obj.name
                 print(f"  {slot}: {display_name}")
         else:
-            print("  장착된 아이템 없음")
+            print("  " + _("No equipped items"))
 
-        print("\n--- 아이템 --- ")
+        print("\n--- " + _("Items") + " --- ")
         if player_inventory_items:
             for item_id, item_data in player_inventory_items.items():
                 item_obj = item_data['item']
                 qty = item_data['qty']
                 print(f"  - {item_obj.name} (x{qty})")
         else:
-            print("  아이템 없음")
+            print("  " + _("No items"))
 
         print(f"\n{COLOR_MAP['green']}[I] 닫기{COLOR_MAP['reset']}")
         sys.stdout.flush()
 
     def show_character_sheet(self, player_entity):
         """캐릭터 정보창 표시 및 스탯 포인트 배분"""
-        from .components import StatsComponent, LevelComponent
+        from components import StatsComponent, LevelComponent
         
         selected_stat = 0 # 0:STR, 1:MAG, 2:DEX, 3:VIT
-        stat_names = ["STR (힘)", "MAG (마력)", "DEX (민첩)", "VIT (활력)"]
+        stat_names = [_("STR (Str)"), _("MAG (Mag)"), _("DEX (Dex)"), _("VIT (Vit)")]
         
         while True:
             self._clear_screen()
@@ -663,10 +665,10 @@ class ConsoleUI:
                 reset = "\033[0m"
                 return f"{color}{prefix} {name:<15}: {value:<4}  | {desc}{reset}"
 
-            print(get_row(0, stat_names[0], stats.base_str, "공격력/장비착용"))
-            print(get_row(1, stat_names[1], stats.base_mag, "최대 마력(MP)"))
-            print(get_row(2, stat_names[2], stats.base_dex, "방어력(AC)/명중"))
-            print(get_row(3, stat_names[3], stats.base_vit, "최대 체력(HP)"))
+            print(get_row(0, stat_names[0], stats.base_str, _("Equipment/Req")))
+            print(get_row(1, stat_names[1], stats.base_mag, _("Max MP")))
+            print(get_row(2, stat_names[2], stats.base_dex, _("AC/Hit")))
+            print(get_row(3, stat_names[3], stats.base_vit, _("Max HP")))
             
             print("-" * 60)
             print(f"  HP: {stats.current_hp}/{stats.max_hp}  MP: {stats.current_mp}/{stats.max_mp}")
@@ -707,7 +709,7 @@ class ConsoleUI:
             선택된 (name, data) 튜플 또는 None (취소 시)
         """
         if not unidentified_items:
-            self.add_message("감정할 아이템이 없습니다!")
+            self.add_message(_("No items to identify!"))
             return None
         
         selected_idx = 0
@@ -728,7 +730,7 @@ class ConsoleUI:
             print("┌" + "─" * (menu_width - 2) + "┐")
             
             # Header
-            header = f" 감정할 아이템 선택 ({len(unidentified_items)}개) "
+            header = _("Select item to identify") + f" ({len(unidentified_items)}) "
             padding = (menu_width - len(header) - 2) // 2
             print(f"\033[{start_y + 1};{start_x}H", end="")
             print("│" + " " * padding + header + " " * (menu_width - len(header) - padding - 2) + "│")

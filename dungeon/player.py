@@ -1,6 +1,6 @@
 # player.py
-from . import data_manager
-from .components import StatsComponent
+import data_manager
+from components import StatsComponent
 
 
 class Player:

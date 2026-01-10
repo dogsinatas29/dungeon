@@ -4,14 +4,14 @@ import csv
 import os
 import random
 from typing import Dict, List
-from .ecs import System
-from .components import (
+from ecs import System
+from components import (
     PositionComponent, StatsComponent, TrapComponent, 
     StunComponent, PoisonComponent, HitFlashComponent,
     AIComponent, MonsterComponent, RenderComponent,
     EffectComponent, MapComponent, InventoryComponent
 )
-from .events import MessageEvent, SoundEvent
+from events import MessageEvent, SoundEvent
 
 
 class TrapDefinition:
@@ -249,7 +249,7 @@ class TrapSystem(System):
                     m_def = m_defs.get(m_comp.monster_id) if m_comp.monster_id else m_defs.get(m_comp.type_name)
                     
                     if m_def:
-                        from .systems import LevelSystem
+                        from systems import LevelSystem
                         level_sys = self.world.get_system(LevelSystem)
                         if level_sys:
                             xp_gained = int(m_def.xp_value) # 함정 킬은 100% 지급
@@ -257,7 +257,7 @@ class TrapSystem(System):
                             self.event_manager.push(MessageEvent(f"함정이 처치한 적의 경험치 {xp_gained}를 획득했습니다.", "yellow"))
             
             # [Fix] 정식 사망 처리 연계
-            from .systems import CombatSystem
+            from systems import CombatSystem
             combat_sys = self.world.get_system(CombatSystem)
             if combat_sys:
                 # source_entity가 없더라도 _handle_death 호출 (None 전달)
@@ -271,7 +271,7 @@ class TrapSystem(System):
         
         # [Visual Effect] 치명적 피해 시 화면 테두리 붉은색 효과 (20% 이상 피해)
         if is_player and damage >= stats.max_hp * 0.2:
-            from .ui import ConsoleUI
+            from ui import ConsoleUI
             ui = getattr(self.world.engine, 'ui', None)
             if ui:
                 ui.blood_overlay_timer = 10 # 약 1~2초간 지속

@@ -2,7 +2,7 @@ import json
 import os
 import copy
 import random
-from .data_manager import ItemDefinition, MonsterDefinition
+from data_manager import ItemDefinition, MonsterDefinition
 
 class ModifierManager:
     """접두어 데이터를 로드하고 아이템/몬스터에 적용하는 관리자"""

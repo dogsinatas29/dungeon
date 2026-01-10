@@ -1,8 +1,8 @@
 # dungeon/systems.py - 게임 로직을 실행하는 모듈
 
 from typing import Set, Tuple, List, Any
-from .ecs import System, Entity, Event, EventManager # EventManager는 필요 없음
-from .components import (
+from ecs import System, Entity, Event, EventManager # EventManager는 필요 없음
+from components import (
     PositionComponent, DesiredPositionComponent, MapComponent, MonsterComponent, 
     MessageComponent, StatsComponent, AIComponent, LootComponent, CorpseComponent,
     RenderComponent, InventoryComponent, ChestComponent, ShopComponent, StunComponent,
@@ -16,8 +16,8 @@ import readchar
 import random
 import time
 import logging
-from .ui import COLOR_MAP
-from .events import (
+from ui import COLOR_MAP
+from events import (
     MoveSuccessEvent, CollisionEvent, MessageEvent, MapTransitionEvent,
     ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent, CombatResultEvent,
     InteractEvent, TrapTriggerEvent
@@ -217,7 +217,7 @@ class InputSystem(System):
         
         # Character Sheet (C)
         if action in ['c', 'C']:
-            from .engine import GameState
+            from engine import GameState
             if self.world.engine.state == GameState.PLAYING:
                 self.world.engine.state = GameState.CHARACTER_SHEET
             elif self.world.engine.state == GameState.CHARACTER_SHEET:
@@ -246,7 +246,7 @@ class InputSystem(System):
                         break
                 
                 # 2. 계단 확인 (시체가 없거나 시체 확인 후에도 계단 확인 가능)
-                from .constants import EXIT_NORMAL, START
+                from constants import EXIT_NORMAL, START
                 map_entities = self.world.get_entities_with_components({MapComponent})
                 if map_entities:
                     map_comp = map_entities[0].get_component(MapComponent)
@@ -353,7 +353,7 @@ class MovementSystem(System):
 
                 # 4. 계단 확인 (플레이어만)
                 if entity.entity_id == self.world.get_player_entity().entity_id:
-                    from .constants import EXIT_NORMAL, START
+                    from constants import EXIT_NORMAL, START
                     current_tile = map_component.tiles[new_y][new_x]
                     if current_tile == EXIT_NORMAL:
                         self.event_manager.push(MessageEvent("다음 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 내려가시겠습니까?"))
@@ -603,7 +603,7 @@ class MonsterAISystem(System):
                 combat_sys = self.world.get_system(CombatSystem)
                 if combat_sys:
                     # [Guardian Tier 4+] Check for CopiedSkillComponent
-                    from .components import CopiedSkillComponent
+                    from components import CopiedSkillComponent
                     copied_skill = entity.get_component(CopiedSkillComponent)
                     
                     dx = 1 if target_pos.x > pos.x else (-1 if target_pos.x < pos.x else 0)
@@ -616,7 +616,7 @@ class MonsterAISystem(System):
                         self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 '{copied_skill.skill_name}'을(를) 모방하여 시전합니다!", "cyan"))
                     else:
                         # Default Behavior (Tier 1-3): Firebolt (Cost 0)
-                        from .data_manager import SkillDefinition
+                        from data_manager import SkillDefinition
                         # ... (SkillDefinition code is just comment/mock here, actual event uses implementation)
                         self.event_manager.push(SkillUseEvent(attacker_id=entity.entity_id, skill_name="FIREBOLT", dx=dx, dy=dy, cost=0))
                         
@@ -897,8 +897,8 @@ class CombatSystem(System):
                 inv.items[item.name]['qty'] += qty
             else:
                 inv.items[item.name] = {'item': item, 'qty': qty}
-            from .ui import COLOR_MAP
-            from .constants import RARITY_COLORS, RARITY_NORMAL
+            from ui import COLOR_MAP
+            from constants import RARITY_COLORS, RARITY_NORMAL
             
             rarity = getattr(item, 'rarity', 'NORMAL')
             color_name = RARITY_COLORS.get(rarity, RARITY_NORMAL)
@@ -946,7 +946,7 @@ class CombatSystem(System):
 
     def _get_element_from_flags(self, flags):
         """플래그 집합에서 속성 찾기"""
-        from .constants import ELEMENT_FIRE, ELEMENT_WATER, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_NONE
+        from constants import ELEMENT_FIRE, ELEMENT_WATER, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_NONE
         if "ELEMENT_FIRE" in flags: return ELEMENT_FIRE
         if "ELEMENT_WATER" in flags: return ELEMENT_WATER
         if "ELEMENT_WOOD" in flags: return ELEMENT_WOOD
@@ -973,7 +973,7 @@ class CombatSystem(System):
             return
 
         # 1. 속성 결정
-        from .constants import ELEMENT_ADVANTAGE, ELEMENT_NONE
+        from constants import ELEMENT_ADVANTAGE, ELEMENT_NONE
         
         # 공격 속성: 스킬 속성 우선 -> 무기 속성 -> 본체 속성(기본)
         attack_element = a_stats.element # 기본값: 본체 속성
@@ -1094,7 +1094,7 @@ class CombatSystem(System):
         final_damage = 0
         if is_magic:
             # 마법 데미지 (저항력 적용)
-            from .constants import ELEMENT_FIRE, ELEMENT_WATER, ELEMENT_WOOD, ELEMENT_POISON
+            from constants import ELEMENT_FIRE, ELEMENT_WATER, ELEMENT_WOOD, ELEMENT_POISON
             resist = 0
             if attack_element == ELEMENT_FIRE: resist = t_stats.res_fire
             elif attack_element == ELEMENT_WATER: resist = t_stats.res_ice
@@ -1171,7 +1171,7 @@ class CombatSystem(System):
             # [HP Bar Display] Track combat for monsters
             if target.has_component(MonsterComponent) and final_damage > 0:
                 import time
-                from .components import CombatTrackerComponent
+                from components import CombatTrackerComponent
                 
                 # Add or update combat tracker
                 tracker = target.get_component(CombatTrackerComponent)
@@ -1419,7 +1419,7 @@ class CombatSystem(System):
                             # Death Bark
                             death_bark = pattern.get("death_bark")
                             if death_bark:
-                                from .events import BossBarkEvent
+                                from events import BossBarkEvent
                                 self.event_manager.push(BossBarkEvent(target, "DEATH", death_bark))
                             
                             # Prepare Boss Loot from Pattern
@@ -1448,7 +1448,7 @@ class CombatSystem(System):
                                 if d_map:
                                     ex, ey = d_map.exit_x, d_map.exit_y
                                     if 0 <= ex < map_comp.width and 0 <= ey < map_comp.height:
-                                        from .constants import EXIT_NORMAL
+                                        from constants import EXIT_NORMAL
                                         map_comp.tiles[ey][ex] = EXIT_NORMAL
                                         
                                         # 메시지 출력
@@ -1552,7 +1552,7 @@ class CombatSystem(System):
                         
                         # [Visual] Set corpse color based on max rarity
                         if render:
-                            from .constants import RARITY_COLORS
+                            from constants import RARITY_COLORS
                             
                             # Determine max rarity
                             max_rarity_val = 0
@@ -1586,7 +1586,7 @@ class CombatSystem(System):
         t_pos = target.get_component(PositionComponent)
         if not t_pos: return
         
-        from .constants import BOSS_SEQUENCE
+        from constants import BOSS_SEQUENCE
         boss_id = getattr(m_comp, 'monster_id', None)
         if not boss_id or boss_id not in BOSS_SEQUENCE: return
         
@@ -1646,7 +1646,7 @@ class CombatSystem(System):
         if target.has_component(ShrineComponent) and attacker.entity_id == self.world.get_player_entity().entity_id:
             shrine_comp = target.get_component(ShrineComponent)
             if not shrine_comp.is_used:
-                from .events import ShrineOpenEvent
+                from events import ShrineOpenEvent
                 self.event_manager.push(ShrineOpenEvent(shrine_id=target.entity_id))
             return
 
@@ -1805,7 +1805,7 @@ class CombatSystem(System):
             inv = attacker.get_component(InventoryComponent)
             if inv and "손1" in inv.equipped:
                 staff = inv.equipped["손1"]
-                from .data_manager import ItemDefinition
+                from data_manager import ItemDefinition
                 if isinstance(staff, ItemDefinition) and getattr(staff, 'current_charges', 0) > 0:
                     # 지팡이 자체 스킬이거나, 마법 계열 스킬인 경우 차지 사용 (여기서는 단순화하여 모든 MP 소모 스킬에 적용)
                     if skill.cost_type == "MP" or "COST_MP" in s_flags:
@@ -1932,7 +1932,7 @@ class CombatSystem(System):
             inv = attacker.get_component(InventoryComponent)
             if inv and "손1" in inv.equipped:
                 weapon = inv.equipped["손1"]
-                from .data_manager import ItemDefinition
+                from data_manager import ItemDefinition
                 if isinstance(weapon, ItemDefinition) and "RANGED" in getattr(weapon, 'flags', []):
                     effective_skill.range += 3
         effective_skill.duration = scaled_duration
@@ -2293,7 +2293,7 @@ class CombatSystem(System):
                 triggered_count = 0
                 
                 # TrapSystem 참조 가져오기 (원격 발동 및 발사체 발동용)
-                from .trap_manager import TrapSystem
+                from trap_manager import TrapSystem
                 trap_system = self.world.get_system(TrapSystem)
                 
                 # 주변 3x3 범위 함정 확인
@@ -2329,7 +2329,7 @@ class CombatSystem(System):
                         # 아이템 수거 확률 (30% 확률로 화살 또는 기계 부품)
                         loot_msg = ""
                         if random.random() < 0.3:
-                            from .data_manager import load_item_definitions
+                            from data_manager import load_item_definitions
                             item_defs = load_item_definitions()
                             loot_id = random.choice(["화살", "기계 부품"])
                             loot_def = next((d for d in item_defs.values() if d.name == loot_id), None)
@@ -2352,7 +2352,7 @@ class CombatSystem(System):
             inv = attacker.get_component(InventoryComponent)
             if inv:
                 staff = inv.equipped.get("손1")
-                from .data_manager import ItemDefinition
+                from data_manager import ItemDefinition
                 if staff and isinstance(staff, ItemDefinition) and hasattr(staff, 'current_charges'):
                     if staff.current_charges < staff.max_charges:
                         # 지팡이 차지 회복 (최대치의 30% 또는 3회)
@@ -2646,7 +2646,7 @@ class CombatSystem(System):
                     t_comp = trap_ent.get_component(TrapComponent)
                     if not t_comp.is_triggered and t_comp.trigger_type == "STEP_ON":
                         # TrapSystem 찾기
-                        from .trap_manager import TrapSystem
+                        from trap_manager import TrapSystem
                         trap_sys = next((s for s in self.world.systems if isinstance(s, TrapSystem)), None)
                         if trap_sys:
                             trap_sys.trigger_trap(target, trap_ent, source_entity=attacker)
@@ -2739,8 +2739,8 @@ class CombatSystem(System):
                 best_skill = None
                 best_lv = -1
                 # Check owner's known skills (Stored in InventoryComponent)
-                from .components import InventoryComponent
-                # from .data_manager import DataManager # Removed
+                from components import InventoryComponent
+                # from data_manager import DataManager # Removed
                 
                 if owner.has_component(InventoryComponent):
                     inv = owner.get_component(InventoryComponent)
@@ -2760,8 +2760,8 @@ class CombatSystem(System):
                                  best_skill = s_id
                 
                 if best_skill:
-                    from .components import CopiedSkillComponent
-                    # from .data_manager import DataManager
+                    from components import CopiedSkillComponent
+                    # from data_manager import DataManager
                     skill_def = self.world.engine.skill_defs.get(best_skill)
                     skill_name = skill_def.name if skill_def else best_skill
                     self.world.add_component(summon.entity_id, CopiedSkillComponent(skill_id=best_skill, skill_name=skill_name))
@@ -3245,7 +3245,7 @@ class BossSystem(System):
         self.patterns = self.world.engine.boss_patterns
         
         # 이벤트 리스너 등록
-        from .events import CombatResultEvent, MapTransitionEvent, BossBarkEvent
+        from events import CombatResultEvent, MapTransitionEvent, BossBarkEvent
         self.event_manager.register(CombatResultEvent, self._handle_combat_result)
         self.event_manager.register(MapTransitionEvent, self._handle_map_transition)
         self.event_manager.register(BossBarkEvent, self._handle_boss_bark)
@@ -3272,7 +3272,7 @@ class BossSystem(System):
         t_pos = target.get_component(PositionComponent)
         if not t_pos: return
         
-        from .constants import BOSS_SEQUENCE
+        from constants import BOSS_SEQUENCE
         boss_id = getattr(m_comp, 'monster_id', None)
         if not boss_id or boss_id not in BOSS_SEQUENCE: return
         
@@ -3458,7 +3458,7 @@ class BossSystem(System):
                                 self._trigger_bark(boss_ent, bark)
                             self.event_manager.push(MessageEvent(f"!!! {boss.boss_id}의 광역 강타! !!!", "red"))
                             
-                            from .events import DirectionalAttackEvent
+                            from events import DirectionalAttackEvent
                             for ddy in range(-4, 5):
                                 for ddx in range(-4, 5):
                                     if ddx == 0 and ddy == 0: continue
@@ -3533,7 +3533,7 @@ class BossSystem(System):
                         elif dist <= 1 and random.random() < 0.3:
                             # [AoE] 대회전
                             self._trigger_bark(boss_ent, "모두 사라져라!")
-                            from .events import DirectionalAttackEvent
+                            from events import DirectionalAttackEvent
                             self.event_manager.push(MessageEvent(f"{boss.boss_id}의 대회전 공격!", "red"))
                             if is_ghost:
                                 self.event_manager.push(MessageEvent("환영의 일격이라 위력이 약합니다.", "gray"))
@@ -3569,7 +3569,7 @@ class BossSystem(System):
             if map_comp.tiles[target_y][target_x] == '.':
                 p_pos_comp.x, p_pos_comp.y = target_x, target_y
                 # 짧은 기절 부여 (nerf_factor 반영)
-                from .components import StunComponent
+                from components import StunComponent
                 player_ent.add_component(StunComponent(duration=1.0 * nerf_factor))
                 self.event_manager.push(MessageEvent("갈고리에 끌려가 기절했습니다!", "yellow"))
             return True
@@ -3638,7 +3638,7 @@ class BossSystem(System):
             
             if hit_wall:
                 self.event_manager.push(MessageEvent("도살자가 벽에 들이받고 기절했습니다!", "yellow"))
-                from .components import StunComponent
+                from components import StunComponent
                 # 보스 기절 시간은 너프하지 않음 (오히려 패널티니까)
                 boss_ent.add_component(StunComponent(duration=2.0))
             return True
@@ -3742,7 +3742,7 @@ class BossSystem(System):
         # 2. 대지의 저주 (Root/속박) - 사거리 10
         curse_cd = 15.0 * cooldown_mod
         if dist <= 10 and random.random() < 0.15:
-            from .components import StatModifierComponent
+            from components import StatModifierComponent
             # 이동 불가 디버프 (여기서는 간단히 Action Delay를 매우 크게 늘리거나 Root 컴포넌트 사용)
             # 일단 Action Delay를 대폭 늘리는 StatModifier로 구현
             if current_time - getattr(boss, 'last_curse_time', 0) > curse_cd:
@@ -3824,7 +3824,7 @@ class BossSystem(System):
         boss.bark_display_timer = duration
         boss.last_bark_time = current_time
         # 로그에도 남김
-        from .events import MessageEvent
+        from events import MessageEvent
         self.event_manager.push(MessageEvent(f"[{boss.boss_id}] \"{text}\"", "gold"))
 
     def _handle_combat_result(self, event):
@@ -3890,7 +3890,7 @@ class BossSystem(System):
     def _trigger_summon(self, boss_ent, minion_type, count):
         """보스 주변에 부하 몬스터 소환"""
         pos = boss_ent.get_component(PositionComponent)
-        from .events import MessageEvent
+        from events import MessageEvent
         self.event_manager.push(MessageEvent(f"{minion_type}들이 보스의 부름에 응답하여 나타납니다!", "purple"))
 
 class InteractionSystem(System):
@@ -4026,7 +4026,7 @@ class InteractionSystem(System):
     def _trigger_door_trap(self, victim, door_comp, damage_multiplier: float = 1.0):
         """문 함정 발동 (데미지 배율 지원)"""
         import random
-        from .components import PoisonComponent, CurseComponent, HitFlashComponent
+        from components import PoisonComponent, CurseComponent, HitFlashComponent
         
         is_player = victim.entity_id == self.world.get_player_entity().entity_id
         victim_name = "당신" if is_player else "몬스터"

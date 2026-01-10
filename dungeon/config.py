@@ -4,6 +4,9 @@
 MAP_WIDTH = 80
 MAP_HEIGHT = 20
 
+# 언어 설정 ("ko", "en")
+LANGUAGE = "en"
+
 # 방 생성을 위한 설정
 MAX_ROOMS = 10
 ROOM_MIN_SIZE = 6

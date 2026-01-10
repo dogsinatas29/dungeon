@@ -10,27 +10,27 @@ import readchar
 import logging
 import copy
 from typing import Dict, List, Set, Type, Optional, Any
-from .map import DungeonMap
+from map import DungeonMap
 
 # 필요한 모듈 임포트
-from .ecs import World, EventManager, initialize_event_listeners
-from .components import (
+from ecs import World, EventManager, initialize_event_listeners
+from components import (
     PositionComponent, RenderComponent, StatsComponent, InventoryComponent, 
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent, ShrineComponent,
     StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent, TrapComponent,
     SleepComponent, PoisonComponent, StatModifierComponent, BossComponent, PetrifiedComponent, BossGateComponent
 )
-from .systems import (
+from systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
     TimeSystem, RegenerationSystem, LevelSystem, BossSystem, InteractionSystem
 )
 
-from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
-from .sound_system import SoundSystem
-from .renderer import Renderer
-from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
-from .constants import (
+from events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
+from sound_system import SoundSystem
+from renderer import Renderer
+from data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
+from constants import (
     ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS,
     RARITY_NORMAL, RARITY_MAGIC, RARITY_UNIQUE, RARITY_CURSED
 )
@@ -96,8 +96,8 @@ class Engine:
         self.renderer = Renderer() 
 
         # 데이터 정의 로드 (항상 사용 가능하도록 __init__에서 처리)
-        from .data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions, load_map_definitions, load_class_definitions, load_boss_patterns
-        from .trap_manager import load_trap_definitions
+        from data_manager import load_item_definitions, load_skill_definitions, load_monster_definitions, load_map_definitions, load_class_definitions, load_boss_patterns
+        from trap_manager import load_trap_definitions
         self.item_defs = load_item_definitions()
         self.skill_defs = load_skill_definitions()
         self.monster_defs = load_monster_definitions()
@@ -109,7 +109,7 @@ class Engine:
         self.suffix_defs = load_suffixes()
         
         # 접두어 관리자 초기화 (몬스터용)
-        from .modifiers import ModifierManager
+        from modifiers import ModifierManager
         self.modifier_manager = ModifierManager()
 
         self.shake_timer = 0 # Screen shake duration
@@ -260,7 +260,7 @@ class Engine:
                         for name, data in inv_data.get("items", {}).items():
                             item_info = data.get("item", {})
                             if item_info:
-                                from .data_manager import ItemDefinition
+                                from data_manager import ItemDefinition
                                 try:
                                     item_obj = ItemDefinition(**item_info)
                                     restored_items[name] = {"item": item_obj, "qty": data.get("qty", 1)}
@@ -273,7 +273,7 @@ class Engine:
                         restored_equipped = {}
                         for slot, eq_data in inv_data.get("equipped", {}).items():
                             if isinstance(eq_data, dict) and "name" in eq_data:
-                                from .data_manager import ItemDefinition
+                                from data_manager import ItemDefinition
                                 restored_equipped[slot] = ItemDefinition(**eq_data)
                             else:
                                 restored_equipped[slot] = eq_data
@@ -550,7 +550,7 @@ class Engine:
         
         # 상성 및 플래그 설정
         # 상성 및 플래그 설정
-        from .constants import ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, RARITY_NORMAL, RARITY_MAGIC, RARITY_UNIQUE
+        from constants import ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, RARITY_NORMAL, RARITY_MAGIC, RARITY_UNIQUE
         all_elements = [ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON]
         monster_el = random.choice(all_elements)
         # color = ELEMENT_COLORS.get(monster_el, "white") # REMOVED: Color now depends on Rarity
@@ -783,7 +783,7 @@ class Engine:
         self.world.add_component(boss.entity_id, stats)
         
         # [Boss System] 보스 컴포넌트 추가
-        from .components import BossComponent
+        from components import BossComponent
         self.world.add_component(boss.entity_id, BossComponent(boss_id=boss_def.ID))
         
         return boss
@@ -1303,7 +1303,7 @@ class Engine:
         self.level_system = LevelSystem(self.world)
         
         # TrapSystem은 trap_manager에서 import
-        from .trap_manager import TrapSystem as TrapSystemNew
+        from trap_manager import TrapSystem as TrapSystemNew
         self.trap_system = TrapSystemNew(self.world, self.trap_defs)
         
         self.sound_system = SoundSystem(self.world)
@@ -1747,7 +1747,7 @@ class Engine:
 
     def _save_game(self):
         """현재 게임 상태를 저장합니다."""
-        from .data_manager import save_game_data
+        from data_manager import save_game_data
         
         # Engine 상태를 JSON으로 변환 가능한 딕셔너리로 추출 (간소화된 예시)
         # 실제로는 모든 엔티티와 컴포넌트를 저장해야 함
@@ -1988,7 +1988,7 @@ class Engine:
             self.state = GameState.PLAYING
             return
 
-        from .components import StatsComponent, LevelComponent
+        from components import StatsComponent, LevelComponent
         level_comp = player_entity.get_component(LevelComponent)
         stats = player_entity.get_component(StatsComponent)
         
@@ -2062,7 +2062,7 @@ class Engine:
         player_entity = self.world.get_player_entity()
         if not player_entity: return
 
-        from .components import InventoryComponent
+        from components import InventoryComponent
         inv = player_entity.get_component(InventoryComponent)
         if not inv: return
 
@@ -2209,7 +2209,7 @@ class Engine:
                     return False # 방향 선택 모드 자체는 턴 소모 안함
                 else:
                     # 즉시 발동형 (SELF 등)
-                    from .events import SkillUseEvent
+                    from events import SkillUseEvent
                     self.world.event_manager.push(SkillUseEvent(attacker_id=player_entity.entity_id, skill_name=skill_name, dx=0, dy=0))
                     return True # 턴 소모
 
@@ -2445,7 +2445,7 @@ class Engine:
 
             # [Stat Buff] 능력치 버약/버프 적용
             if any(v != 0 for v in [item.str_bonus, item.mag_bonus, item.dex_bonus, item.vit_bonus]) and item.duration > 0:
-                from .components import StatModifierComponent
+                from components import StatModifierComponent
                 modifiers = player_entity.get_components(StatModifierComponent)
                 buff_source = f"ITEM_{item.name}"
                 existing = next((m for m in modifiers if m.source == buff_source), None)
@@ -2711,7 +2711,7 @@ class Engine:
         
         # 2. 장비(Permanent) 보너스 합산
         for slot, item in inv.equipped.items():
-            from .data_manager import ItemDefinition
+            from data_manager import ItemDefinition
             if isinstance(item, ItemDefinition):
                 # [Durability] Check if broken
                 if getattr(item, 'max_durability', 0) > 0 and getattr(item, 'current_durability', 0) <= 0:
@@ -2927,7 +2927,7 @@ class Engine:
 
     def _render(self):
         """World 상태를 기반으로 Renderer를 사용하여 화면을 그립니다."""
-        from .data_manager import ItemDefinition
+        from data_manager import ItemDefinition
         
         # 1. 사이드바 영역 계산
         self.renderer.clear_buffer()
@@ -3121,7 +3121,7 @@ class Engine:
 
                 # 2-0. 상태 이상 시각 효과 (오버헤드 아이콘) - 우선순위 순서로 표시
                 # Priority: Petrified > Stun > Sleep > Poison > Bleeding > Mana Shield
-                from .components import (BleedingComponent, ManaShieldComponent)
+                from components import (BleedingComponent, ManaShieldComponent)
                 
                 status_icon = None
                 status_color = "white"
@@ -3180,7 +3180,7 @@ class Engine:
                         self.renderer.draw_text(screen_x + 1, screen_y - 1, duration_text, status_color)
                 
                 # [Monster HP Bar] 전투 중인 몬스터 HP 표시
-                from .components import CombatTrackerComponent, MonsterComponent
+                from components import CombatTrackerComponent, MonsterComponent
                 if entity.has_component(MonsterComponent) and entity.has_component(CombatTrackerComponent):
                     stats = entity.get_component(StatsComponent)
                     if stats and stats.max_hp > 0:
@@ -3577,7 +3577,7 @@ class Engine:
         player_entity = self.world.get_player_entity()
         if not player_entity: return
         
-        from .components import StatsComponent, LevelComponent
+        from components import StatsComponent, LevelComponent
         stats = player_entity.get_component(StatsComponent)
         level_comp = player_entity.get_component(LevelComponent)
         
@@ -3669,7 +3669,7 @@ class Engine:
         # 4. 아이템 목록 필터링 및 표시
         player_entity = self.world.get_player_entity()
         if player_entity:
-             from .components import InventoryComponent
+             from components import InventoryComponent
              filtered_items = []
              total_items = 0
              inv_comp = player_entity.get_component(InventoryComponent)
@@ -3684,7 +3684,7 @@ class Engine:
                  else:
                      current_y = start_y + 4
                      # Import constants
-                     from .constants import ELEMENT_ICONS, RARITY_NORMAL
+                     from constants import ELEMENT_ICONS, RARITY_NORMAL
                      # 스크롤 가능한 영역 계산 (하단 상세 정보창을 위해 6개로 제한)
                      max_visible_items = 6
                      
@@ -3968,11 +3968,11 @@ class Engine:
                 if i == self.selected_shop_item_index:
                     color = "green"
                 else:
-                    from .constants import RARITY_NORMAL
+                    from constants import RARITY_NORMAL
                     color = getattr(item, 'color', RARITY_NORMAL)
                 
                 # Icon
-                from .constants import ELEMENT_ICONS
+                from constants import ELEMENT_ICONS
                 icon = ""
                 if hasattr(item, 'element') and item.element in ELEMENT_ICONS:
                      icon = ELEMENT_ICONS[item.element] + " "
@@ -4087,7 +4087,7 @@ class Engine:
         y = sy + 2
         equipped_list = list(inv.equipped.items())
         
-        from .constants import RARITY_NORMAL
+        from constants import RARITY_NORMAL
         
         for idx, (slot, item) in enumerate(equipped_list):
             if y >= sy + h - 1: break

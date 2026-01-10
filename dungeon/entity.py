@@ -1,10 +1,10 @@
 # dungeon/entity.py
 
 from typing import Tuple # Tuple 임포트 추가
-from .component import PositionComponent, RenderComponent, ColliderComponent, DoorComponent, KeyComponent, HealthComponent, AttackComponent, DefenseComponent, MovableComponent, NameComponent, AIComponent # 필요한 컴포넌트 임포트
-from .player import Player # Player 클래스 임포트
-from .monster import Monster # Monster 클래스 임포트
-from . import data_manager
+from components import PositionComponent, RenderComponent, ColliderComponent, DoorComponent, KeyComponent, HealthComponent, AttackComponent, DefenseComponent, MovableComponent, NameComponent, AIComponent # 필요한 컴포넌트 임포트
+from player import Player # Player 클래스 임포트
+from monster import Monster # Monster 클래스 임포트
+import data_manager
 
 class EntityManager:
     """모든 엔티티를 관리하고, 컴포넌트를 할당하는 역할."""

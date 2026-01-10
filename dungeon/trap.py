@@ -1,5 +1,5 @@
 # trap.py
-from . import data_manager
+import data_manager
 
 class Trap:
     def __init__(self, x, y, trap_id):

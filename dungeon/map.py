@@ -3,7 +3,7 @@
 import random
 import logging
 from typing import List, Tuple, Dict, Any, Optional
-from .constants import WALL, FLOOR, UNKNOWN_CHAR # 상수 임포트
+from constants import WALL, FLOOR, UNKNOWN_CHAR # 상수 임포트
 
 # --- Tile Definitions ---
 DOOR_CLOSED_CHAR = '+'
