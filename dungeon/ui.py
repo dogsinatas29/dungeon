@@ -673,14 +673,31 @@ class ConsoleUI:
         print(f"{COLOR_MAP['yellow']}           {_('Inventory'):^13}           {COLOR_MAP['reset']}")
         print(f"{COLOR_MAP['yellow']}==================================={COLOR_MAP['reset']}")
         
-        print("\n--- " + _("Equipment") + " --- ")
+        print(f"\n--- {COLOR_MAP['cyan']}{_('EQUIP')}{COLOR_MAP['reset']} --- ")
         if player_equipped_items:
-            for slot, item_obj in player_equipped_items.items():
+            # Defined list of standard slots for sorting/display
+            slot_order = ["Head", "Neck", "Body", "Hand1", "Hand2", "Gloves", "Ring1", "Ring2", "Boots"]
+            
+            # Sort items by slot order if possible
+            sorted_items = []
+            for slot in slot_order:
+                if slot in player_equipped_items:
+                    sorted_items.append((slot, player_equipped_items[slot]))
+            
+            # Add any remaining slots not in standard list
+            for slot, item in player_equipped_items.items():
+                if slot not in slot_order:
+                    sorted_items.append((slot, item))
+
+            for slot, item_obj in sorted_items:
                 # item_obj가 문자열(ID)일 수도 있고 객체일 수도 있음. 객체라면 이름 사용
                 display_name = item_obj
                 if hasattr(item_obj, 'name'):
                     display_name = item_obj.name
-                print(f"  {slot}: {display_name}")
+                
+                # Localize Slot Name (Head -> 머리 / Head)
+                slot_display = _(slot)
+                print(f"  {slot_display:<6}: {display_name}")
         else:
             print("  " + _("No equipped items"))
 

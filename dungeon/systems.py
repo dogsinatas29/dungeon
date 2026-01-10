@@ -2392,13 +2392,28 @@ class CombatSystem(System):
                 else:
                     self.event_manager.push(MessageEvent("이동할 수 있는 빈 공간이 없습니다."))
 
-        elif skill.type == "RECOVERY":
             stats = attacker.get_component(StatsComponent)
             old_hp = stats.current_hp
             heal_amount = getattr(skill, 'damage', 10)
             stats.current_hp = min(stats.max_hp, stats.current_hp + heal_amount)
             recovered = stats.current_hp - old_hp
-            self.event_manager.push(MessageEvent(f"체력을 {recovered} 회복했습니다!"))
+            
+            # Localized Format: "HP recovered by {recovered}!" or "체력을 {recovered} 회복했습니다!"
+            from .localization import _
+            msg_format = _("recovered") # Expect "recovered" -> "회복했습니다" (suffix) or similar
+            # Better Approach: Full string translation with placeholders is tricky without valid `sprintf`.
+            # We'll construct it: "{Target} {Value} {Action}"
+            # Current localization system is simple dictionary lookup.
+            # Let's use simple concatenation for now matching current structure.
+            
+            # KO: "체력을 {recovered} 회복했습니다!"
+            # EN: "HP recovered by {recovered}!"
+            
+            import dungeon.config as config
+            if getattr(config, 'LANGUAGE', 'ko') == 'en':
+                self.event_manager.push(MessageEvent(f"HP recovered by {recovered}!"))
+            else:
+                self.event_manager.push(MessageEvent(f"체력을 {recovered} 회복했습니다!"))
         
         elif skill.type == "BUFF":
             if skill.id == "RAGE":

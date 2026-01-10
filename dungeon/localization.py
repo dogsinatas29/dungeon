@@ -39,6 +39,11 @@ TRANSLATIONS = {
         
         # System Messages
         "Save complete.": "저장이 완료되었습니다.", "Load complete.": "로드가 완료되었습니다.",
+
+        # New Additions
+        "LOGS": "로그", "EQUIP": "장비", "QUICK SLOTS": "퀵슬롯", "SKILLS": "스킬", "ACTIVE EFFECTS": "진행 효과",
+        "Head": "머리", "Body": "몸통", "Hand1": "손1", "Hand2": "손2", "Gloves": "장갑", "Boots": "신발", "Neck": "목", "Ring1": "반지1", "Ring2": "반지2",
+        "recovered": "회복되었습니다.",
     },
     "en": {
         "Level": "Level", "Exp": "Exp", "Job": "Job", "Gold": "Gold", "Floor": "Floor",
@@ -71,6 +76,11 @@ TRANSLATIONS = {
         "You died...": "You died...", "Victory!": "Victory!",
         
         "Save complete.": "Save complete.", "Load complete.": "Load complete.",
+
+        # New Additions
+        "LOGS": "LOGS", "EQUIP": "EQUIP", "QUICK SLOTS": "QUICK SLOTS", "SKILLS": "SKILLS", "ACTIVE EFFECTS": "ACTIVE EFFECTS",
+        "Head": "Head", "Body": "Body", "Hand1": "Hand1", "Hand2": "Hand2", "Gloves": "Gloves", "Boots": "Boots", "Neck": "Neck", "Ring1": "Ring1", "Ring2": "Ring2",
+        "recovered": "recovered", "HP": "HP", "MP": "MP",
     }
 }
 
