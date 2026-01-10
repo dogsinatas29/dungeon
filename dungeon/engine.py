@@ -1729,6 +1729,11 @@ class Engine:
         
         if game_result != "DEATH":
             self._save_game()
+        else:
+            # Perma-death: Delete save file
+            from .data_manager import delete_save_data
+            if hasattr(self, 'player_name') and self.player_name:
+                delete_save_data(self.player_name)
             
         return game_result
 

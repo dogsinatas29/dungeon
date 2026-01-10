@@ -1571,6 +1571,7 @@ class CombatSystem(System):
         elif target.entity_id == self.world.get_player_entity().entity_id:
             # 플레이어 사망
             self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("당신은 죽었습니다...") + f"{COLOR_MAP['reset']}", "red"))
+            self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("GAME OVER! 저장된 데이터가 삭제됩니다.") + f"{COLOR_MAP['reset']}", "red"))
 
     def _trigger_boss_summon(self, attacker: Entity, target: Entity, specific_boss_id: str = None):
         """보스의 체력이 낮아지면 지원군을 소환합니다. specific_boss_id가 있으면 해당 보스 소환."""

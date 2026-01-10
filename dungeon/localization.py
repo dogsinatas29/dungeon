@@ -653,6 +653,8 @@ TRANSLATIONS = {
         "필요 레벨:": "Req Level:",
         "소지 골드:": "Gold:",
         "Trap ID '{}'에 해당하는 함정 정의를 찾을 수 없습니다.": "Trap definition for ID '{}' not found.",
+        
+        "GAME OVER! 저장된 데이터가 삭제됩니다.": "GAME OVER! Save data will be deleted.",
     }
 }
 
