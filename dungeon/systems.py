@@ -522,7 +522,7 @@ class MonsterAISystem(System):
                 if rage_aura and dist <= rage_aura.radius:
                     if ai.behavior != AIComponent.CHASE:
                         ai.behavior = AIComponent.CHASE
-                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 분노에 이끌려 달려옵니다!"))
+                        self.event_manager.push(MessageEvent(_("{}가 분노에 이끌려 달려옵니다!").format(self.world.engine._get_entity_name(entity))))
             
             # 5. 행동 결정 (플래그 기반 확장)
             if "TELEPORT" in stats.flags and random.random() < 0.2:
@@ -533,7 +533,7 @@ class MonsterAISystem(System):
                     tx, ty = target_pos.x + random.randint(-1, 1), target_pos.y + random.randint(-1, 1)
                     if 0 <= tx < mc.width and 0 <= ty < mc.height and mc.tiles[ty][tx] == '.':
                         pos.x, pos.y = tx, ty
-                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 갑자기 이동했습니다!"))
+                        self.event_manager.push(MessageEvent(_("{}가 갑자기 이동했습니다!").format(self.world.engine._get_entity_name(entity))))
                         stats.last_action_time = current_time
                         continue
 
@@ -543,7 +543,7 @@ class MonsterAISystem(System):
                     ai.behavior = AIComponent.CHASE
                     # Play "Ah... Fresh Meat!" sound/msg only once (use detection_range as flag or add state)
                     # For simplicity, we assume encountering triggers CHASE and that's it.
-                    self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자: \"Ah... Fresh Meat!\"{COLOR_MAP['reset']}", "red"))
+                    self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _('도살자: "Ah... Fresh Meat!"') + f"{COLOR_MAP['reset']}", "red"))
             
             # [Fix] Detection Range - Monsters should only engage when player is nearby
             # This prevents invisible monsters from attacking from across the map
@@ -614,7 +614,7 @@ class MonsterAISystem(System):
                     if copied_skill:
                         # Use Copied Skill (Cost 0 for Summon)
                         self.event_manager.push(SkillUseEvent(attacker_id=entity.entity_id, skill_name=copied_skill.skill_id, dx=dx, dy=dy, cost=0))
-                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 '{copied_skill.skill_name}'을(를) 모방하여 시전합니다!", "cyan"))
+                        self.event_manager.push(MessageEvent(_("{}가 '{}'을(를) 모방하여 시전합니다!").format(self.world.engine._get_entity_name(entity), copied_skill.skill_name), "cyan"))
                     else:
                         # Default Behavior (Tier 1-3): Firebolt (Cost 0)
                         from .data_manager import SkillDefinition
@@ -651,21 +651,21 @@ class MonsterAISystem(System):
                     ai.has_summoned = True
                     
                     if "BUTCHER" in stats.flags:
-                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자가 분노하여 지원군을 부릅니다!{COLOR_MAP['reset']}", "red"))
+                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("도살자가 분노하여 지원군을 부릅니다!") + f"{COLOR_MAP['reset']}", "red"))
                         # Summon Goblins as "Small Demons"
                         for _ in range(3):
                             mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
                             if hasattr(self.world.engine, '_spawn_minion'):
                                 self.world.engine._spawn_minion(mx, my, "GOBLIN")
                     elif "LEORIC" in stats.flags:
-                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}해골 왕이 영원한 충성을 요구합니다!{COLOR_MAP['reset']}", "red"))
+                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("해골 왕이 영원한 충성을 요구합니다!") + f"{COLOR_MAP['reset']}", "red"))
                         # Summon Skeletons
                         for _ in range(4):
                             mx, my = pos.x + random.randint(-2, 2), pos.y + random.randint(-2, 2)
                             if hasattr(self.world.engine, '_spawn_minion'):
                                 self.world.engine._spawn_minion(mx, my, "SKELETON")
                     else:
-                        self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}가 지원군을 부릅니다!"))
+                        self.event_manager.push(MessageEvent(_("{}가 지원군을 부릅니다!").format(self.world.engine._get_entity_name(entity))))
                         # 주변에 미니언 소환 (2-3마리)
                         for _ in range(random.randint(2, 3)):
                             mx, my = pos.x + random.randint(-1, 1), pos.y + random.randint(-1, 1)
@@ -683,12 +683,12 @@ class MonsterAISystem(System):
                     self.world.delete_entity(corpse.entity_id)
                     if hasattr(self.world.engine, '_spawn_minion'):
                         self.world.engine._spawn_minion(c_pos.x, c_pos.y, "SKELETON")
-                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}해골 왕이 죽은 자를 다시 일으켜 세웁니다!{COLOR_MAP['reset']}", "red"))
+                        self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("해골 왕이 죽은 자를 다시 일으켜 세웁니다!") + f"{COLOR_MAP['reset']}", "red"))
 
             # [DIABLO] Apocalypse (Map-wide Fire Damage)
             if "APOCALYPSE" in stats.flags:
                 if random.random() < 0.05: # 5% chance per tick
-                    self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}디아블로가 파멸의 화염(Apocalypse)을 시전합니다!{COLOR_MAP['reset']}", "red"))
+                    self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("디아블로가 파멸의 화염(Apocalypse)을 시전합니다!") + f"{COLOR_MAP['reset']}", "red"))
                     self.world.engine.ui.trigger_shake(5)
                     # Damage all non-Diablo entities
                 for target in self.world.get_entities_with_components({StatsComponent, PositionComponent}):
@@ -696,7 +696,7 @@ class MonsterAISystem(System):
                          t_stats = target.get_component(StatsComponent)
                          damage = random.randint(10, 20)
                          t_stats.current_hp -= damage
-                         self.event_manager.push(MessageEvent(f"화염이 {self.world.engine._get_entity_name(target)}을 덮쳐 {damage}의 피해를 입혔습니다!", "red"))
+                         self.event_manager.push(MessageEvent(_("화염이 {}을 덮쳐 {}의 피해를 입혔습니다!").format(self.world.engine._get_entity_name(target), damage), "red"))
 
 
 class CombatSystem(System):
@@ -807,7 +807,7 @@ class CombatSystem(System):
         map_comp = map_entities[0].get_component(MapComponent)
 
         attacker_name = self._get_entity_name(attacker)
-        self.event_manager.push(MessageEvent(f'"{attacker_name}"의 원거리 공격!'))
+        self.event_manager.push(MessageEvent(_('"{}"의 원거리 공격!').format(attacker_name)))
         self.event_manager.push(MessageEvent(f"[Debug] Range Hit: {event.range_dist}", "yellow"))
 
         # 사거리만큼 일직선상 조사 (애니메이션 효과 포함)
@@ -831,7 +831,7 @@ class CombatSystem(System):
                 time.sleep(0.08) # 80ms 대기 (User fedback: animation not visible)
 
             if map_comp.tiles[target_y][target_x] == '#':
-                self.event_manager.push(MessageEvent("공격이 벽에 막혔습니다."))
+                self.event_manager.push(MessageEvent(_("공격이 벽에 막혔습니다.")))
                 self.world.delete_entity(effect_entity.entity_id) # 잔상 삭제
                 break
 
@@ -917,7 +917,8 @@ class CombatSystem(System):
             elif not corpse: source = "아이템"
             elif corpse and corpse.original_name: source = f"{corpse.original_name}의 시체"
             
-            self.event_manager.push(MessageEvent(f"{source}에서 {msg}을(를) 획득했습니다!"))
+            translated_source = _(source) if source in ["시체", "보물상자", "아이템"] else source
+            self.event_manager.push(MessageEvent(_("{source}에서 {}을(를) 획득했습니다!").format(msg, source=translated_source)))
             
             # 루팅 후 처리 (내용물 비우기)
             loot.items = []
@@ -942,8 +943,8 @@ class CombatSystem(System):
             elif not corpse: source = "아이템"
             elif corpse and corpse.original_name: source = f"{corpse.original_name}의 시체"
             
-            # 사용자의 요청에 따른 메시지 형식: "[대상]을(를) 살펴봅니다... 아무것도 발견하지 못했습니다."
-            self.event_manager.push(MessageEvent(f"{source}를 살펴봅니다... 아무것도 발견하지 못했습니다."))
+            translated_source = _(source) if source in ["시체", "보물상자", "아이템"] else source
+            self.event_manager.push(MessageEvent(_("{source}를 살펴봅니다... 아무것도 발견하지 못했습니다.").format(source=translated_source)))
 
     def _get_element_from_flags(self, flags):
         """플래그 집합에서 속성 찾기"""
@@ -1034,13 +1035,13 @@ class CombatSystem(System):
             bonus = random.uniform(0.01, 0.05)
             damage_multiplier = 1.0 + bonus
             crit_chance += 0.1
-            advantage_msg = f" (상성 우위! +{int(bonus*100)}%)"
+            advantage_msg = " " + _("상성 우위! +{}%").format(int(bonus*100))
         elif ELEMENT_ADVANTAGE.get(defense_element) == attack_element:
             # 상성 열위: 데미지 -1~5%, 크리티컬 -10%
             malus = random.uniform(0.01, 0.05)
             damage_multiplier = 1.0 - malus
             crit_chance -= 0.1
-            advantage_msg = f" (상성 열위.. -{int(malus*100)}%)"
+            advantage_msg = " " + _("상성 열위.. -{}%").format(int(malus*100))
 
         # 크리티컬 판정
         if random.random() < crit_chance:
@@ -1144,14 +1145,14 @@ class CombatSystem(System):
                      # Apply Bleeding (High chance)
                      if not target.has_component(BleedingComponent):
                          target.add_component(BleedingComponent(damage=3, duration=10, attacker_id=attacker.entity_id))
-                         self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}도살자의 식칼에 베여 과다출혈이 발생합니다!{COLOR_MAP['reset']}", "red"))
+                         self.event_manager.push(MessageEvent(f"{COLOR_MAP['red']}" + _("도살자의 식칼에 베여 과다출혈이 발생합니다!") + f"{COLOR_MAP['reset']}", "red"))
                 
                 # [Check Weapon Flags] e.g. BLEEDING on Items (Player or Monster)
                 # If attacker has BLEEDING flag (from Weapon or Monster stats)
                 if "BLEEDING" in getattr(a_stats, 'flags', ""):
                      if not target.has_component(BleedingComponent):
                          target.add_component(BleedingComponent(damage=2, duration=5, attacker_id=attacker.entity_id))
-                         self.event_manager.push(MessageEvent(f"{target_name}이(가) 출혈 상태가 되었습니다!", "red"))
+                         self.event_manager.push(MessageEvent(_("{}이(가) 출혈 상태가 되었습니다!").format(target_name), "red"))
 
             # [Mana Shield Absorption]
             ms_comp = target.get_component(ManaShieldComponent)
@@ -1162,7 +1163,7 @@ class CombatSystem(System):
                 remaining_damage = final_damage - absorb_amount
                 
                 if absorb_amount > 0:
-                    self.event_manager.push(MessageEvent(f"마법 장막이 {absorb_amount}의 피해를 흡수했습니다! (남은 MP: {int(t_stats.current_mp)})", "light_cyan"))
+                    self.event_manager.push(MessageEvent(_("마법 장막이 {}의 피해를 흡수했습니다! (남은 MP: {})").format(absorb_amount, int(t_stats.current_mp)), "light_cyan"))
                 
                 if remaining_damage > 0:
                     t_stats.current_hp -= remaining_damage
@@ -1223,7 +1224,7 @@ class CombatSystem(System):
                 if not target.has_component(StunComponent):
                     # 0.5초간 경직
                     target.add_component(StunComponent(duration=0.5))
-                    self.event_manager.push(MessageEvent(f"'{target_name}'이(가) 강력한 충격으로 경직되었습니다!"))
+                    self.event_manager.push(MessageEvent(_("'{}'이(가) 강력한 충격으로 경직되었습니다!").format(target_name)))
             
             # A. Attacker Weapon Durability
             a_inv = attacker.get_component(InventoryComponent)
@@ -1240,7 +1241,7 @@ class CombatSystem(System):
                     if getattr(w_item, 'max_durability', 0) > 0 and w_item.current_durability > 0:
                         w_item.current_durability -= 1
                         if w_item.current_durability <= 0:
-                             self.event_manager.push(MessageEvent(f"[경고] {attacker_name}의 {w_item.name}이(가) 파손되었습니다!"))
+                             self.event_manager.push(MessageEvent(_("[경고] {}의 {}이(가) 파손되었습니다!").format(attacker_name, w_item.name)))
                              self.event_manager.push(SoundEvent("BREAK"))
 
             # B. Target Armor Durability
@@ -1259,7 +1260,7 @@ class CombatSystem(System):
                     if a_item.current_durability > 0:
                         a_item.current_durability -= 1
                         if a_item.current_durability <= 0:
-                             self.event_manager.push(MessageEvent(f"[경고] {target_name}의 {a_item.name}이(가) 파손되었습니다!"))
+                             self.event_manager.push(MessageEvent(_("[경고] {}의 {}이(가) 파손되었습니다!").format(target_name, a_item.name)))
                              self.event_manager.push(SoundEvent("BREAK"))
 
 
@@ -1280,7 +1281,7 @@ class CombatSystem(System):
             if "STUN_ON_HIT" in a_flags:
                 if not target.has_component(StunComponent):
                    target.add_component(StunComponent(duration=1.0))
-                   self.event_manager.push(MessageEvent(f"{target_name}이(가) 충격으로 기절했습니다!"))
+                   self.event_manager.push(MessageEvent(_("{}이(가) 충격으로 기절했습니다!").format(target_name)))
             
             # 타격 시 스턴 플래그가 있는 스킬인 경우
             if skill:
@@ -1320,7 +1321,7 @@ class CombatSystem(System):
                                     # 스플래쉬 데미지는 50% (0.5), range=1, 스플래쉬 전파 X
                                     self._apply_damage(attacker, s_target, distance=1, skill=skill, damage_factor=0.5, allow_splash=False)
                                     if first and attacker.entity_id == player_entity.entity_id:
-                                        self.event_manager.push(MessageEvent("주변의 적들이 공격에 휘말립니다!", "cyan"))
+                                        self.event_manager.push(MessageEvent(_("주변의 적들이 공격에 휘말립니다!"), "cyan"))
                                         first = False
         
 
@@ -1344,12 +1345,12 @@ class CombatSystem(System):
         # 3.5 수면(Sleep) 해제 처리: 공격을 받으면 깨어남
         if target.has_component(SleepComponent):
             target.remove_component(SleepComponent)
-            self.event_manager.push(MessageEvent(f"{target_name}이(가) 공격을 받아 잠에서 깨어났습니다!"))
+            self.event_manager.push(MessageEvent(_("{}이(가) 공격을 받아 잠에서 깨어났습니다!").format(target_name)))
 
         # 4. 사망 처리
         if t_stats.current_hp <= 0:
             t_stats.current_hp = 0
-            self.event_manager.push(MessageEvent(f"{target_name}이(가) 쓰러졌습니다!"))
+            self.event_manager.push(MessageEvent(_("{}이(가) 쓰러졌습니다!").format(target_name)))
             
             if target.has_component(MonsterComponent):
                 m_comp = target.get_component(MonsterComponent)
@@ -1379,7 +1380,7 @@ class CombatSystem(System):
                                 if xp_gained < 1: xp_gained = 1 # 최소 1은 보장
                                 
                                 level_sys.gain_exp(player_entity, xp_gained)
-                                self.event_manager.push(MessageEvent(f"경험치 {xp_gained}를 획득했습니다.", "yellow"))
+                                self.event_manager.push(MessageEvent(_("경험치 {}를 획득했습니다.").format(xp_gained), "yellow"))
                             else:
                                 logging.error("LevelSystem NOT FOUND during death handling")
 
@@ -1433,7 +1434,7 @@ class CombatSystem(System):
                                         item_def = self.world.engine.item_defs.get(item_name)
                                         if item_def:
                                             loot.items.append({"item": item_def, "qty": 1})
-                                            self.event_manager.push(MessageEvent(f"{boss_id}의 전리품: {item_name}이(가) 떨어졌습니다!", "gold"))
+                                            self.event_manager.push(MessageEvent(_("{}의 전리품: {}이(가) 떨어졌습니다!").format(boss_id, item_name), "gold"))
 
                         # [Boss Gate] 계단 생성 로직
                         map_ents = self.world.get_entities_with_components({MapComponent, BossGateComponent})
@@ -1455,9 +1456,9 @@ class CombatSystem(System):
                                         # 메시지 출력
                                         region = boss_gate.next_region_name
                                         if region == "승리":
-                                             self.event_manager.push(MessageEvent("!!! 던전을 정복했습니다 !!!", "gold"))
+                                             self.event_manager.push(MessageEvent(_("!!! 던전을 정복했습니다 !!!"), "gold"))
                                         else:
-                                             self.event_manager.push(MessageEvent(f"!!! {region}(으)로 가는 계단이 나타났습니다 !!!", "light_cyan"))
+                                             self.event_manager.push(MessageEvent(_("!!! {}(으)로 가는 계단이 나타났습니다 !!!").format(region), "light_cyan"))
                                         
                                         self.event_manager.push(SoundEvent("LEVEL_UP")) # 보상 사운드
 
@@ -1592,7 +1593,7 @@ class CombatSystem(System):
         if not boss_id or boss_id not in BOSS_SEQUENCE: return
         
         target_name = self._get_entity_name(target)
-        self.event_manager.push(MessageEvent(f"'{target_name}'이(가) 강력한 포효와 함께 지원군을 부릅니다!"))
+        self.event_manager.push(MessageEvent(_("'{}'이(가) 강력한 포효와 함께 지원군을 부릅니다!").format(target_name)))
         self.event_manager.push(SoundEvent("BOSS_ROAR"))
         
         engine = self.world.engine
@@ -1613,7 +1614,7 @@ class CombatSystem(System):
         if spawn_id:
             tx, ty = self._find_spawn_pos(t_pos.x, t_pos.y)
             engine._spawn_boss(tx, ty, boss_name=spawn_id, is_summoned=True)
-            self.event_manager.push(MessageEvent(f"!!! {boss_id}이(가) {spawn_id}의 환영을 불러냅니다! !!!", "purple"))
+            self.event_manager.push(MessageEvent(_("!!! {}이(가) {}의 환영을 불러냅니다! !!!").format(boss_id, spawn_id), "purple"))
 
     def _find_spawn_pos(self, x, y):
         """주변 빈 공간을 찾습니다."""
@@ -1675,7 +1676,7 @@ class CombatSystem(System):
         # Here we only check generic cooldown if set.
         if self.get_cooldown(attacker.entity_id, event.skill_name) > 0:
             remaining = int(self.get_cooldown(attacker.entity_id, event.skill_name)) + 1
-            self.event_manager.push(MessageEvent(f"기술이 준비되지 않았습니다! ({remaining}초)", "white"))
+            self.event_manager.push(MessageEvent(_("기술이 준비되지 않았습니다! ({}초)").format(remaining), "white"))
             return
         
         # [Charge Skill] 특별 처리
@@ -1694,15 +1695,15 @@ class CombatSystem(System):
                          attacker.remove_component(ChargeComponent)
                      
                      attacker.add_component(ChargeComponent(selected_skill))
-                     self.event_manager.push(MessageEvent(f"지팡이에 '{selected_skill}' 마력을 충전했습니다!", "cyan"))
-                     self.event_manager.push(MessageEvent("충전을 취소했습니다."))
+                     self.event_manager.push(MessageEvent(_("지팡이에 '{}' 마력을 충전했습니다!").format(selected_skill), "cyan"))
+                     self.event_manager.push(MessageEvent(_("충전을 취소했습니다.")))
              return
 
         # [Repair Skill] 특별 처리
         if event.skill_name == "Repair" or event.skill_name == "수리":
             inv = attacker.get_component(InventoryComponent)
             if not inv: 
-                self.event_manager.push(MessageEvent("수리할 장비가 없습니다."))
+                self.event_manager.push(MessageEvent(_("수리할 장비가 없습니다.")))
                 return
 
             # 내구도가 감소된 아이템 찾기 (착용 중 + 인벤토리)
@@ -1732,7 +1733,7 @@ class CombatSystem(System):
                         repairable_items.append(item)
             
             if not repairable_items:
-                self.event_manager.push(MessageEvent("수리가 필요한 아이템이 없습니다.", "yellow"))
+                self.event_manager.push(MessageEvent(_("수리가 필요한 아이템이 없습니다."), "yellow"))
                 return
 
             # Show UI
@@ -1745,14 +1746,14 @@ class CombatSystem(System):
                     if random.random() < 0.6:
                         # Success
                         selected_item.current_durability = selected_item.max_durability
-                        self.event_manager.push(MessageEvent(f"'{selected_item.name}' 수리에 성공했습니다!", "green"))
+                        self.event_manager.push(MessageEvent(_("'{}' 수리에 성공했습니다!").format(selected_item.name), "green"))
                         self.event_manager.push(SoundEvent("LEVEL_UP")) # 긍정적 효과음
                     else:
                         # Fail
-                        self.event_manager.push(MessageEvent(f"'{selected_item.name}' 수리에 실패했습니다...", "red"))
+                        self.event_manager.push(MessageEvent(_("'{}' 수리에 실패했습니다...").format(selected_item.name), "red"))
                         # 페널티는 현재 턴 소모 뿐
                 else:
-                    self.event_manager.push(MessageEvent("수리를 취소했습니다."))
+                    self.event_manager.push(MessageEvent(_("수리를 취소했습니다.")))
             return
 
         a_stats = attacker.get_component(StatsComponent)
@@ -1771,7 +1772,7 @@ class CombatSystem(System):
                     'subtype': 'PROJECTILE', 'range': 6, 'type': 'ATTACK', 'element': '불', 'cost_type': 'MP'
                 })
             else:
-                self.event_manager.push(MessageEvent(f"알 수 없는 스킬입니다: {event.skill_name}"))
+                self.event_manager.push(MessageEvent(_("알 수 없는 스킬입니다: {}").format(event.skill_name)))
                 return
 
         if not skill:
@@ -1781,7 +1782,7 @@ class CombatSystem(System):
         level_comp = attacker.get_component(LevelComponent)
         req_level = getattr(skill, 'required_level', 1)
         if level_comp and req_level > level_comp.level:
-            self.event_manager.push(MessageEvent(f"아직 이 기술을 사용할 수 없습니다. (필요: Lv.{req_level})"))
+            self.event_manager.push(MessageEvent(_("아직 이 기술을 사용할 수 없습니다. (필요: Lv.{})").format(req_level)))
             return
 
         # 스킬 플래그 가져오기
@@ -1818,13 +1819,13 @@ class CombatSystem(System):
                             # Charge Saved!
                             used_charge = True
                             resource_used = f"STAFF CHARGE SAVED ({staff.current_charges}/{staff.max_charges})"
-                            self.event_manager.push(MessageEvent(f"숙련된 마법 시전으로 지팡이 마력을 보존했습니다! (확률: {int(savings_chance*100)}%)", "light_blue"))
+                            self.event_manager.push(MessageEvent(_("숙련된 마법 시전으로 지팡이 마력을 보존했습니다! (확률: {}%)").format(int(savings_chance*100)), "light_blue"))
                         else:
                             # Charge Consumed
                             staff.current_charges -= 1
                             used_charge = True
                             resource_used = f"STAFF CHARGE -1 ({staff.current_charges}/{staff.max_charges})"
-                            self.event_manager.push(MessageEvent(f"지팡이의 마력을 사용하여 정신력을 보존했습니다! (남은 충전: {staff.current_charges})"))
+                            self.event_manager.push(MessageEvent(_("지팡이의 마력을 사용하여 정신력을 보존했습니다! (남은 충전: {})").format(staff.current_charges)))
 
         # 자원 소모 로직 (플래그 우선 -> 기존 cost_type 폴백)
 
@@ -1846,7 +1847,7 @@ class CombatSystem(System):
         if not used_charge:
             if "COST_HP" in s_flags:
                 if a_stats.current_hp <= cost_val:
-                    self.event_manager.push(MessageEvent("체력이 부족합니다!"))
+                    self.event_manager.push(MessageEvent(_("체력이 부족합니다!")))
                     return
                 a_stats.current_hp -= cost_val
                 resource_used = f"HP -{cost_val}"
@@ -1858,10 +1859,10 @@ class CombatSystem(System):
                 if mp_cost < 1: mp_cost = 1
                 
                 if a_stats.current_hp <= hp_cost:
-                    self.event_manager.push(MessageEvent("체력이 부족하여 기술을 사용할 수 없습니다!"))
+                    self.event_manager.push(MessageEvent(_("체력이 부족하여 기술을 사용할 수 없습니다!")))
                     return
                 if a_stats.current_mp < mp_cost:
-                    self.event_manager.push(MessageEvent("마력이 부족하여 기술을 사용할 수 없습니다!"))
+                    self.event_manager.push(MessageEvent(_("마력이 부족하여 기술을 사용할 수 없습니다!")))
                     return
                     
                 a_stats.current_hp -= hp_cost
@@ -1869,7 +1870,7 @@ class CombatSystem(System):
                 resource_used = f"HP -{hp_cost}, MP -{mp_cost}"
             elif "COST_MP" in s_flags or (hasattr(skill, 'cost_type') and skill.cost_type == "MP"):
                 if a_stats.current_mp < cost_val:
-                    self.event_manager.push(MessageEvent("마력이 부족하여 기술을 사용할 수 없습니다!"))
+                    self.event_manager.push(MessageEvent(_("마력이 부족하여 기술을 사용할 수 없습니다!")))
                     return
                 a_stats.current_mp -= cost_val
                 resource_used = f"MP -{cost_val}"
@@ -1893,7 +1894,7 @@ class CombatSystem(System):
             
             if hasattr(self.world.engine, '_recalculate_stats'):
                 self.world.engine._recalculate_stats()
-            self.event_manager.push(MessageEvent(f"{skill.name}의 효과로 능력이 향상되었습니다!"))
+            self.event_manager.push(MessageEvent(_("{}의 효과로 능력이 향상되었습니다!").format(skill.name)))
 
         # [Clean] 스킬 레벨은 위에서 이미 계산됨 (skill_level)
         # inv 변수도 위에서 이미 할당됨
@@ -1946,7 +1947,7 @@ class CombatSystem(System):
         if cooldown_val > 0:
             self.set_cooldown(attacker.entity_id, skill.name, cooldown_val)
 
-        self.event_manager.push(MessageEvent(f"'{effective_skill.name}' 발동! (Lv.{skill_level}, {resource_used})"))
+        self.event_manager.push(MessageEvent(_("'{}' 발동! (Lv.{}, {})").format(effective_skill.name, skill_level, resource_used)))
 
         # 스킬 타입별 처리 (플래그 기반)
         if "PROJECTILE" in effective_skill.flags or effective_skill.subtype == "PROJECTILE":
@@ -1965,7 +1966,7 @@ class CombatSystem(System):
         elif effective_skill.id == "MANA_SHIELD" or effective_skill.name == "마나 실드":
             # 마나 실드 컴포넌트 추가/갱신
             attacker.add_component(ManaShieldComponent(duration=effective_skill.duration))
-            self.event_manager.push(MessageEvent(f"마법 장막이 생겨나 데미지를 마나로 흡수합니다! (지속 {int(effective_skill.duration)}초)", "light_cyan"))
+            self.event_manager.push(MessageEvent(_("마법 장막이 생겨나 데미지를 마나로 흡수합니다! (지속 {}초)").format(int(effective_skill.duration)), "light_cyan"))
         else:
             self._handle_self_skill(attacker, effective_skill)
 
@@ -2126,7 +2127,7 @@ class CombatSystem(System):
                 pos = attacker.get_component(PositionComponent)
                 if pos:
                     pos.x, pos.y = target_x, target_y
-                    self.event_manager.push(MessageEvent(f"차원 문을 통해 이동했습니다! ({target_x}, {target_y})", "cyan"))
+                    self.event_manager.push(MessageEvent(_("차원 문을 통해 이동했습니다! ({}, {})").format(target_x, target_y), "cyan"))
                     self.event_manager.push(SoundEvent("TELEPORT"))
                     if hasattr(self.world.engine, '_render'):
                         self.world.engine._render()
@@ -2188,7 +2189,7 @@ class CombatSystem(System):
     def _handle_explosion(self, attacker, cx, cy, skill):
         """폭발 효과: 지정된 좌표 주변 8방향(3x3)에 피해 및 이펙트 생성"""
         
-        self.event_manager.push(MessageEvent(f"!!! '{skill.name}' 폭발 !!!"))
+        self.event_manager.push(MessageEvent(_("!!! '{}' 폭발 !!!").format(skill.name)))
         
         for dy in range(-1, 2):
             for dx in range(-1, 2):
@@ -2266,9 +2267,9 @@ class CombatSystem(System):
                             item.current_durability = min(item.max_durability, item.current_durability + recovery)
                             if item.current_durability > old_dur:
                                 repaired = True
-                                self.event_manager.push(MessageEvent(f"[{item.name}]의 내구도를 {item.current_durability - old_dur} 회복했습니다."))
+                                self.event_manager.push(MessageEvent(_("[{}]의 내구도를 {} 회복했습니다.").format(item.name, item.current_durability - old_dur)))
                 if not repaired:
-                    self.event_manager.push(MessageEvent("수리할 장비가 없습니다."))
+                    self.event_manager.push(MessageEvent(_("수리할 장비가 없습니다.")))
                 else:
                     self.event_manager.push(SoundEvent("REPAIR"))
 
@@ -2339,14 +2340,14 @@ class CombatSystem(System):
                                 inv.add_item(loot_def, 1)
                                 loot_msg = f" (수거: {loot_id})"
                         
-                        self.event_manager.push(MessageEvent(f"함정 {removed_count}개를 안전하게 해제했습니다! (+{total_xp}XP){loot_msg} (성공률 {int(success_rate*100)}%)", "green"))
+                        self.event_manager.push(MessageEvent(_("함정 {}개를 안전하게 해제했습니다! (+{}XP){}(성공률 {}%)").format(removed_count, total_xp, loot_msg, int(success_rate*100)), "green"))
                     
                     if triggered_count > 0:
-                        self.event_manager.push(MessageEvent(f"해제에 실패하여 함정 {triggered_count}개가 발동되었습니다! (피해 감쇄 {int(mitigation*100)}%)", "yellow"))
+                        self.event_manager.push(MessageEvent(_("해제에 실패하여 함정 {}개가 발동되었습니다! (피해 감쇄 {}%)").format(triggered_count, int(mitigation*100)), "yellow"))
                     
                     self.event_manager.push(SoundEvent("UNLOCK"))
                 else:
-                    self.event_manager.push(MessageEvent("주변에 해제할 함정이 발견되지 않았습니다.", "white"))
+                    self.event_manager.push(MessageEvent(_("주변에 해제할 함정이 발견되지 않았습니다."), "white"))
 
         elif skill.id == "RECHARGE" or skill.name == "충전":
             # 지팡이 차지 회복
@@ -2360,12 +2361,12 @@ class CombatSystem(System):
                         recovery = max(3, int(staff.max_charges * 0.3))
                         old_chg = staff.current_charges
                         staff.current_charges = min(staff.max_charges, staff.current_charges + recovery)
-                        self.event_manager.push(MessageEvent(f"지팡이에 마력을 {staff.current_charges - old_chg}회 충전했습니다! ({staff.current_charges}/{staff.max_charges})", "blue"))
+                        self.event_manager.push(MessageEvent(_("지팡이에 마력을 {}회 충전했습니다! ({}/{})").format(staff.current_charges - old_chg, staff.current_charges, staff.max_charges), "blue"))
                         self.event_manager.push(SoundEvent("CHARGE"))
                     else:
-                        self.event_manager.push(MessageEvent("지팡이의 마력이 이미 가득 차 있습니다."))
+                        self.event_manager.push(MessageEvent(_("지팡이의 마력이 이미 가득 차 있습니다.")))
                 else:
-                    self.event_manager.push(MessageEvent("차를 충전할 지팡이를 들고 있지 않습니다."))
+                    self.event_manager.push(MessageEvent(_("마력을 충전할 지팡이를 들고 있지 않습니다.")))
         
         elif skill.id == "PHASING" or skill.name == "페이징" or "TELEPORT_RANDOM" in getattr(skill, 'flags', set()):
             # 랜덤 텔레포트
@@ -2386,12 +2387,12 @@ class CombatSystem(System):
                     pos = attacker.get_component(PositionComponent)
                     if pos:
                         pos.x, pos.y = tx, ty
-                        self.event_manager.push(MessageEvent(f"시공간이 뒤틀리며 무작위 위치로 이동했습니다! ({tx}, {ty})", "cyan"))
+                        self.event_manager.push(MessageEvent(_("시공간이 뒤틀리며 무작위 위치로 이동했습니다! ({}, {})").format(tx, ty), "cyan"))
                         self.event_manager.push(SoundEvent("TELEPORT"))
                         if hasattr(self.world.engine, '_render'):
                             self.world.engine._render()
                 else:
-                    self.event_manager.push(MessageEvent("이동할 수 있는 빈 공간이 없습니다."))
+                    self.event_manager.push(MessageEvent(_("이동할 수 있는 빈 공간이 없습니다.")))
 
             stats = attacker.get_component(StatsComponent)
             old_hp = stats.current_hp
@@ -2399,22 +2400,7 @@ class CombatSystem(System):
             stats.current_hp = min(stats.max_hp, stats.current_hp + heal_amount)
             recovered = stats.current_hp - old_hp
             
-            # Localized Format: "HP recovered by {recovered}!" or "체력을 {recovered} 회복했습니다!"
-            from .localization import _
-            msg_format = _("recovered") # Expect "recovered" -> "회복했습니다" (suffix) or similar
-            # Better Approach: Full string translation with placeholders is tricky without valid `sprintf`.
-            # We'll construct it: "{Target} {Value} {Action}"
-            # Current localization system is simple dictionary lookup.
-            # Let's use simple concatenation for now matching current structure.
-            
-            # KO: "체력을 {recovered} 회복했습니다!"
-            # EN: "HP recovered by {recovered}!"
-            
-            import dungeon.config as config
-            if getattr(config, 'LANGUAGE', 'ko') == 'en':
-                self.event_manager.push(MessageEvent(f"HP recovered by {recovered}!"))
-            else:
-                self.event_manager.push(MessageEvent(f"체력을 {recovered} 회복했습니다!"))
+            self.event_manager.push(MessageEvent(_("체력을 {} 회복했습니다!").format(recovered)))
         
         elif skill.type == "BUFF":
             if skill.id == "RAGE":
@@ -2428,7 +2414,7 @@ class CombatSystem(System):
                 attacker.add_component(mod)
                 
                 name = self._get_entity_name(attacker)
-                self.event_manager.push(MessageEvent(f"'{name}'가 분노를 폭발시킵니다! (지속 {int(duration)}초)", "red"))
+                self.event_manager.push(MessageEvent(_("'{}'가 분노를 폭발시킵니다! (지속 {}초)").format(name, int(duration)), "red"))
                 self.event_manager.push(SoundEvent("ROAR"))
                 
                 # 3. Taunt (Angry Mode)
@@ -2506,7 +2492,7 @@ class CombatSystem(System):
                 # 레벨당 사거리 보정은 handle_skill_use_event에서 이미 처리됨 (scaled_range)
                 radius = skill.range if skill.range > 0 else 3
                 
-                self.event_manager.push(MessageEvent(f"'{skill.name}'!! 서늘한 번개 파동이 퍼져나갑니다!"))
+                self.event_manager.push(MessageEvent(_("'{}'!! 서늘한 번개 파동이 퍼져나갑니다!").format(skill.name)))
                 self.event_manager.push(SoundEvent("MAGIC_BOLT"))
                 
                 # 파동 연출 (거리 1부터 radius까지 확장)
@@ -2900,13 +2886,13 @@ class RenderSystem(System):
                      monster_comp = target_entity.get_component(MonsterComponent)
                      if monster_comp:
                          if monster_comp.type_name == "상인":
-                             message_comp.add_message("상인을 만났습니다. (거래 가능)")
+                             message_comp.add_message(_("상인을 만났습니다. (거래 가능)"))
                          else:
-                             message_comp.add_message(f"{monster_comp.type_name}와 충돌했습니다. 전투가 시작됩니다.")
+                             message_comp.add_message(_("{}와 충돌했습니다. 전투가 시작됩니다.").format(monster_comp.type_name))
                      else:
-                         message_comp.add_message(f"알 수 없는 엔티티와 충돌했습니다.")
+                         message_comp.add_message(_("알 수 없는 엔티티와 충돌했습니다."))
             else:
-                 message_comp.add_message(f"충돌 발생: {event.collision_type}")
+                 message_comp.add_message(_("충돌 발생: {}").format(event.collision_type))
 
     # handle_move_success_event는 현재 특별한 메시지가 필요 없으므로 생략
 class RegenerationSystem(System):
@@ -3096,7 +3082,7 @@ class TimeSystem(System):
             summon = entity.get_component(SummonComponent)
             summon.duration -= dt
             if summon.duration <= 0:
-                self.event_manager.push(MessageEvent(f"{self.world.engine._get_entity_name(entity)}의 소환 시간이 만료되어 사라집니다.", "gray"))
+                self.event_manager.push(MessageEvent(_("{}의 소환 시간이 만료되어 사라집니다.").format(self.world.engine._get_entity_name(entity)), "gray"))
                 self.world.delete_entity(entity.entity_id)
 
         # 2. 횃불(VISION_UP) 시간 감액
@@ -3107,12 +3093,12 @@ class TimeSystem(System):
                 if current_time >= stats.vision_expires_at:
                     stats.vision_range = 5
                     stats.flags.remove("VISION_UP")
-                    self.world.event_manager.push(MessageEvent("횃불이 모두 타버려 다시 어두워졌습니다."))
+                    self.world.event_manager.push(MessageEvent(_("횃불이 모두 타버려 다시 어두워졌습니다.")))
             
             if stats and stats.sees_hidden:
                 if current_time >= stats.sees_hidden_expires_at:
                     stats.sees_hidden = False
-                    self.world.event_manager.push(MessageEvent("영험한 기운이 사라져 숨겨진 것들이 보이지 않게 되었습니다."))
+                    self.world.event_manager.push(MessageEvent(_("영험한 기운이 사라져 숨겨진 것들이 보이지 않게 되었습니다.")))
 
         # 2. 시각 효과(Effect) 시간 감액
         effect_entities = self.world.get_entities_with_components({EffectComponent})
@@ -3145,7 +3131,7 @@ class TimeSystem(System):
                 render = entity.get_component(RenderComponent)
                 if render: render.color = 'white'
                 
-                self.event_manager.push(MessageEvent(f"{skill.name} 효과가 끝났습니다."))
+                self.event_manager.push(MessageEvent(_("{} 효과가 끝났습니다.").format(skill.name)))
 
         # 4. 피격 피드백(HitFlash) 시간 감액
         flash_entities = self.world.get_entities_with_components({HitFlashComponent})
@@ -3172,7 +3158,7 @@ class TimeSystem(System):
                     entity.remove_component_instance(mod)
                     needs_recalc = True
                     if entity == player_ent:
-                        self.world.event_manager.push(MessageEvent(f"{mod.source} 효과가 만료되었습니다."))
+                        self.world.event_manager.push(MessageEvent(_("{} 효과가 만료되었습니다.").format(mod.source)))
         
         if needs_recalc and hasattr(self.world.engine, '_recalculate_stats'):
             self.world.engine._recalculate_stats()
@@ -3293,7 +3279,7 @@ class BossSystem(System):
         if not boss_id or boss_id not in BOSS_SEQUENCE: return
         
         target_name = self._get_entity_name(target)
-        self.event_manager.push(MessageEvent(f"'{target_name}'이(가) 강력한 포효와 함께 지원군을 부릅니다!"))
+        self.event_manager.push(MessageEvent(_("'{}'이(가) 강력한 포효와 함께 지원군을 부릅니다!").format(target_name)))
         self.event_manager.push(SoundEvent("BOSS_ROAR"))
         
         engine = self.world.engine
@@ -3312,7 +3298,7 @@ class BossSystem(System):
         if spawn_id:
             tx, ty = self._find_spawn_pos(t_pos.x, t_pos.y)
             engine._spawn_boss(tx, ty, boss_name=spawn_id, is_summoned=True)
-            self.event_manager.push(MessageEvent(f"!!! {boss_id}이(가) {spawn_id}의 환영을 불러냅니다! !!!", "purple"))
+            self.event_manager.push(MessageEvent(_("!!! {}이(가) {}의 환영을 불러냅니다! !!!").format(boss_id, spawn_id), "purple"))
 
     def _find_spawn_pos(self, x, y):
         """주변 빈 공간을 찾습니다."""
@@ -3425,7 +3411,7 @@ class BossSystem(System):
                                 self._announce_skill(summon_bark, "purple") # Center Alert
                                 # 근처에 소환
                                 self.world.engine._spawn_boss(pos.x + 1, pos.y + 1, boss_name=last_id, is_summoned=True)
-                                self.event_manager.push(MessageEvent(f"!!! {boss.boss_id}이(가) 이전의 적 {last_id}의 환영을 불러냅니다! !!!", "purple"))
+                                self.event_manager.push(MessageEvent(_("!!! {}이(가) 이전의 적 {}의 환영을 불러냅니다! !!!").format(boss.boss_id, last_id), "purple"))
                         else:
                             bark_key = f"on_hp_{int(threshold*100)}"
                             bark = pattern.get(bark_key)
@@ -3482,7 +3468,7 @@ class BossSystem(System):
                             if bark:
                                 self._trigger_bark(boss_ent, bark)
                                 self._announce_skill(bark, "red") # Center Alert
-                            self.event_manager.push(MessageEvent(f"!!! {boss.boss_id}의 광역 강타! !!!", "red"))
+                            self.event_manager.push(MessageEvent(_("!!! {}의 광역 강타! !!!").format(boss.boss_id), "red"))
                             
                             from .events import DirectionalAttackEvent
                             for ddy in range(-4, 5):
@@ -3516,14 +3502,14 @@ class BossSystem(System):
                                 stats.attack_max = int(getattr(stats, 'attack_max', stats.attack) * boost["attack"])
                             if "action_delay" in boost:
                                 stats.action_delay *= boost["action_delay"]
-                            self.event_manager.push(MessageEvent(f"!!! {boss.boss_id}이(가) 분노하여 더욱 강력해집니다! !!!", "red"))
+                            self.event_manager.push(MessageEvent(_("!!! {}이(가) 분노하여 더욱 강력해집니다! !!!").format(boss.boss_id), "red"))
                             stats.last_action_time = current_time # 페이즈 전환도 행동으로 간주하거나 쿨다운 갱신
 
                 # --- 4. 스킬 및 행동 AI (Logic) ---
                 # 매 턴 10% 확률로 특수 패턴 발동 (Engagement 상태일 때만)
                 if boss.is_engaged and random.random() < 0.1:
                     # 보스별 특수 스킬 트리거 (나중에 skill_defs 연동 가능)
-                    self.event_manager.push(MessageEvent(f"{boss.boss_id}의 강력한 기운이 방출됩니다!", "purple"))
+                    self.event_manager.push(MessageEvent(_("{}의 강력한 기운이 방출됩니다!").format(boss.boss_id), "purple"))
                     if hasattr(self.world.engine, 'trigger_shake'):
                         self.world.engine.trigger_shake(5)
                     stats.last_action_time = current_time
@@ -3549,7 +3535,7 @@ class BossSystem(System):
                         if dist > 3 and random.random() < 0.2:
                             # [Dash] 돌진
                             self._trigger_bark(boss_ent, "거기 서라!")
-                            self.event_manager.push(MessageEvent(f"{boss.boss_id}이(가) 당신을 향해 급격히 돌진합니다!", "red"))
+                            self.event_manager.push(MessageEvent(_("{}이(가) 당신을 향해 급격히 돌진합니다!").format(boss.boss_id), "red"))
                             dx = 1 if p_pos.x > pos.x else (-1 if p_pos.x < pos.x else 0)
                             dy = 1 if p_pos.y > pos.y else (-1 if p_pos.y < pos.y else 0)
                             if map_comp.tiles[pos.y + dy][pos.x + dx] == '.':
@@ -3561,9 +3547,9 @@ class BossSystem(System):
                             # [AoE] 대회전
                             self._trigger_bark(boss_ent, "모두 사라져라!")
                             from .events import DirectionalAttackEvent
-                            self.event_manager.push(MessageEvent(f"{boss.boss_id}의 대회전 공격!", "red"))
+                            self.event_manager.push(MessageEvent(_("{}의 대회전 공격!").format(boss.boss_id), "red"))
                             if is_ghost:
-                                self.event_manager.push(MessageEvent("환영의 일격이라 위력이 약합니다.", "gray"))
+                                self.event_manager.push(MessageEvent(_("환영의 일격이라 위력이 약합니다."), "gray"))
                             
                             for ddy in [-1, 0, 1]:
                                 for ddx in [-1, 0, 1]:
@@ -3583,7 +3569,7 @@ class BossSystem(System):
             bark = pattern.get("on_skill_hook", "Come here!")
             self._trigger_bark(boss_ent, bark)
             self._announce_skill(f"'{bark}'", "red") # Center Alert
-            self.event_manager.push(MessageEvent("!!! 도살자가 피 묻은 갈고리를 던집니다! !!!", "red"))
+            self.event_manager.push(MessageEvent(_("!!! 도살자가 피 묻은 갈고리를 던집니다! !!!"), "red"))
             
             # 플레이어를 보스 바로 앞으로 끌어당김
             player_ent = self.world.get_player_entity()
@@ -3599,7 +3585,7 @@ class BossSystem(System):
                 # 짧은 기절 부여 (nerf_factor 반영)
                 from .components import StunComponent
                 player_ent.add_component(StunComponent(duration=1.0 * nerf_factor))
-                self.event_manager.push(MessageEvent("갈고리에 끌려가 기절했습니다!", "yellow"))
+                self.event_manager.push(MessageEvent(_("갈고리에 끌려가 기절했습니다!"), "yellow"))
             return True
 
         # 2. 슬램 (Slam): 인접했을 때
@@ -3607,14 +3593,14 @@ class BossSystem(System):
             bark = pattern.get("on_skill_slam", "Fresh Meat!")
             self._trigger_bark(boss_ent, bark)
             self._announce_skill(f"'{bark}'", "red") # Center Alert
-            self.event_manager.push(MessageEvent("!!! 도살자의 강력한 내려치기! !!!", "red"))
+            self.event_manager.push(MessageEvent(_("!!! 도살자의 강력한 내려치기! !!!"), "red"))
             
             player_ent = self.world.get_player_entity()
             # 1.5배 데미지 적용 (CombatSystem의 로직을 간소하게 재현하거나 이벤트를 보내야 함)
             # 여기서는 직접 stats를 깎거나 이벤트를 발행. 
             # 일관성을 위해 _apply_damage를 호출하고 싶지만 CombatSystem 메서드임.
             # 임시로 메시지와 함께 데미지 부여 로직 (CombatSystem 접근 권한 확인 필요)
-            self.event_manager.push(MessageEvent("큰 충격과 함께 뒤로 밀려납니다!", "yellow"))
+            self.event_manager.push(MessageEvent(_("큰 충격과 함께 뒤로 밀려납니다!"), "yellow"))
             # 넉백 처리 (AI 단에서 직접 수행)
             self._apply_manual_knockback(boss_ent, player_ent, map_comp)
             # 데미지 이벤트는 없으므로 직접 처리 (stats 깎기, nerf_factor 반영)
@@ -3630,7 +3616,7 @@ class BossSystem(System):
             bark = pattern.get("on_skill_charge", "RRRRAAAARRRRGH!")
             self._trigger_bark(boss_ent, bark)
             self._announce_skill(f"'{bark}'", "red") # Center Alert
-            self.event_manager.push(MessageEvent("!!! 도살자가 미친 듯이 돌진합니다! !!!", "red"))
+            self.event_manager.push(MessageEvent(_("!!! 도살자가 미친 듯이 돌진합니다! !!!"), "red"))
             
             dx = 1 if p_pos.x > pos.x else (-1 if p_pos.x < pos.x else 0)
             dy = 1 if p_pos.y > pos.y else (-1 if p_pos.y < pos.y else 0)
@@ -3660,14 +3646,14 @@ class BossSystem(System):
             pos.x, pos.y = curr_x, curr_y
             
             if hit_player:
-                self.event_manager.push(MessageEvent("도살자의 돌진에 치여 큰 피해를 입었습니다!", "red"))
+                self.event_manager.push(MessageEvent(_("도살자의 돌진에 치여 큰 피해를 입었습니다!"), "red"))
                 player_ent = self.world.get_player_entity()
                 p_stats = player_ent.get_component(StatsComponent) if player_ent else None
                 if p_stats:
                     p_stats.current_hp -= int(stats.attack * 2.0 * nerf_factor)
             
             if hit_wall:
-                self.event_manager.push(MessageEvent("도살자가 벽에 들이받고 기절했습니다!", "yellow"))
+                self.event_manager.push(MessageEvent(_("도살자가 벽에 들이받고 기절했습니다!"), "yellow"))
                 from .components import StunComponent
                 # 보스 기절 시간은 너프하지 않음 (오히려 패널티니까)
                 boss_ent.add_component(StunComponent(duration=2.0))
@@ -3708,7 +3694,7 @@ class BossSystem(System):
             
             if spawned_any:
                 self._announce_skill("깨어나라, 나의 군대여!", "gray") # Center Alert
-                self.event_manager.push(MessageEvent(f"{boss.boss_id}이(가) 해골 군단을 소환합니다!", "gray"))
+                self.event_manager.push(MessageEvent(_("{}이(가) 해골 군단을 소환합니다!").format(boss.boss_id), "gray"))
                 return True
 
         # 2. 석화 마법 (소환수가 15마리 이상일 때)
@@ -3725,7 +3711,7 @@ class BossSystem(System):
                     if not player.has_component(PetrifiedComponent):
                         self._announce_skill("굳어버려라!", "yellow") # Center Alert
                         player.add_component(PetrifiedComponent(duration=3.0))
-                        self.event_manager.push(MessageEvent(f"!!! {boss.boss_id}의 마법으로 전신이 석화되었습니다! !!!", "yellow"))
+                        self.event_manager.push(MessageEvent(_("!!! {}의 마법으로 전신이 석화되었습니다! !!!").format(boss.boss_id), "yellow"))
                         # 석화 시 이펙트
                         if hasattr(self.world.engine, 'trigger_shake'):
                             self.world.engine.trigger_shake(5)
@@ -3763,13 +3749,13 @@ class BossSystem(System):
                         p_comp.stacks += 1
                         p_comp.duration = 5.0 # 지속시간 갱신
                         self._announce_skill("죽음의 냉기...", "cyan")
-                        self.event_manager.push(MessageEvent(f"!!! 리치 왕의 시선에 몸이 더욱 굳어갑니다! (석화 {p_comp.stacks}스택) !!!", "gray"))
+                        self.event_manager.push(MessageEvent(_("!!! 리치 왕의 시선에 몸이 더욱 굳어갑니다! (석화 {}스택) !!!").format(p_comp.stacks), "gray"))
                     else:
-                        self.event_manager.push(MessageEvent("!!! 이미 완전히 석화된 상태입니다! !!!", "gray"))
+                        self.event_manager.push(MessageEvent(_("!!! 이미 완전히 석화된 상태입니다! !!!"), "gray"))
                 else:
                     player.add_component(PetrifiedComponent(duration=5.0, stacks=1))
                     self._announce_skill("죽음의 시선...", "cyan")
-                    self.event_manager.push(MessageEvent("!!! 리치 왕의 시선이 당신을 굳게 만듭니다! (석화 1스택) !!!", "gray"))
+                    self.event_manager.push(MessageEvent(_("!!! 리치 왕의 시선이 당신을 굳게 만듭니다! (석화 1스택) !!!"), "gray"))
                 
                 return True
 
@@ -3792,7 +3778,7 @@ class BossSystem(System):
                 if not player.has_component(StunComponent):
                     self._announce_skill("대지가 너를 삼키리라...", "brown")
                     player.add_component(StunComponent(duration=2.0))
-                    self.event_manager.push(MessageEvent(f"!!! 대지의 저주가 당신의 발을 묶습니다! !!!", "brown"))
+                    self.event_manager.push(MessageEvent(_("!!! 대지의 저주가 당신의 발을 묶습니다! !!!"), "brown"))
                 return True
     
 
@@ -3926,7 +3912,7 @@ class BossSystem(System):
         """보스 주변에 부하 몬스터 소환"""
         pos = boss_ent.get_component(PositionComponent)
         from .events import MessageEvent
-        self.event_manager.push(MessageEvent(f"{minion_type}들이 보스의 부름에 응답하여 나타납니다!", "purple"))
+        self.event_manager.push(MessageEvent(_("{}들이 보스의 부름에 응답하여 나타납니다!").format(minion_type), "purple"))
 
 class InteractionSystem(System):
     """상호작용 이벤트(InteractEvent)를 처리하는 시스템"""
@@ -3969,7 +3955,7 @@ class InteractionSystem(System):
                     pass
             
             if not has_key:
-                self.event_manager.push(MessageEvent("잠겨있습니다. 열쇠가 필요합니다.", "gray"))
+                self.event_manager.push(MessageEvent(_("잠겨있습니다. 열쇠가 필요합니다."), "gray"))
                 return
 
         # 상태 변경
@@ -4000,7 +3986,7 @@ class InteractionSystem(System):
         if getattr(render, 'char', '') in ['/', '\\']:
             state = "당겨졌습니다" if switch.is_open else "원위치되었습니다"
         
-        self.event_manager.push(MessageEvent(f"{name}이(가) {state}."))
+        self.event_manager.push(MessageEvent(_("{}이(가) {}.").format(name, state)))
         self.event_manager.push(SoundEvent("DOOR" if name == "문" else "CLICK"))
 
         # [Boss Room] Linkage Logic (Lever opens Door)
@@ -4027,7 +4013,7 @@ class InteractionSystem(System):
                             b.blocks_movement = False
                             b.blocks_sight = False
                             
-                        self.event_manager.push(MessageEvent("쿠쿠쿵! 어딘가에서 거대한 문이 열리는 소리가 들립니다!", "yellow"))
+                        self.event_manager.push(MessageEvent(_("쿠쿠쿵! 어딘가에서 거대한 문이 열리는 소리가 들립니다!"), "yellow"))
                         self.event_manager.push(SoundEvent("DOOR_OPEN_HEAVY"))
                         found_door = True
                         
@@ -4036,7 +4022,7 @@ class InteractionSystem(System):
                         player = self.world.get_player_entity()
                         if player:
                              # 1. 폭발 함정 효과 (Explosion Trap)
-                             self.event_manager.push(MessageEvent("레버를 당기자 함정이 발동했습니다! 폭발이 일어납니다!", "red"))
+                             self.event_manager.push(MessageEvent(_("레버를 당기자 함정이 발동했습니다! 폭발이 일어납니다!"), "red"))
                              self.event_manager.push(SoundEvent("EXPLOSION"))
                              
                              # 데미지 처리
@@ -4046,7 +4032,7 @@ class InteractionSystem(System):
                                  damage = int(p_stats.max_hp * (damage_pct / 100.0))
                                  p_stats.current_hp -= damage
                                  player.add_component(HitFlashComponent())
-                                 self.event_manager.push(MessageEvent(f"폭발로 인해 {damage}의 피해를 입었습니다! (HP {damage_pct}%)", "red"))
+                                 self.event_manager.push(MessageEvent(_("폭발으로 인해 {}의 피해를 입었습니다! (HP {}%)").format(damage, damage_pct), "red"))
                         
                         break
             
@@ -4070,7 +4056,7 @@ class InteractionSystem(System):
         # 함정 효과 처리
         if door_comp.trap_type == "POISON_NEEDLE":
             # 독침 함정
-            self.event_manager.push(MessageEvent(f"문에서 독침이 튀어나왔습니다!", "green"))
+            self.event_manager.push(MessageEvent(_("문에서 독침이 튀어나왔습니다!"), "green"))
             self.event_manager.push(SoundEvent("BASH"))
             
             # 독 상태 이상 적용 (틱당 데미지도 Max HP 비례로 할 수 있지만 일단 고정)
@@ -4079,13 +4065,13 @@ class InteractionSystem(System):
                 tick_pct = 4
                 tick_damage = max(2, int(stats.max_hp * (tick_pct / 100.0) * damage_multiplier)) if stats else 10
                 victim.add_component(PoisonComponent(damage=tick_damage, duration=15.0))
-                self.event_manager.push(MessageEvent(f"{victim_name}이(가) 중독되었습니다!", "green"))
+                self.event_manager.push(MessageEvent(_("{}이(가) 중독되었습니다!").format(victim_name), "green"))
             
             victim.add_component(HitFlashComponent())
             
         elif door_comp.trap_type == "EXPLOSION":
             # 폭발 함정
-            self.event_manager.push(MessageEvent(f"문이 폭발했습니다!", "red"))
+            self.event_manager.push(MessageEvent(_("문이 폭발했습니다!"), "red"))
             self.event_manager.push(SoundEvent("EXPLOSION"))
             
             # 데미지 적용
@@ -4095,23 +4081,23 @@ class InteractionSystem(System):
                 stats.current_hp -= damage
                 if stats.current_hp < 0:
                     stats.current_hp = 0
-                self.event_manager.push(MessageEvent(f"{victim_name}이(가) {damage}의 피해를 입었습니다! (HP {damage_pct}%, 감쇄 {int((1-damage_multiplier)*100)}%)", "red"))
+                self.event_manager.push(MessageEvent(_("{}이(가) {}의 피해를 입었습니다! (HP {}%, 감쇄 {}%)").format(victim_name, damage, damage_pct, int((1-damage_multiplier)*100)), "red"))
             
             victim.add_component(HitFlashComponent())
             
         elif door_comp.trap_type == "CURSE":
             # 저주 함정
-            self.event_manager.push(MessageEvent(f"문에서 사악한 기운이 뿜어져 나옵니다!", "magenta"))
+            self.event_manager.push(MessageEvent(_("문에서 사악한 기운이 뿜어져 나옵니다!"), "magenta"))
             self.event_manager.push(SoundEvent("CURSE"))
             
             # 저주 상태 이상 적용 (공격력/방어력 감소)
             if not victim.has_component(CurseComponent):
                 victim.add_component(CurseComponent(duration=30.0))
-                self.event_manager.push(MessageEvent(f"{victim_name}이(가) 저주에 걸렸습니다!", "magenta"))
+                self.event_manager.push(MessageEvent(_("{}이(가) 저주에 걸렸습니다!").format(victim_name), "magenta"))
             
         elif door_comp.trap_type == "GAS":
             # 가스 함정
-            self.event_manager.push(MessageEvent(f"문에서 독가스가 분출됩니다!", "green"))
+            self.event_manager.push(MessageEvent(_("문에서 독가스가 분출됩니다!"), "green"))
             self.event_manager.push(SoundEvent("GAS"))
             
             # 주변 2칸 범위에 독 구름 생성
@@ -4135,4 +4121,4 @@ class InteractionSystem(System):
                             entity.add_component(PoisonComponent(damage=5, duration=10.0))
                             e_is_player = entity.entity_id == self.world.get_player_entity().entity_id
                             e_name = "당신" if e_is_player else "몬스터"
-                            self.event_manager.push(MessageEvent(f"{e_name}이(가) 독가스에 중독되었습니다!", "green"))
+                            self.event_manager.push(MessageEvent(_("{}이(가) 독가스에 중독되었습니다!").format(e_name), "green"))

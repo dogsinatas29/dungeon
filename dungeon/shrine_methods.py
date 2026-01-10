@@ -1,4 +1,4 @@
-    def _handle_shrine_input(self, action: str):
+def _handle_shrine_input(self, action: str):
         """신전 상태에서의 입력 처리"""
         player_entity = self.world.get_player_entity()
         if not player_entity:
@@ -46,7 +46,7 @@
                 # 뒤로 가기
                 self.shrine_enhance_step = 0
     
-    def _close_shrine(self):
+def _close_shrine(self):
         """신전 닫기 및 소멸 처리"""
         if self.active_shrine_id:
             shrine_ent = self.world.get_entity(self.active_shrine_id)
@@ -62,7 +62,7 @@
         self.shrine_menu_index = 0
         self.shrine_enhance_step = 0
     
-    def _shrine_restore_all(self):
+def _shrine_restore_all(self):
         """복구: 모든 내구도 + HP/MP/Stamina 완전 회복"""
         player_entity = self.world.get_player_entity()
         if not player_entity:
@@ -83,11 +83,11 @@
                 if item and hasattr(item, 'max_durability') and item.max_durability > 0:
                     item.current_durability = item.max_durability
         
-        self.world.event_manager.push(MessageEvent("신성한 힘이 당신을 완전히 회복시켰습니다!"))
+        self.world.event_manager.push(MessageEvent(_("신성한 힘이 당신을 완전히 회복시켰습니다!")))
         self.world.event_manager.push(SoundEvent("LEVEL_UP"))
         self._recalculate_stats()
     
-    def _shrine_enhance_item(self, item):
+def _shrine_enhance_item(self, item):
         """강화: 아이템 등급 +1, 성공/실패 처리"""
         import random
         
@@ -103,7 +103,7 @@
         elif current_level == 10:
             success_rate = 0.05  # 5%
         else:
-            self.world.event_manager.push(MessageEvent("이미 최대 강화 등급입니다!"))
+            self.world.event_manager.push(MessageEvent(_("이미 최대 강화 등급입니다!")))
             return
         
         roll = random.random()
@@ -137,7 +137,7 @@
                 base_name = base_name.split('+')[0].strip()
             item.name = f"+{item.enhancement_level} {base_name}"
             
-            self.world.event_manager.push(MessageEvent(f"강화 성공! {item.name}"))
+            self.world.event_manager.push(MessageEvent(_("강화 성공! {}").format(item.name)))
             self.world.event_manager.push(SoundEvent("LEVEL_UP"))
         else:
             # 실패!
@@ -145,12 +145,12 @@
                 # 안전: 내구도 절반 감소
                 if hasattr(item, 'current_durability') and item.max_durability > 0:
                     item.current_durability = max(0, item.current_durability // 2)
-                self.world.event_manager.push(MessageEvent(f"강화 실패... {item.name}의 내구도가 감소했습니다."))
+                self.world.event_manager.push(MessageEvent(_("강화 실패... {}의 내구도가 감소했습니다.").format(item.name)))
             elif current_level <= 6:
                 # 파손: 내구도 0
                 if hasattr(item, 'current_durability'):
                     item.current_durability = 0
-                self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 파손되었습니다!"))
+                self.world.event_manager.push(MessageEvent(_("강화 실패! {}이(가) 파손되었습니다!").format(item.name)))
             else:
                 # 소멸: 아이템 제거
                 player_entity = self.world.get_player_entity()
@@ -161,7 +161,7 @@
                         for slot, equipped_item in list(inv.equipped.items()):
                             if equipped_item == item:
                                 inv.equipped[slot] = None
-                self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 산산조각 났습니다..."))
+                self.world.event_manager.push(MessageEvent(_("강화 실패! {}이(가) 산산조각 났습니다...").format(item.name)))
             
             self.world.event_manager.push(SoundEvent("BREAK"))
         

@@ -429,7 +429,7 @@ class ConsoleUI:
                 line_padding = (terminal_width - len(line)) // 2
                 print(f"{color}{' ' * line_padding}{line}{COLOR_MAP['reset']}")
                 
-            controls = "[↑/↓] 이동 | [ENTER] 선택"
+            controls = _("[↑/↓] 이동 | [ENTER] 선택")
             controls_padding = (terminal_width - len(controls)) // 2
             print(f"\n{COLOR_MAP['yellow']}{' ' * controls_padding}{controls}{COLOR_MAP['reset']}")
             
@@ -510,7 +510,7 @@ class ConsoleUI:
             skill_padding = (terminal_width - len(skill_line)) // 2
             print(f"{' ' * skill_padding}{skill_line}")
             
-            controls = "[↑/↓] 이동 | [ENTER] 선택"
+            controls = _("[↑/↓] 이동 | [ENTER] 선택")
             controls_padding = (terminal_width - len(controls)) // 2
             print(f"\n{COLOR_MAP['green']}{' ' * controls_padding}{controls}{COLOR_MAP['reset']}")
 
@@ -629,7 +629,7 @@ class ConsoleUI:
                 buffer.append(content)
 
         # 1. 맵 렌더링
-        add_line(f"{COLOR_MAP['white']}--- 던전 맵 ---{COLOR_MAP['reset']}\n")
+        add_line(f"{COLOR_MAP['white']}--- " + _("Dungeon Map") + f" ---{COLOR_MAP['reset']}\n")
 
         for y_idx, row in enumerate(map_data):
             rendered_row = []
@@ -642,13 +642,13 @@ class ConsoleUI:
             buffer.append("".join(rendered_row) + f"{COLOR_MAP['reset']}\n")
         
         # 2. 플레이어 상태
-        add_line(f"\n{COLOR_MAP['yellow']}--- 플레이어 상태 ---{COLOR_MAP['reset']}\n")
+        add_line(f"\n{COLOR_MAP['yellow']}--- " + _("Player Condition") + f" ---{COLOR_MAP['reset']}\n")
         job_display = player_stats.get('job', 'Adventurer')
-        add_line(f" Name : {player_stats.get('name', 'N/A')} ({job_display})\n")
-        add_line(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<15} | MP: {COLOR_MAP['blue']}{player_stats.get('mp', 0)}/{player_stats.get('max_mp', 0)}{COLOR_MAP['reset']:<15} | 골드: {player_stats.get('gold', 0)}G\n")
+        add_line(f" " + _("이름") + f" : {player_stats.get('name', 'N/A')} ({job_display})\n")
+        add_line(f" HP: {COLOR_MAP['red']}{player_stats.get('hp', 0)}/{player_stats.get('max_hp', 0)}{COLOR_MAP['reset']:<15} | MP: {COLOR_MAP['blue']}{player_stats.get('mp', 0)}/{player_stats.get('max_mp', 0)}{COLOR_MAP['reset']:<15} | " + _("Gold") + f": {player_stats.get('gold', 0)}G\n")
         
         # 3. 메시지 로그
-        add_line(f"\n{COLOR_MAP['blue']}--- 로그 ---{COLOR_MAP['reset']}\n")
+        add_line(f"\n{COLOR_MAP['blue']}--- " + _("Log") + f" ---{COLOR_MAP['reset']}\n")
         msgs = self.messages[-5:]
         for msg in msgs:
             add_line(f"> {msg:<60}\n")
@@ -710,7 +710,7 @@ class ConsoleUI:
         else:
             print("  " + _("No items"))
 
-        print(f"\n{COLOR_MAP['green']}[I] 닫기{COLOR_MAP['reset']}")
+        print(f"\n{COLOR_MAP['green']}[I] " + _("Close") + f"{COLOR_MAP['reset']}")
         sys.stdout.flush()
 
     def show_character_sheet(self, player_entity):
@@ -729,9 +729,9 @@ class ConsoleUI:
             
             # --- Header ---
             print(f"\n  [ {level_comp.job or 'Adventurer'} - Level {level_comp.level} ]")
-            print("="*60)
-            print(f"  Experience: {level_comp.exp} / {level_comp.exp_to_next}")
-            print(f"  Stat Points: {level_comp.stat_points}")
+            print("-" * 60)
+            print(f"  " + _("경험치") + f": {level_comp.exp} / {level_comp.exp_to_next}")
+            print(f"  " + _("스탯 포인트") + f": {level_comp.stat_points}")
             print("-" * 60)
             
             # --- Stats Rows ---
@@ -748,9 +748,9 @@ class ConsoleUI:
             
             print("-" * 60)
             print(f"  HP: {stats.current_hp}/{stats.max_hp}  MP: {stats.current_mp}/{stats.max_mp}")
-            print(f"  Attack: {stats.attack_min}-{stats.attack_max}  Defense: {stats.defense}")
+            print(f"  " + _("공격력") + f": {stats.attack_min}-{stats.attack_max}  " + _("방어력") + f": {stats.defense}")
             print("="*60)
-            print("\n  [UP/DOWN]: Select  [RIGHT/ENTER]: Add Point  [ESC/Q]: Close")
+            print("\n  " + _("[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기"))
 
             key = self.get_key_input()
             
@@ -843,7 +843,7 @@ class ConsoleUI:
             print(f"\033[{footer_y};{start_x}H", end="")
             print("├" + "─" * (menu_width - 2) + "┤")
             
-            help_text = f" [↑/↓] 선택  [ENTER] 감정  [ESC] 취소 ({selected_idx}/{len(unidentified_items)-1}) "
+            help_text = _(" [↑/↓] 선택  [ENTER] 감정  [ESC] 취소 ({}/{}) ").format(selected_idx, len(unidentified_items)-1)
             padding = (menu_width - len(help_text) - 2) // 2
             print(f"\033[{footer_y + 1};{start_x}H", end="")
             print("│" + " " * padding + help_text + " " * (menu_width - len(help_text) - padding - 2) + "│")

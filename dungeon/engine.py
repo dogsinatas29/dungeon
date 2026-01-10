@@ -1629,7 +1629,7 @@ class Engine:
                     
                     # ESC 키로 메인 메뉴 복귀
                     if action == '\x1b' or action.lower() == 'q':  # ESC key or Q
-                        self.world.event_manager.push(MessageEvent("저장하고 메인 메뉴로 돌아갑니다..."))
+                        self.world.event_manager.push(MessageEvent(_("저장하고 메인 메뉴로 돌아갑니다...")))
                         game_result = "MENU"
                         self.is_running = False
                         continue
@@ -1829,7 +1829,7 @@ class Engine:
             logging.info("[Save] Game saved successfully.")
         except Exception as e:
             logging.error(f"[Save] FAILED to save game: {e}")
-            self.ui.add_message(f"게임 저장 실패: {e}") # UI Feedback
+            self.ui.add_message(_("게임 저장 실패: {}").format(e)) # UI Feedback
 
     def handle_map_transition_event(self, event: MapTransitionEvent):
         """맵 이동 이벤트 처리: 새로운 층 생성"""
@@ -1841,7 +1841,7 @@ class Engine:
         spawn_at = "EXIT" if going_up else "START"
 
         direction_str = "위로 올라갑니다" if going_up else "깊은 곳으로 내려갑니다"
-        self.world.event_manager.push(MessageEvent(f"{direction_str}... (던전 {self.current_level}층)"))
+        self.world.event_manager.push(MessageEvent(_("{}... (던전 {}층)").format(direction_str, self.current_level)))
         
         # 1. 플레이어 데이터 보존
         player_entity = self.world.get_player_entity()
@@ -1864,7 +1864,7 @@ class Engine:
         self.active_shop_id = event.shopkeeper_id
         self.selected_shop_item_index = 0
         self.shop_category_index = 0 # 기본 '사기' 탭
-        self.world.event_manager.push(MessageEvent("상점에 오신 것을 환영합니다!"))
+        self.world.event_manager.push(MessageEvent(_("상점에 오신 것을 환영합니다!")))
     
     def handle_shrine_open_event(self, event: ShrineOpenEvent):
         """신전 열기 이벤트 처리"""
@@ -1881,7 +1881,7 @@ class Engine:
         self.target_enhance_item = None
         self.selected_oil = None
         self.selected_sacrifice = None
-        self.world.event_manager.push(MessageEvent("신성한 기운이 느껴집니다..."))
+        self.world.event_manager.push(MessageEvent(_("신성한 기운이 느껴집니다...")))
 
     def _handle_shop_input(self, action: str):
         """상점 상태에서의 입력 처리 (사기/팔기 탭 지원)"""
@@ -1950,7 +1950,7 @@ class Engine:
         if item.name in inv.items:
             inv.items[item.name]['qty'] -= 1
             stats.gold += price
-            self.world.event_manager.push(MessageEvent(f"{item.name}을(를) {price} 골드에 판매했습니다."))
+            self.world.event_manager.push(MessageEvent(_("{}을(를) {} 골드에 판매했습니다.").format(item.name, price)))
             
             if inv.items[item.name]['qty'] <= 0:
                 del inv.items[item.name]
@@ -1962,7 +1962,7 @@ class Engine:
             # 인덱스 범위 보정
             self.selected_shop_item_index = max(0, self.selected_shop_item_index - 1)
         else:
-            self.world.event_manager.push(MessageEvent("판매할 아이템이 없습니다."))
+            self.world.event_manager.push(MessageEvent(_("판매할 아이템이 없습니다.")))
 
     def _buy_item(self, shop_item: Dict):
         """아이템 구매 로직"""
@@ -1984,9 +1984,9 @@ class Engine:
                 inv.items[item.name]['qty'] += 1
             else:
                 inv.items[item.name] = {'item': item_copy, 'qty': 1}
-            self.world.event_manager.push(MessageEvent(f"{item.name}을(를) {price} 골드에 구매했습니다!"))
+            self.world.event_manager.push(MessageEvent(_("{}을(를) {} 골드에 구매했습니다!").format(item.name, price)))
         else:
-            self.world.event_manager.push(MessageEvent("골드가 부족합니다!"))
+            self.world.event_manager.push(MessageEvent(_("골드가 부족합니다!")))
 
     def _handle_character_sheet_input(self, action):
         """캐릭터 정보창 입력 처리"""
@@ -2079,7 +2079,7 @@ class Engine:
             # 인벤토리 보기는 가능 (action 'i' 등은 상위에서 처리됨)
             # 여기서는 아이템 사용/버리기 등 주요 액션이 일어나는 시점에 체크
             if action not in [readchar.key.UP, readchar.key.DOWN, readchar.key.LEFT, readchar.key.RIGHT, '\x1b[A', '\x1b[B', '\x1b[D', '\x1b[C', 'i', 'I']:
-                self.world.event_manager.push(MessageEvent("몸이 움직이지 않아 아이템을 조작할 수 없습니다!"))
+                self.world.event_manager.push(MessageEvent(_("몸이 움직이지 않아 아이템을 조작할 수 없습니다!")))
                 return
 
         # 1. 현재 카테고리에 해당하는 아이템 필터링 (헬퍼 사용)
@@ -2143,17 +2143,17 @@ class Engine:
         if name in slots:
             idx = slots.index(name)
             slots[idx] = None
-            self.world.event_manager.push(MessageEvent(f"{name}을(를) {slot_label} {idx+1+offset}번에서 해제했습니다."))
+            self.world.event_manager.push(MessageEvent(_("{}을(를) {} {}번에서 해제했습니다.").format(name, slot_label, idx+1+offset)))
             return
 
         # 비어있는 슬롯 찾기
         for i in range(len(slots)):
             if slots[i] is None:
                 slots[i] = name
-                self.world.event_manager.push(MessageEvent(f"{name}을(를) {slot_label} {i+1+offset}번에 등록했습니다."))
+                self.world.event_manager.push(MessageEvent(_("{}을(를) {} {}번에 등록했습니다.").format(name, slot_label, i+1+offset)))
                 return
         
-        self.world.event_manager.push(MessageEvent(f"{slot_label}이 가득 찼습니다!"))
+        self.world.event_manager.push(MessageEvent(_("{}이 가득 찼습니다!").format(slot_label)))
 
     def _trigger_quick_slot(self, key):
         """단축키(1~0)를 눌러 퀵슬롯 아이템/스킬 실행"""
@@ -2165,7 +2165,7 @@ class Engine:
         # 스턴 상태 확인
         stun = player_entity.get_component(StunComponent)
         if stun:
-            self.world.event_manager.push(MessageEvent("몸이 움직이지 않아 퀵슬롯을 사용할 수 없습니다!"))
+            self.world.event_manager.push(MessageEvent(_("몸이 움직이지 않아 퀵슬롯을 사용할 수 없습니다!")))
             return
 
         try:
@@ -2189,10 +2189,10 @@ class Engine:
                     self._use_item(found_id, found_data)
                     return True # 턴 소모
                 else:
-                    self.world.event_manager.push(MessageEvent(f"{item_name}을(를) 인벤토리에서 찾을 수 없습니다."))
+                    self.world.event_manager.push(MessageEvent(_("{}을(를) 인벤토리에서 찾을 수 없습니다.").format(item_name)))
                     return False
             else:
-                self.world.event_manager.push(MessageEvent(f"{num}번 퀵슬롯이 비어있습니다."))
+                self.world.event_manager.push(MessageEvent(_("{}번 퀵슬롯이 비어있습니다.").format(num)))
                 return False
         
         else: # 스킬 슬롯 (6,7,8,9,0)
@@ -2204,7 +2204,7 @@ class Engine:
                 if not skill:
                     # 만약 DB에 없다면 (샌드박스 등의 하드코딩된 이름일 경우)
                     # 샌드박스용 더미 객체 생성 혹은 로그 출력
-                    self.world.event_manager.push(MessageEvent(f"{skill_name} 스킬 데이터가 없습니다."))
+                    self.world.event_manager.push(MessageEvent(_("{} 스킬 데이터가 없습니다.").format(skill_name)))
                     return
 
                 # 스킬 타입에 따른 처리
@@ -2212,7 +2212,7 @@ class Engine:
                     # 방향 선택 모드 진입
                     self.is_attack_mode = True
                     self.active_skill_name = skill_name
-                    self.world.event_manager.push(MessageEvent(f"[{skill_name}] 방향을 선택하세요..."))
+                    self.world.event_manager.push(MessageEvent(_("[{}] 방향을 선택하세요...").format(skill_name)))
                     return False # 방향 선택 모드 자체는 턴 소모 안함
                 else:
                     # 즉시 발동형 (SELF 등)
@@ -2222,7 +2222,7 @@ class Engine:
 
             else:
                 slot_num = 10 if num == 0 else num
-                self.world.event_manager.push(MessageEvent(f"{slot_num}번 스킬 슬롯이 비어있습니다."))
+                self.world.event_manager.push(MessageEvent(_("{}번 스킬 슬롯이 비어있습니다.").format(slot_num)))
                 return False
         return False
 
@@ -2250,13 +2250,13 @@ class Engine:
         # 레벨 및 식별 여부 확인
         is_id = getattr(item, 'is_identified', True)
         if not is_id:
-            self.world.event_manager.push(MessageEvent("식별되지 않은 아이템은 사용할 수 없습니다.", "red"))
+            self.world.event_manager.push(MessageEvent(_("식별되지 않은 아이템은 사용할 수 없습니다."), "red"))
             return
 
         level_comp = player_entity.get_component(LevelComponent)
         if level_comp and item.required_level > level_comp.level:
             # [Fix] 피드백 강화 (노란색으로 강조, 무엇이 부족한지 명시)
-            self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 '{item.name}'을(를) 읽을 수 없습니다. (필요: Lv.{item.required_level}, 현재: Lv.{level_comp.level})", "yellow"))
+            self.world.event_manager.push(MessageEvent(_("레벨이 부족하여 '{}'을(를) 읽을 수 없습니다. (필요: Lv.{}, 현재: Lv.{})").format(item.name, item.required_level, level_comp.level), "yellow"))
             return
 
         old_hp = stats.current_hp
@@ -2266,7 +2266,7 @@ class Engine:
 
         if item.type == "SKILLBOOK":
             if not item.skill_id:
-                self.world.event_manager.push(MessageEvent(f"이 책은 가르침이 없습니다: {item.name}"))
+                self.world.event_manager.push(MessageEvent(_("이 책은 가르침이 없습니다: {}").format(item.name)))
                 return
             
             # [Class Restriction] 직업 전용 스킬 체크
@@ -2282,7 +2282,7 @@ class Engine:
                  if level_comp: job_name = level_comp.job
                  
                  if job_name != req_job:
-                      self.world.event_manager.push(MessageEvent(f"이 서적의 내용은 {req_job}만이 이해할 수 있습니다.", "red"))
+                      self.world.event_manager.push(MessageEvent(_("이 서적의 내용은 {}만이 이해할 수 있습니다.").format(req_job), "red"))
                       return
             
             skill_def = self.skill_defs.get(item.skill_id)
@@ -2291,7 +2291,7 @@ class Engine:
                 skill_def = next((s for s in self.skill_defs.values() if s.id == item.skill_id), None)
             
             if not skill_def:
-                self.world.event_manager.push(MessageEvent(f"존재하지 않는 기술의 비급서입니다: {item.skill_id}"))
+                self.world.event_manager.push(MessageEvent(_("존재하지 않는 기술의 비급서입니다: {}").format(item.skill_id)))
                 return
             
             skill_name = skill_def.name
@@ -2376,7 +2376,7 @@ class Engine:
                         unidentified.append((item_key, item_val))
                 
                 if not unidentified:
-                    self.world.event_manager.push(MessageEvent("식별할 미확인 아이템이 없습니다."))
+                    self.world.event_manager.push(MessageEvent(_("식별할 미확인 아이템이 없습니다.")))
                     return  # Do not consume scroll
                 
                 # Show selection menu (with game screen overlay)
@@ -2404,7 +2404,7 @@ class Engine:
                 self.pending_oil_type = oil_type
                 self.oil_selection_open = True
                 self.selected_equip_index = 0
-                self.world.event_manager.push(MessageEvent("강화할 장비를 선택하세요."))
+                self.world.event_manager.push(MessageEvent(_("강화할 장비를 선택하세요.")))
                 return # Do not consume yet
             
             # [VISION_UP] 횃불 효과
@@ -2523,7 +2523,7 @@ class Engine:
                 if inv.skill_slots[i] == skill_name:
                     inv.skill_slots[i] = None
             
-            self.world.event_manager.push(MessageEvent(f"'{skill_name}' 스킬을 잊었습니다."))
+            self.world.event_manager.push(MessageEvent(_("'{}' 스킬을 잊었습니다.").format(skill_name)))
             # 인덱스 보정
             self.selected_item_index = max(0, self.selected_item_index - 1)
 
@@ -2553,19 +2553,19 @@ class Engine:
             if item.name not in inv.items:
                 inv.items[item.name] = {'item': item, 'qty': 1}
             
-            self.world.event_manager.push(MessageEvent(f"{item.name}의 장착을 해제했습니다."))
+            self.world.event_manager.push(MessageEvent(_("{}의 장착을 해제했습니다.").format(item.name)))
             self._recalculate_stats()
             return
 
         # 2. 장착 로직 (레벨 및 식별 여부 확인)
         is_id = getattr(item, 'is_identified', True)
         if not is_id:
-            self.world.event_manager.push(MessageEvent("식별되지 않은 아이템은 장착할 수 없습니다.", "red"))
+            self.world.event_manager.push(MessageEvent(_("식별되지 않은 아이템은 장착할 수 없습니다."), "red"))
             return
 
         level_comp = player_entity.get_component(LevelComponent)
         if level_comp and item.required_level > level_comp.level:
-            self.world.event_manager.push(MessageEvent(f"레벨이 부족하여 장착할 수 없습니다. (필요: Lv.{item.required_level})"))
+            self.world.event_manager.push(MessageEvent(_("레벨이 부족하여 장착할 수 없습니다. (필요: Lv.{})").format(item.required_level)))
             return
 
         inv_comp = player_entity.get_component(InventoryComponent)
@@ -2610,7 +2610,7 @@ class Engine:
         # TODO: 머리, 장갑, 신발 등 타입 확장
         
         # 장착 메시지 추가
-        self.world.event_manager.push(MessageEvent(f"{item.name}을(를) 장착했습니다."))
+        self.world.event_manager.push(MessageEvent(_("{}을(를) 장착했습니다.").format(item.name)))
         
         # 능력치 재계산
         self._recalculate_stats()
@@ -3630,7 +3630,7 @@ class Engine:
         self.renderer.draw_text(start_x + 4, base_y + 11, atk_def, "cyan")
         
         # 5. Footer
-        help_text = _("​[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기")
+        help_text = _("[↑/↓] 선택  [→/ENTER] 포인트 투자  [C/ESC] 닫기")
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
     def _render_inventory_popup(self):
@@ -3784,7 +3784,7 @@ class Engine:
                  self.renderer.draw_text(start_x, info_y, "─" * (POPUP_WIDTH - 2), "white")
                  
                  # 가이드 메시지 (아이템 목록 바로 위 또는 구분선 근처)
-                 debug_info = f" {_('선택:')}{self.selected_item_index + 1}/{total_items} "
+                 debug_info = " " + _("선택:") + f"{self.selected_item_index + 1}/{total_items} "
                  self.renderer.draw_text(start_x + 2, start_y + 3, debug_info, "yellow")
                  if 0 <= self.selected_item_index < total_items:
                      sel_id, sel_data = filtered_items[self.selected_item_index]
@@ -3899,9 +3899,9 @@ class Engine:
         
         # 5. 하단 도움말
         if self.inventory_category_index == 3:
-            help_text = _("​[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기")
+            help_text = _("[←/→] 탭  [↑/↓] 선택  [ENTER/E] 등록/해제  [X] 스킬 잊기  [B] 닫기")
         else:
-            help_text = _("​[←/→] 탭  [↑/↓] 선택  [E] 퀴슬롯 등록  [ENTER] 사용/장착  [B] 닫기")
+            help_text = _("[←/→] 탭  [↑/↓] 선택  [E] 퀴슬롯 등록  [ENTER] 사용/장착  [B] 닫기")
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(help_text)) // 2, start_y + POPUP_HEIGHT - 2, help_text, "dark_grey")
 
     def _render_shop_popup(self):
@@ -4004,7 +4004,7 @@ class Engine:
                 self.renderer.draw_text(start_x + POPUP_WIDTH - 12, item_y, price_text, color)
         
         # 5. 하단 도움말
-        guide_text = _("​[←/→] 탭 전환  [↑/↓] 선택  [ENTER]") + " " + (_("구매") if self.shop_category_index == 0 else _("판매")) + _("​  [B] 뒤로/닫기")
+        guide_text = _("[←/→] 탭 전환  [↑/↓] 선택  [ENTER]") + " " + (_("구매") if self.shop_category_index == 0 else _("판매")) + " " + _(" [B] 뒤로/닫기")
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(guide_text)) // 2, start_y + POPUP_HEIGHT - 2, guide_text, "dark_grey")
     def _handle_oil_selection_input(self, action):
         """오일 사용 시 장비 선택 입력 처리"""
@@ -4013,7 +4013,7 @@ class Engine:
             self.oil_selection_open = False
             self.pending_oil_item = None
             self.pending_oil_type = None
-            self.world.event_manager.push(MessageEvent("강화를 취소했습니다."))
+            self.world.event_manager.push(MessageEvent(_("강화를 취소했습니다.")))
             return
 
         # Up/Down
@@ -4038,7 +4038,7 @@ class Engine:
                     # Apply Oil Logic
                     success = self._apply_oil(item, self.pending_oil_type)
                     if success:
-                        self.world.event_manager.push(MessageEvent(f"{item.name}이(가) 강화되었습니다!"))
+                        self.world.event_manager.push(MessageEvent(_("{}이(가) 강화되었습니다!").format(item.name)))
                         self.world.event_manager.push(SoundEvent("LEVEL_UP"))
                         
                         # Consume Oil
@@ -4053,9 +4053,9 @@ class Engine:
                         self.pending_oil_item = None
                         self._recalculate_stats()
                     else:
-                        self.world.event_manager.push(MessageEvent("이 아이템에는 사용할 수 없습니다."))
+                        self.world.event_manager.push(MessageEvent(_("이 아이템에는 사용할 수 없습니다.")))
                 else:
-                    self.world.event_manager.push(MessageEvent("빈 슬롯입니다."))
+                    self.world.event_manager.push(MessageEvent(_("빈 슬롯입니다.")))
 
     def _apply_oil(self, item, oil_type):
         """오일 효과 적용"""
@@ -4297,7 +4297,7 @@ class Engine:
                 if item and hasattr(item, 'max_durability') and item.max_durability > 0:
                     item.current_durability = item.max_durability
         
-        self.world.event_manager.push(MessageEvent("신성한 힘이 당신을 완전히 회복시켰습니다!"))
+        self.world.event_manager.push(MessageEvent(_("신성한 힘이 당신을 완전히 회복시켰습니다!")))
         self.world.event_manager.push(SoundEvent("LEVEL_UP"))
         self._recalculate_stats()
         self._close_shrine_with_destruction()
@@ -4307,7 +4307,7 @@ class Engine:
         if self.active_shrine_id:
             shrine_ent = self.world.get_entity(self.active_shrine_id)
             if shrine_ent:
-                self.world.event_manager.push(MessageEvent("축복을 다한 신전이 요란한 소리를 내며 무너져 내립니다!"))
+                self.world.event_manager.push(MessageEvent(_("축복을 다한 신전이 요란한 소리를 내며 무너져 내립니다!")))
                 self.world.event_manager.push(SoundEvent("BREAK"))
                 self.world.delete_entity(self.active_shrine_id)
         
@@ -4337,34 +4337,34 @@ class Engine:
                 item.attack_min += bonus
                 item.attack_max += bonus
                 item.attack = item.attack_max
-                self.world.event_manager.push(MessageEvent(f"[오일] {item.name}의 날에 차가운 광기가 서립니다! (공격력 +{bonus})"))
+                self.world.event_manager.push(MessageEvent(_("[오일] {}의 날에 차가운 광기가 서립니다! (공격력 +{})").format(item.name, bonus)))
             elif "OIL_ACCURACY" in flag:
                 bonus = random.randint(5, 10)
                 item.to_hit_bonus = getattr(item, 'to_hit_bonus', 0) + bonus
-                self.world.event_manager.push(MessageEvent(f"[오일] 무기에 정밀한 마법의 문양이 새겨지며 목표를 쫓습니다. (명중률 +{bonus}%)"))
+                self.world.event_manager.push(MessageEvent(_("[오일] 무기에 정밀한 마법의 문양이 새겨지며 목표를 쫓습니다. (명중률 +{}%)").format(bonus)))
             elif "OIL_HARDENING" in flag:
                 bonus = random.randint(1, 2)
                 item.defense_min += bonus
                 item.defense_max += bonus
                 item.defense = item.defense_max
-                self.world.event_manager.push(MessageEvent(f"[오일] 갑옷의 표면이 강철보다 단단한 질감으로 변합니다. (방어력 +{bonus})"))
+                self.world.event_manager.push(MessageEvent(_("[오일] 갑옷의 표면이 강철보다 단단한 질감으로 변합니다. (방어력 +{})").format(bonus)))
             elif "OIL_STABILITY" in flag:
                 bonus = random.randint(5, 10)
                 item.max_durability += bonus
                 item.current_durability += bonus
-                self.world.event_manager.push(MessageEvent(f"[오일] {item.name}의 구조가 강화되어 더욱 긴 시간 견딜 수 있게 되었습니다. (최대 내구도 +{bonus})"))
+                self.world.event_manager.push(MessageEvent(_("[오일] {}의 구조가 강화되어 더욱 긴 시간 견딜 수 있게 되었습니다. (최대 내구도 +{})").format(item.name, bonus)))
             elif "OIL_FORTITUDE" in flag:
                 bonus = random.randint(20, 50)
                 item.max_durability += bonus
                 item.current_durability += bonus
-                self.world.event_manager.push(MessageEvent(f"[오일] 불멸의 금속이 덧대어져 파괴 불가능에 가까운 강도를 얻었습니다! (최대 내구도 +{bonus})"))
+                self.world.event_manager.push(MessageEvent(_("[오일] 불멸의 금속이 덧대어져 파괴 불가능에 가까운 강도를 얻었습니다! (최대 내구도 +{})").format(bonus)))
             elif "OIL_SKILL" in flag:
                 bonus = random.randint(5, 10)
                 item.required_level = max(1, item.required_level - bonus)
-                self.world.event_manager.push(MessageEvent(f"[오일] 장비의 무게가 마치 깃털처럼 가벼워집니다. (요구 레벨 -{bonus})"))
+                self.world.event_manager.push(MessageEvent(_("[오일] 장비의 무게가 마치 깃털처럼 가벼워집니다. (요구 레벨 -{})").format(bonus)))
             elif "OIL_REPAIR" in flag:
                 item.current_durability = item.max_durability
-                self.world.event_manager.push(MessageEvent(f"[오일] 대장장이의 정수가 흐르며 {item.name}의 모든 균열이 메워집니다!"))
+                self.world.event_manager.push(MessageEvent(_("[오일] 대장장이의 정수가 흐르며 {}의 모든 균열이 메워집니다!").format(item.name)))
 
         # 2. 제물 효과 (리롤/승급 등 특수 효과)
         prevent_destruction = False
@@ -4374,17 +4374,17 @@ class Engine:
             sac_flag = getattr(sacrifice, 'flags', "")
             if "SAC_BLOOD" in sac_flag:
                 success_bonus = 0.1
-                self.world.event_manager.push(MessageEvent("[제물] 악마의 피가 갈구하듯 끓어오르며 강화의 성공을 이끕니다... (+10%)"))
+                self.world.event_manager.push(MessageEvent(_("[제물] 악마의 피가 갈구하듯 끓어오르며 강화의 성공을 이끕니다... (+10%)")))
             elif "SAC_FEATHER" in sac_flag:
                 prevent_destruction = True
-                self.world.event_manager.push(MessageEvent("[제물] 눈부신 천사의 깃털이 대상을 감싸 안아 파괴로부터 보호합니다."))
+                self.world.event_manager.push(MessageEvent(_("[제물] 눈부신 천사의 깃털이 대상을 감싸 안아 파괴로부터 보호합니다.")))
             elif "SAC_RUNE" in sac_flag:
                 # Prefix 리롤 (단순하게 Prefix 값들을 새로 고침하거나, 아예 Prefix 자체를 바꿀 수도 있음)
                 # 여기서는 기존 Prefix의 수치들을 무작위로 다시 계산하는 수준으로 구현
                 if hasattr(item, 'prefix_id') and item.prefix_id:
                      boost_pct = random.uniform(0.05, 0.20)
                      # 단순히 수치를 상향/하향 리롤
-                     self.world.event_manager.push(MessageEvent("[제물] 룬석이 공명하며 아이템에 잠재된 마법의 흐름을 뒤바꿉니다!"))
+                     self.world.event_manager.push(MessageEvent(_("[제물] 룬석이 공명하며 아이템에 잠재된 마법의 흐름을 뒤바꿉니다!")))
             elif "SAC_CRYSTAL" in sac_flag:
                 # 노멀 -> 매직 승급 (Magic 옵션이 없으면 추가)
                 if not getattr(item, 'prefix_id', None) and not getattr(item, 'suffix_id', None):
@@ -4392,13 +4392,13 @@ class Engine:
                     # (간소화를 위해 여기서는 이름 색상만 바꾸고 기본 스탯을 약간 강화하는 식)
                     item.color = "blue"
                     item.name = f"Magic {item.name}"
-                    self.world.event_manager.push(MessageEvent(f"[제물] 어둠의 수정이 {item.name}의 본질을 뒤흔들어 마법의 물건으로 승급시킵니다!"))
+                    self.world.event_manager.push(MessageEvent(_("[제물] 어둠의 수정이 {}의 본질을 뒤흔들어 마법의 물건으로 승급시킵니다!").format(item.name)))
 
         # 3. 기본 강화 (등급 +1)
         current_level = getattr(item, 'enhancement_level', 0)
         
         if current_level >= 10:
-            self.world.event_manager.push(MessageEvent("이미 최대 강화 등급입니다! (+10)"))
+            self.world.event_manager.push(MessageEvent(_("이미 최대 강화 등급입니다! (+10)")))
         else:
             if current_level <= 3:
                 success_rate = 0.9 - (current_level * 0.1)
@@ -4435,21 +4435,21 @@ class Engine:
                     base_name = base_name.split('+')[0].strip()
                 item.name = f"+{item.enhancement_level} {base_name}"
                 
-                self.world.event_manager.push(MessageEvent(f"[성공] 빛무리가 걷히고 더욱 강력해진 {item.name}이(가) 모습을 드러냅니다!"))
+                self.world.event_manager.push(MessageEvent(_("[성공] 빛무리가 걷히고 더욱 강력해진 {}이(가) 모습을 드러냅니다!").format(item.name)))
                 self.world.event_manager.push(SoundEvent("LEVEL_UP"))
             else:
                 # 실패 처리
                 if current_level <= 3:
                     if hasattr(item, 'current_durability') and item.max_durability > 0:
                         item.current_durability = max(0, item.current_durability // 2)
-                    self.world.event_manager.push(MessageEvent(f"강화 실패... {item.name}의 내구도가 감소했습니다."))
+                    self.world.event_manager.push(MessageEvent(_("강화 실패... {}의 내구도가 감소했습니다.").format(item.name)))
                 elif current_level <= 6:
                     if hasattr(item, 'current_durability'):
                         item.current_durability = 0
-                    self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 파손되었습니다!"))
+                    self.world.event_manager.push(MessageEvent(_("강화 실패! {}이(가) 파손되었습니다!").format(item.name)))
                 else:
                     if prevent_destruction:
-                        self.world.event_manager.push(MessageEvent(f"강화 실패! 하지만 제물 덕분에 {item.name}의 파괴를 면했습니다!"))
+                        self.world.event_manager.push(MessageEvent(_("강화 실패! 하지만 제물 덕분에 {}의 파괴를 면했습니다!").format(item.name)))
                     else:
                         if inv:
                             # 장착 중인지 확인
@@ -4461,7 +4461,7 @@ class Engine:
                             # 단순히 이름으로 qty 감소시킴
                             inv.remove_item(item.name, 1)
 
-                        self.world.event_manager.push(MessageEvent(f"강화 실패! {item.name}이(가) 산산조각 났습니다..."))
+                        self.world.event_manager.push(MessageEvent(_("강화 실패! {}이(가) 산산조각 났습니다...").format(item.name)))
                 
                 self.world.event_manager.push(SoundEvent("BREAK"))
         
@@ -4527,13 +4527,13 @@ class Engine:
                 ui.draw_text(sx + 2, y, f"{prefix}{loc_str} {item.name}{enh_str}", color)
                 y += 1
             
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 닫기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, _("[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 닫기"), "dark_grey")
 
         elif self.shrine_enhance_step == 2:
-            ui.draw_text(sx + 2, sy + 3, "사용할 오일을 선택하세요:", "cyan")
+            ui.draw_text(sx + 2, sy + 3, _("사용할 오일을 선택하세요:"), "cyan")
             
             if not self.eligible_oils:
-                ui.draw_text(sx + 4, sy + 6, "(사용 가능한 오일이 없습니다)", "dark_grey")
+                ui.draw_text(sx + 4, sy + 6, _("(사용 가능한 오일이 없습니다)"), "dark_grey")
             else:
                 for idx, oil in enumerate(self.eligible_oils):
                     y = sy + 5 + idx
@@ -4542,10 +4542,10 @@ class Engine:
                     ui.draw_text(sx + 4, y, f"{prefix}{oil.name}", color)
                     ui.draw_text(sx + 25, y, f"- {oil.description}", "dark_grey")
 
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 닫기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, _("[↑/↓] 선택  [ENTER] 다음  [B] 뒤로  [Q] 닫기"), "dark_grey")
 
         elif self.shrine_enhance_step == 3:
-            ui.draw_text(sx + 2, sy + 3, "특별한 제물을 바치시겠습니까?", "cyan")
+            ui.draw_text(sx + 2, sy + 3, _("특별한 제물을 바치시겠습니까?"), "cyan")
             
             y = sy + 6
             prefix_yes = "> " if self.sacrifice_prompt_yes else "  "
@@ -4554,17 +4554,17 @@ class Engine:
             ui.draw_text(sx + 10, y, f"{prefix_yes}Yes", "green" if self.sacrifice_prompt_yes else "white")
             ui.draw_text(sx + 25, y, f"{prefix_no}No", "red" if not self.sacrifice_prompt_yes else "white")
             
-            ui.draw_text(sx + 2, sy + 10, "제물을 바치면 강화 성공률이 오르거나", "dark_grey")
-            ui.draw_text(sx + 2, sy + 11, "아이템 파괴를 방지할 수 있습니다.", "dark_grey")
+            ui.draw_text(sx + 2, sy + 10, _("제물을 바치면 강화 성공률이 오르거나"), "dark_grey")
+            ui.draw_text(sx + 2, sy + 11, _("아이템 파괴를 방지할 수 있습니다."), "dark_grey")
 
-            ui.draw_text(sx + 2, sy + h - 2, "[←/→] 선택  [ENTER] 확인  [B] 뒤로  [Q] 닫기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, _("[←/→] 선택  [ENTER] 확인  [B] 뒤로  [Q] 닫기"), "dark_grey")
 
         elif self.shrine_enhance_step == 4:
-            ui.draw_text(sx + 2, sy + 3, "봉납할 제물을 선택하세요:", "cyan")
+            ui.draw_text(sx + 2, sy + 3, _("봉납할 제물을 선택하세요:"), "cyan")
             
             if not self.eligible_sacrifices:
-                ui.draw_text(sx + 4, sy + 6, "(보유 중인 제물이 없습니다. 그대로 강화하시겠습니까?)", "yellow")
-                ui.draw_text(sx + 4, sy + 8, "[ENTER]를 누르면 제물 없이 강화를 시작합니다.", "dark_grey")
+                ui.draw_text(sx + 4, sy + 6, _("(보유 중인 제물이 없습니다. 그대로 강화하시겠습니까?)"), "yellow")
+                ui.draw_text(sx + 4, sy + 8, _("[ENTER]를 누르면 제물 없이 강화를 시작합니다."), "dark_grey")
             else:
                 for idx, sac in enumerate(self.eligible_sacrifices):
                     y = sy + 5 + idx
@@ -4573,7 +4573,7 @@ class Engine:
                     ui.draw_text(sx + 4, y, f"{prefix}{sac.name}", color)
                     ui.draw_text(sx + 25, y, f"- {sac.description}", "dark_grey")
 
-            ui.draw_text(sx + 2, sy + h - 2, "[↑/↓] 선택  [ENTER] 강화 실행  [B] 뒤로  [Q] 닫기", "dark_grey")
+            ui.draw_text(sx + 2, sy + h - 2, _("[↑/↓] 선택  [ENTER] 강화 실행  [B] 뒤로  [Q] 닫기"), "dark_grey")
 
     def _get_eligible_items(self, floor, item_pool=None):
         """현재 층수에서 획득 가능한 아이템 목록을 반환합니다."""
