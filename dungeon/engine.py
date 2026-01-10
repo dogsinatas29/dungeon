@@ -28,6 +28,7 @@ from .systems import (
 )
 
 from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, ShopOpenEvent, ShrineOpenEvent, SoundEvent
+from .localization import _
 from .sound_system import SoundSystem
 from .renderer import Renderer
 from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
@@ -3328,7 +3329,7 @@ class Engine:
                 # 4. 오른쪽 사이드바 (Right Sidebar)
                 # 4-1. 로그 (Logs)
                 log_start_y = 0
-                self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y, "[ LOGS ]", "gold")
+                self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, log_start_y, f"[ {_('LOGS')} ]", "gold")
         
         message_comp_list = self.world.get_entities_with_components({MessageComponent})
         if message_comp_list:
@@ -3374,15 +3375,19 @@ class Engine:
 
         # 4-2. 장비 (Equipment)
         eq_start_y = 12 # 로그(10줄)와 겹치지 않도록 시작점 조정
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, eq_start_y, "[ EQUIP ]", "gold")
+        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, eq_start_y, f"[ {_('EQUIP')} ]", "gold")
         eq_y = eq_start_y + 1
         if player_entity:
             inv_comp = player_entity.get_component(InventoryComponent)
             if inv_comp:
-                slots = ["머리", "몸통", "장갑", "신발", "손1", "손2", "액세서리1", "액세서리2"]
-                for i, slot in enumerate(slots):
+                # Actual slot keys used in equipped dict
+                slot_keys = ["머리", "몸통", "장갑", "신발", "손1", "손2", "액세서리1", "액세서리2"]
+                # Translation keys for display
+                slot_display_keys = ["Head", "Body", "Gloves", "Boots", "Hand1", "Hand2", "Neck", "Ring1"]
+                
+                for i, (slot_key, display_key) in enumerate(zip(slot_keys, slot_display_keys)):
                     if eq_y >= 21: break # 사이드바 높이 제한 (스크롤/스킬 영역 확보)
-                    item = inv_comp.equipped.get(slot)
+                    item = inv_comp.equipped.get(slot_key)
                     
                     # Initialize color to white by default
                     color = "white"
@@ -3413,13 +3418,15 @@ class Engine:
                     if item_display == "(양손 점유)":
                         color = "dark_grey"
                     
-                    # 슬롯명과 아이템명을 정돈해서 표시
-                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, eq_y, f"{slot:<5}: {item_display}", color)
+                    # 슬롯명과 아이템명을 정돈해서 표시 (translated slot name)
+                    slot_display = _(display_key)
+                    self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, eq_y, f"{slot_display:<5}: {item_display}", color)
                     eq_y += 1
+
 
         # 4-3. 퀵슬롯 (Item Slots 1-5)
         qs_start_y = 21
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_start_y, "[ QUICK SLOTS ]", "gold")
+        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, qs_start_y, f"[ {_('QUICK SLOTS')} ]", "gold")
         qs_y = qs_start_y + 1
         if player_entity:
             # 1. 활성화된 버프 확인 및 Duration 매핑 (Item Slots 용)
@@ -3451,7 +3458,7 @@ class Engine:
         
         # 4-4. 스킬 (Skill Slots 6-0)
         skill_start_y = qs_start_y + 7
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y, "[ SKILLS ] (6-0)", "gold")
+        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, skill_start_y, f"[ {_('SKILLS')} ] (6-0)", "gold")
         skill_y = skill_start_y + 1
         if player_entity:
             inv_comp = player_entity.get_component(InventoryComponent)
@@ -3471,7 +3478,7 @@ class Engine:
 
         # 4-5. 활성 효과 (Active Effects / Buffs) - User Request: "Count down for items"
         buff_start_y = skill_y + 6 # After 5 skill slots
-        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, buff_start_y, "[ ACTIVE EFFECTS ]", "gold")
+        self.renderer.draw_text(RIGHT_SIDEBAR_X + 2, buff_start_y, f"[ {_('ACTIVE EFFECTS')} ]", "gold")
         buff_y = buff_start_y + 1
         
         if player_entity:
