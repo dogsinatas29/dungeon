@@ -565,7 +565,11 @@ def load_boss_patterns(data_path=None):
             print(f"Failed to load boss patterns JSON: {e}")
 
     # 2. CSV 대사 로드 및 병합
-    csv_path = os.path.join(data_path, "boss_dialogues.csv")
+    from .localization import get_data_path
+    
+    # [Localization] Use get_data_path to load localized dialogues if available
+    csv_path = get_data_path("boss_dialogues.csv", data_path)
+    
     if os.path.exists(csv_path):
         try:
             with open(csv_path, mode='r', encoding='utf-8-sig') as f:

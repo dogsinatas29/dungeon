@@ -17,6 +17,7 @@ import random
 import time
 import logging
 from .ui import COLOR_MAP
+from .localization import _
 from .events import (
     MoveSuccessEvent, CollisionEvent, MessageEvent, MapTransitionEvent,
     ShopOpenEvent, DirectionalAttackEvent, SkillUseEvent, SoundEvent, CombatResultEvent,
@@ -57,7 +58,7 @@ class InputSystem(System):
                     self.world.engine.is_running = False
                     return True
                 if current_time - stats.last_action_time > 1.0: # 메시지 도배 방지
-                    self.event_manager.push(MessageEvent("전신이 석화되어 움직일 수 없습니다!", "gray"))
+                    self.event_manager.push(MessageEvent(_("전신이 석화되어 움직일 수 없습니다!"), "gray"))
                     stats.last_action_time = current_time # 쿨다운 갱신하여 메시지 텀 주기
                 return False
             elif p_comp.stacks >= 1:
@@ -74,7 +75,7 @@ class InputSystem(System):
             if action == 'q':
                 self.world.engine.is_running = False
                 return True
-            self.event_manager.push(MessageEvent("몸이 움직이지 않습니다... (기절 중)"))
+            self.event_manager.push(MessageEvent(_("몸이 움직이지 않습니다... (기절 중)")))
             return False
 
         # 수면 상태 확인
@@ -83,7 +84,7 @@ class InputSystem(System):
             if action == 'q':
                 self.world.engine.is_running = False
                 return True
-            self.event_manager.push(MessageEvent("깊은 잠에 빠져 움직일 수 없습니다... (수면 중)"))
+            self.event_manager.push(MessageEvent(_("깊은 잠에 빠져 움직일 수 없습니다... (수면 중)")))
             return False
 
         # 액션 허용됨 -> 시간 갱신 (실제 이동/공격 로직에서 한 번 더 갱신할 수 있음)
@@ -94,9 +95,9 @@ class InputSystem(System):
             # Engine의 is_attack_mode 토글
             self.world.engine.is_attack_mode = not self.world.engine.is_attack_mode
             if self.world.engine.is_attack_mode:
-                self.event_manager.push(MessageEvent("공격 방향을 선택하세요... [Space] 취소"))
+                self.event_manager.push(MessageEvent(_("공격 방향을 선택하세요... [Space] 취소")))
             else:
-                self.event_manager.push(MessageEvent("공격 모드 해제."))
+                self.event_manager.push(MessageEvent(_("공격 모드 해제.")))
             return False # 턴을 소모하지 않음
 
         # 입력값 정규화 (소문자 및 좌우 공백 제거)
@@ -160,7 +161,7 @@ class InputSystem(System):
                     
                     if is_heal:
                         # 자신에게 시전 (dx=0, dy=0), Cost=0 (Free)
-                        self.event_manager.push(MessageEvent(f"지팡이에 충전된 '{skill_name}'을(를) 방출하여 자신을 치유합니다!", "yellow"))
+                        self.event_manager.push(MessageEvent(_("지팡이에 충전된 '{}'을(를) 방출하여 자신을 치유합니다!").format(skill_name), "yellow"))
                         self.event_manager.push(SkillUseEvent(
                             attacker_id=player_entity.entity_id,
                             skill_name=skill_name,
@@ -170,7 +171,7 @@ class InputSystem(System):
                         ))
                     else:
                         # 방향 발사, Cost=0 (Free)
-                        self.event_manager.push(MessageEvent(f"지팡이에 충전된 '{skill_name}'을(를) 방출합니다!", "yellow"))
+                        self.event_manager.push(MessageEvent(_("지팡이에 충전된 '{}'을(를) 방출합니다!").format(skill_name), "yellow"))
                         self.event_manager.push(SkillUseEvent(
                             attacker_id=player_entity.entity_id,
                             skill_name=skill_name,
@@ -231,7 +232,7 @@ class InputSystem(System):
         # 상호작용/줍기 (Enter)
         if action in ['\r', '\n']:
             # 제자리 대기 효과 부여 (턴 소모)
-            self.event_manager.push(MessageEvent("주변을 살펴봅니다."))
+            self.event_manager.push(MessageEvent(_("주변을 살펴봅니다.")))
             player_pos = player_entity.get_component(PositionComponent)
             if player_pos:
                 # 1. 시체 확인
@@ -241,7 +242,7 @@ class InputSystem(System):
                     c_pos = c.get_component(PositionComponent)
                     if c_pos.x == player_pos.x and c_pos.y == player_pos.y:
                         corpse_comp = c.get_component(CorpseComponent)
-                        self.event_manager.push(MessageEvent(f"{corpse_comp.original_name}의 시체를 살펴봅니다..."))
+                        self.event_manager.push(MessageEvent(_("{}의 시체를 살펴봅니다...").format(corpse_comp.original_name)))
                         found_corpse = True
                         break
                 
@@ -263,7 +264,7 @@ class InputSystem(System):
                             self.event_manager.push(MapTransitionEvent(target_level=target_level))
                             return True
                         else:
-                             self.event_manager.push(MessageEvent("지상으로 나가는 출구는 막혀있습니다."))
+                             self.event_manager.push(MessageEvent(_("지상으로 나가는 출구는 막혀있습니다.")))
                              return True
                         
                 if found_corpse: return True
@@ -271,7 +272,7 @@ class InputSystem(System):
         
         # 제자리 대기 (Wait)
         if action_lower in ['.', '5', 'x', 'z']: # 대기 키 확장
-            self.event_manager.push(MessageEvent("제자리에서 대기합니다."))
+            self.event_manager.push(MessageEvent(_("제자리에서 대기합니다.")))
             return True # 턴 소모
 
         if action_lower == 'q':
@@ -349,16 +350,16 @@ class MovementSystem(System):
                     if stats.current_stamina <= 0:
                         stats.current_stamina = 0
                         stats.current_hp = 0
-                        self.event_manager.push(MessageEvent("탈진하여 쓰러졌습니다! (Stamina 0)"))
+                        self.event_manager.push(MessageEvent(_("탈진하여 쓰러졌습니다! (Stamina 0)")))
 
                 # 4. 계단 확인 (플레이어만)
                 if entity.entity_id == self.world.get_player_entity().entity_id:
                     from .constants import EXIT_NORMAL, START
                     current_tile = map_component.tiles[new_y][new_x]
                     if current_tile == EXIT_NORMAL:
-                        self.event_manager.push(MessageEvent("다음 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 내려가시겠습니까?"))
+                        self.event_manager.push(MessageEvent(_("다음 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 내려가시겠습니까?")))
                     elif current_tile == START:
-                        self.event_manager.push(MessageEvent("이전 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 올라가시겠습니까?"))
+                        self.event_manager.push(MessageEvent(_("이전 층으로 연결되는 계단입니다. [ENTER] 키를 눌러 올라가시겠습니까?")))
 
             # 5. 숨겨진 아이템 발견 시 메시지
             if not is_collision:
@@ -370,7 +371,7 @@ class MovementSystem(System):
                         if player:
                             p_stats = player.get_component(StatsComponent)
                             if p_stats and p_stats.sees_hidden:
-                                 self.event_manager.push(MessageEvent("숨겨진 무언가를 발견했습니다!"))
+                                 self.event_manager.push(MessageEvent(_("숨겨진 무언가를 발견했습니다!")))
 
             # DesiredPositionComponent 제거 (처리 완료)
             entity.remove_component(DesiredPositionComponent)
@@ -2932,7 +2933,7 @@ class RegenerationSystem(System):
                     stats.current_hp = min(stats.max_hp, stats.current_hp + 1)
                     # 플레이어인 경우 메시지 출력
                     if entity == self.world.get_player_entity():
-                         self.world.event_manager.push(MessageEvent("체력이 1 회복되었습니다."))
+                         self.world.event_manager.push(MessageEvent(_("체력이 1 회복되었습니다.")))
 
         # 2. MP 자연 회복 (2초마다)
         if current_time - self.last_mp_regen_time >= 2.0:
@@ -2943,7 +2944,7 @@ class RegenerationSystem(System):
                     stats.current_mp = min(stats.max_mp, stats.current_mp + 1)
                     # 플레이어인 경우 메시지 출력
                     if entity == self.world.get_player_entity():
-                         self.world.event_manager.push(MessageEvent("마력이 1 회복되었습니다."))
+                         self.world.event_manager.push(MessageEvent(_("마력이 1 회복되었습니다.")))
 
         # 3. 스테미너 자연 회복: 제거됨 (아이템으로만 회복)
 
@@ -3197,7 +3198,7 @@ class LevelSystem(System):
             self._level_up(entity)
             
         if leveled_up:
-            self.event_manager.push(MessageEvent(f"레벨업! 현재 레벨: {level_comp.level}"))
+            self.event_manager.push(MessageEvent(_("레벨업! 현재 레벨: {}").format(level_comp.level)))
             self.event_manager.push(SoundEvent("LEVEL_UP", "레벨 업!"))
 
     def _level_up(self, entity: Entity):
@@ -3234,7 +3235,7 @@ class LevelSystem(System):
             stats_comp.current_hp = stats_comp.max_hp
             stats_comp.current_mp = stats_comp.max_mp
             
-            self.event_manager.push(MessageEvent(f"체력과 마력이 모두 회복되었습니다!", "green"))
+            self.event_manager.push(MessageEvent(_("체력과 마력이 모두 회복되었습니다!"), "green"))
 
     def grant_stat_points(self, entity: Entity, amount: int, reason: str = ""):
         """외부 요인(퀘스트, 보스 처치 등)으로 스탯 포인트를 지급"""
@@ -3242,7 +3243,7 @@ class LevelSystem(System):
         if level_comp:
             level_comp.stat_points += amount
             
-            msg = f"보너스 스탯 포인트 +{amount} 획득!"
+            msg = _("보너스 스탯 포인트 +{} 획득!").format(amount)
             if reason:
                  msg += f" ({reason})"
             
