@@ -43,6 +43,39 @@ class ConsoleUI:
         """화면 흔들림 효과를 트리거합니다."""
         self.shake_duration = frames
 
+    def show_language_selection(self):
+        """언어 선택 메뉴를 표시합니다."""
+        self._clear_screen()
+        
+        selected_idx = 0
+        options = ["한국어 (Korean)", "English", "Exit"]
+        
+        while True:
+            self._clear_screen()
+            print("\n" * 5)
+            print(" " * 10 + "┌──────────────────────────┐")
+            print(" " * 10 + "│    Language Selection    │")
+            print(" " * 10 + "├──────────────────────────┤")
+            
+            for i, option in enumerate(options):
+                prefix = " >" if i == selected_idx else "  "
+                color = "\033[93m" if i == selected_idx else ""
+                reset = "\033[0m" if i == selected_idx else ""
+                print(" " * 10 + f"│{color}{prefix} {option:<19}{reset}│")
+                
+            print(" " * 10 + "└──────────────────────────┘")
+            print("\n" * 2 + " " * 10 + "Use W/S or Up/Down to move, Enter to select.")
+            
+            key = self.get_key_input()
+            if key in ['w', 'W', '\x1b[A']: # Up
+                selected_idx = (selected_idx - 1) % len(options)
+            elif key in ['s', 'S', '\x1b[B']: # Down
+                selected_idx = (selected_idx + 1) % len(options)
+            elif key in ['\r', '\n', ' ']: # Enter/Space
+                return selected_idx
+            elif key in ['q', 'Q']:
+                return 2 # Exit
+
     def show_skill_selection_menu(self, known_skills, game_renderer=None):
         """충전할 스킬 선택 메뉴 표시 (Identifiy Menu와 유사)
         
