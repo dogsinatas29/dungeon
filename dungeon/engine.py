@@ -485,7 +485,7 @@ class Engine:
         if map_type == "BOSS":
             message_comp.add_message("[경고] 강력한 보스의 기운이 느껴집니다!", "red")
         else:
-            message_comp.add_message("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.")
+            message_comp.add_message(_("WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요."))
         self.world.add_component(message_entity.entity_id, message_comp)
         
         # 4. 엔티티 배치 (몬스터/보스/오브젝트)
@@ -3608,7 +3608,7 @@ class Engine:
         self.renderer.draw_text(start_x + 2, start_y + 4, "-" * (POPUP_WIDTH - 4), "dark_grey")
         
         # 3. Stats List
-        stat_names = ["STR (힘)", "MAG (마력)", "DEX (민첩)", "VIT (활력)"]
+        stat_names = [_("STR (힘)"), _("MAG (마력)"), _("DEX (민첩)"), _("VIT (활력)")]
         stat_vals = [stats.base_str, stats.base_mag, stats.base_dex, stats.base_vit]
         stat_desc = ["공격력 / 무기효율", "최대마력 / 마법효율", "방어력 / 명중률 / 치명타", "최대체력 / 생존력"]
         
@@ -3784,7 +3784,7 @@ class Engine:
                  self.renderer.draw_text(start_x, info_y, "─" * (POPUP_WIDTH - 2), "white")
                  
                  # 가이드 메시지 (아이템 목록 바로 위 또는 구분선 근처)
-                 debug_info = f" 선택: {self.selected_item_index + 1}/{total_items} "
+                 debug_info = f" {_('선택:')}{self.selected_item_index + 1}/{total_items} "
                  self.renderer.draw_text(start_x + 2, start_y + 3, debug_info, "yellow")
                  if 0 <= self.selected_item_index < total_items:
                      sel_id, sel_data = filtered_items[self.selected_item_index]
@@ -3807,9 +3807,9 @@ class Engine:
                      req_color = "gold" if req_met else "red"
                      
                      # 이름과 레벨 표시
-                     self.renderer.draw_text(start_x + 2, detail_y + 1, f"이름: {disp_name}", "gold")
+                     self.renderer.draw_text(start_x + 2, detail_y + 1, f"{_('이름:')} {disp_name}", "gold")
                      if req_lvl > 1:
-                         self.renderer.draw_text(start_x + 25, detail_y + 1, f"[필요 레벨: {req_lvl}]", req_color)
+                         self.renderer.draw_text(start_x + 25, detail_y + 1, f"[{_('필요 레벨:')} {req_lvl}]", req_color)
                      
                      # 상세 정보 텍스트 (아이템/스킬 공통 필드)
                      
@@ -3824,16 +3824,16 @@ class Engine:
                          # 한 줄로 표시 (공간 제약)
                          if len(desc) > POPUP_WIDTH - 10:
                              desc = desc[:POPUP_WIDTH - 13] + "..."
-                         self.renderer.draw_text(start_x + 2, detail_y + 2, f"설명: {desc}", "white")
+                         self.renderer.draw_text(start_x + 2, detail_y + 2, f"{_('설명:')} {desc}", "white")
                      
                      # 스탯 정보
                      stats_text = ""
                      if hasattr(sel_item, 'attack') and sel_item.attack != "0":
                          val = getattr(sel_item, 'attack', '') if (is_id and req_met) else "?"
-                         stats_text += f"공격: {val} "
+                         stats_text += f"{_('공격:')} {val} "
                      if hasattr(sel_item, 'defense') and sel_item.defense != 0:
                          val = sel_item.defense if (is_id and req_met) else "?"
-                         stats_text += f"방어: {val} "
+                         stats_text += f"{_('방어:')} {val} "
                      
                      # 사거리 정보 (핵심!)
                      r_val = 0
@@ -3842,7 +3842,7 @@ class Engine:
                      
                      if r_val > 0:
                          val = r_val if (is_id and req_met) else "?"
-                         stats_text += f"사거리: {val} "
+                         stats_text += f"{_('사거리:')} {val} "
                     
                      # 스킬 전용 정보
                      if self.inventory_category_index == 3: # 스킬 탭
@@ -3927,7 +3927,7 @@ class Engine:
                 self.renderer.draw_char(x, y, char, "gold")
         
         # 2. 탭 구성 (사기 / 팔기)
-        categories = ["사기 (BUY)", "팔기 (SELL)"]
+        categories = [_("사기 (BUY)"), _("팔기 (SELL)")]
         tab_x = start_x + 4
         for i, cat in enumerate(categories):
             color = "yellow" if i == self.shop_category_index else "dark_grey"
@@ -3940,7 +3940,7 @@ class Engine:
         if player_entity:
             stats = player_entity.get_component(StatsComponent)
             if stats:
-                gold_text = f" 소지 골드: {stats.gold} G "
+                gold_text = f" {_('소지 골드:')} {stats.gold} G "
                 self.renderer.draw_text(start_x + POPUP_WIDTH - len(gold_text) - 2, start_y + 3, gold_text, "yellow")
         
         self.renderer.draw_text(start_x + 2, start_y + 4, "-" * (POPUP_WIDTH - 4), "dark_grey")
@@ -4004,7 +4004,7 @@ class Engine:
                 self.renderer.draw_text(start_x + POPUP_WIDTH - 12, item_y, price_text, color)
         
         # 5. 하단 도움말
-        guide_text = "[←/→] 탭 전환  [↑/↓] 선택  [ENTER] " + ("구매" if self.shop_category_index == 0 else "판매") + "  [B] 뒤로/닫기"
+        guide_text = _("​[←/→] 탭 전환  [↑/↓] 선택  [ENTER]") + " " + (_("구매") if self.shop_category_index == 0 else _("판매")) + _("​  [B] 뒤로/닫기")
         self.renderer.draw_text(start_x + (POPUP_WIDTH - len(guide_text)) // 2, start_y + POPUP_HEIGHT - 2, guide_text, "dark_grey")
     def _handle_oil_selection_input(self, action):
         """오일 사용 시 장비 선택 입력 처리"""
@@ -4092,7 +4092,7 @@ class Engine:
         w, h = 50, 20
         sx = 5
         sy = 3
-        ui.draw_box(sx, sy, w, h, title="강화할 장비 선택")
+        ui.draw_box(sx, sy, w, h, title=_("강화할 장비 선택"))
         
         player_entity = self.world.get_player_entity()
         inv = player_entity.get_component(InventoryComponent)

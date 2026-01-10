@@ -44,6 +44,39 @@ TRANSLATIONS = {
         "LOGS": "로그", "EQUIP": "장비", "QUICK SLOTS": "퀵슬롯", "SKILLS": "스킬", "ACTIVE EFFECTS": "진행 효과",
         "Head": "머리", "Body": "몸통", "Hand1": "손1", "Hand2": "손2", "Gloves": "장갑", "Boots": "신발", "Neck": "목", "Ring1": "반지1", "Ring2": "반지2",
         "recovered": "회복되었습니다.",
+        
+        # Game Start Messages
+        "WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.": "WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.",
+        
+        # Inventory UI
+        "선택:": "선택:",
+        "이름:": "이름:",
+        "설명:": "설명:",
+        "필요 레벨:": "필요 레벨:",
+        "공격:": "공격:",
+        "방어:": "방어:",
+        "사거리:": "사거리:",
+        "효과:": "효과:",
+        
+        # Character Sheet
+        "STR (힘)": "STR (힘)",
+        "MAG (마력)": "MAG (마력)",
+        "DEX (민첩)": "DEX (민첩)",
+        "VIT (활력)": "VIT (활력)",
+        "Points:": "포인트:",
+        
+        # Shop UI
+        "사기 (BUY)": "사기 (BUY)",
+        "팔기 (SELL)": "팔기 (SELL)",
+        "소지 골드:": "소지 골드:",
+        "구매": "구매",
+        "판매": "판매",
+        "[←/→] 탭 전환  [↑/↓] 선택  [ENTER]": "[←/→] 탭 전환  [↑/↓] 선택  [ENTER]",
+        "  [B] 뒤로/닫기": "  [B] 뒤로/닫기",
+        
+        # Shrine UI
+        "강화할 장비 선택": "강화할 장비 선택",
+        "[ENTER] 강화  [ESC] 취소": "[ENTER] 강화  [ESC] 취소",
     },
     "en": {
         "Level": "Level", "Exp": "Exp", "Job": "Job", "Gold": "Gold", "Floor": "Floor",
@@ -81,6 +114,39 @@ TRANSLATIONS = {
         "LOGS": "LOGS", "EQUIP": "EQUIP", "QUICK SLOTS": "QUICK SLOTS", "SKILLS": "SKILLS", "ACTIVE EFFECTS": "ACTIVE EFFECTS",
         "Head": "Head", "Body": "Body", "Hand1": "Hand1", "Hand2": "Hand2", "Gloves": "Gloves", "Boots": "Boots", "Neck": "Neck", "Ring1": "Ring1", "Ring2": "Ring2",
         "recovered": "recovered", "HP": "HP", "MP": "MP",
+        
+        # Game Start Messages
+        "WASD나 방향키로 이동하고 몬스터와 부딪혀 전투하세요.": "Use WASD or arrow keys to move and bump into monsters to fight.",
+        
+        # Inventory UI
+        "선택:": "Select:",
+        "이름:": "Name:",
+        "설명:": "Desc:",
+        "필요 레벨:": "Req Lv:",
+        "공격:": "ATK:",
+        "방어:": "DEF:",
+        "사거리:": "Range:",
+        "효과:": "Effect:",
+        
+        # Character Sheet
+        "STR (힘)": "STR (Str)",
+        "MAG (마력)": "MAG (Mag)",
+        "DEX (민첩)": "DEX (Dex)",
+        "VIT (활력)": "VIT (Vit)",
+        "Points:": "Points:",
+        
+        # Shop UI
+        "사기 (BUY)": "BUY",
+        "팔기 (SELL)": "SELL",
+        "소지 골드:": "Gold:",
+        "구매": "Buy",
+        "판매": "Sell",
+        "[←/→] 탭 전환  [↑/↓] 선택  [ENTER]": "[←/→] Tab  [↑/↓] Select  [ENTER]",
+        "  [B] 뒤로/닫기": "  [B] Back/Close",
+        
+        # Shrine UI
+        "강화할 장비 선택": "Select Equipment to Enhance",
+        "[ENTER] 강화  [ESC] 취소": "[ENTER] Enhance  [ESC] Cancel",
         
         # System Messages (Dynamic)
         "전신이 석화되어 움직일 수 없습니다!": "You are petrified and cannot move!",
