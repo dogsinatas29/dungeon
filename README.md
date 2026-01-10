@@ -188,8 +188,9 @@ Diablo-like real-time roguelike engine for terminal
 ### Medium Priority
 - [x] **Item Drop System Overhaul** (Loot tables, Affixes, MF)
 - [x] **Language Selection Menu** - choose Korean/English at startup
-    - Fully localized UI and system messages.
-    - Select language upon game launch.
+    - ✅ **Fully localized UI and system messages** (English/Korean)
+    - ✅ **Complete message translation** for all game events, combat, bosses, and traps
+    - Select language upon game launch
 - [ ] **Player Action Cooldown** - enforce cooldown in input handling
 - [ ] **Balance Adjustments** - tune difficulty for real-time gameplay
 - [ ] **UI Improvements**:
