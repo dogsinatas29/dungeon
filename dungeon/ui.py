@@ -45,35 +45,59 @@ class ConsoleUI:
 
     def show_language_selection(self):
         """언어 선택 메뉴를 표시합니다."""
-        self._clear_screen()
-        
         selected_idx = 0
         options = ["한국어 (Korean)", "English", "Exit"]
         
         while True:
             self._clear_screen()
-            print("\n" * 5)
-            print(" " * 10 + "┌──────────────────────────┐")
-            print(" " * 10 + "│    Language Selection    │")
-            print(" " * 10 + "├──────────────────────────┤")
+            terminal_width = shutil.get_terminal_size().columns
+            
+            # ASCII Art Title "LANGUAGE"
+            title = [
+                "",
+                "  ██╗      █████╗ ███╗   ██╗ ██████╗ ██╗   ██╗ █████╗  ██████╗ ███████╗",
+                "  ██║     ██╔══██╗████╗  ██║██╔════╝ ██║   ██║██╔══██╗██╔════╝ ██╔════╝",
+                "  ██║     ███████║██╔██╗ ██║██║  ███╗██║   ██║███████║██║  ███╗█████╗  ",
+                "  ██║     ██╔══██║██║╚██╗██║██║   ██║██║   ██║██╔══██║██║   ██║██╔══╝  ",
+                "  ███████╗██║  ██║██║ ╚████║╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████╗",
+                "  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝",
+                ""
+            ]
+            
+            for line in title:
+                padding = (terminal_width - len(line)) // 2
+                print(f"{COLOR_MAP['gold']}{' ' * padding}{line}{COLOR_MAP['reset']}")
+
+            # Menu Box
+            box_width = 40
+            box_padding = (terminal_width - box_width) // 2
+            
+            print(f"{' ' * box_padding}┌{'─' * (box_width-2)}┐")
             
             for i, option in enumerate(options):
                 prefix = " >" if i == selected_idx else "  "
-                color = "\033[93m" if i == selected_idx else ""
-                reset = "\033[0m" if i == selected_idx else ""
-                print(" " * 10 + f"│{color}{prefix} {option:<19}{reset}│")
+                color = COLOR_MAP['yellow'] if i == selected_idx else COLOR_MAP['white']
+                content = f"{prefix} {option}"
+                padding_len = box_width - 2 - len(content) + (len(color) - len(COLOR_MAP['white']) if i == selected_idx else 0) # Adjust for color codes? simple len is safer if reset separately
                 
-            print(" " * 10 + "└──────────────────────────┘")
-            print("\n" * 2 + " " * 10 + "Use W/S or Up/Down to move, Enter to select.")
+                # Careful with color string length math, print content and padding separately
+                print(f"{' ' * box_padding}│{color}{content:<{box_width-2}}{COLOR_MAP['reset']}│")
+                
+            print(f"{' ' * box_padding}└{'─' * (box_width-2)}┘")
+            
+            # Controls
+            controls = "[↑/↓ or W/S] Select | [ENTER] Confirm"
+            ctrl_padding = (terminal_width - len(controls)) // 2
+            print(f"\n{COLOR_MAP['dark_grey']}{' ' * ctrl_padding}{controls}{COLOR_MAP['reset']}")
             
             key = self.get_key_input()
-            if key in ['w', 'W', '\x1b[A']: # Up
+            if key in [readchar.key.UP, 'w', 'W', '\x1b[A']:
                 selected_idx = (selected_idx - 1) % len(options)
-            elif key in ['s', 'S', '\x1b[B']: # Down
+            elif key in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
                 selected_idx = (selected_idx + 1) % len(options)
-            elif key in ['\r', '\n', ' ']: # Enter/Space
+            elif key in [readchar.key.ENTER, '\r', '\n', ' ']:
                 return selected_idx
-            elif key in ['q', 'Q']:
+            elif key in ['q', 'Q', readchar.key.ESC]:
                 return 2 # Exit
 
     def show_skill_selection_menu(self, known_skills, game_renderer=None):
