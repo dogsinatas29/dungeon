@@ -68,22 +68,24 @@ class ConsoleUI:
                 padding = (terminal_width - len(line)) // 2
                 print(f"{COLOR_MAP['gold']}{' ' * padding}{line}{COLOR_MAP['reset']}")
 
-            # Menu Box
-            box_width = 40
-            box_padding = (terminal_width - box_width) // 2
-            
-            print(f"{' ' * box_padding}┌{'─' * (box_width-2)}┐")
-            
+            print("\n") # Spacing after title
+
             for i, option in enumerate(options):
-                prefix = " >" if i == selected_idx else "  "
-                color = COLOR_MAP['yellow'] if i == selected_idx else COLOR_MAP['white']
+                prefix = ">" if i == selected_idx else " "
+                color = COLOR_MAP['yellow'] if i == selected_idx else COLOR_MAP['dark_grey'] # Dark grey for unselected for style? Or White. Main menu uses White.
+                # Let's use White for consistency with main menu options usually
+                if i == selected_idx:
+                     color = COLOR_MAP['yellow']
+                else:
+                     color = COLOR_MAP['white']
+
+                content = f"{prefix} {option} {prefix[::-1]}" # Add symmetric arrow? Or just left.
+                # User asked to remove border, usually that implies a cleaner look.
+                # Let's just do "> Option" centered.
+                
                 content = f"{prefix} {option}"
-                padding_len = box_width - 2 - len(content) + (len(color) - len(COLOR_MAP['white']) if i == selected_idx else 0) # Adjust for color codes? simple len is safer if reset separately
-                
-                # Careful with color string length math, print content and padding separately
-                print(f"{' ' * box_padding}│{color}{content:<{box_width-2}}{COLOR_MAP['reset']}│")
-                
-            print(f"{' ' * box_padding}└{'─' * (box_width-2)}┘")
+                padding = (terminal_width - len(content)) // 2
+                print(f"{' ' * padding}{color}{content}{COLOR_MAP['reset']}")
             
             # Controls
             controls = "[↑/↓ or W/S] Select | [ENTER] Confirm"
