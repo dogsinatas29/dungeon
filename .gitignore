@@ -39,7 +39,7 @@ screenshots/
 package-lock.json
 main.py
 back/
-docs/
+# docs/  <-- Enabled for Translation Guide
 *.old
 events/
 tmp/

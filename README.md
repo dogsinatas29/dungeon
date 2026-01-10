@@ -207,35 +207,19 @@ Diablo-like real-time roguelike engine for terminal
 
 The game features a fully integrated localization system that supports multiple languages. Currently, **English** and **Korean** are fully supported.
 
+- [English](README.md)
+- [한국어](README.ko.md)
+
 ### Architecture
 - **Central Translation Map**: All user-facing strings are managed in `dungeon/localization.py` within the `TRANSLATIONS` dictionary.
 - **`_()` Function**: The code uses a standard `_("Source Text")` function (with an alias `L()`) to look up translations based on the `config.LANGUAGE` setting.
 - **Dynamic Messages**: Supports dynamic content using Python's `.format()` method:
   `_("{} has been poisoned!").format(entity_name)`
 
-### Language Pack Guide (Adding/Modifying Languages)
+### Localization & Translation Guide
 
-To add a new language (e.g., Japanese `ja`) or modify:
-
-1. **Update `dungeon/localization.py`**:
-   - Add a new `"ja"` key to the `TRANSLATIONS` dictionary.
-   - Copy key-value pairs from `"ko"` (Korean) or English, then replace values with translated text.
-   - *Example*:
-     ```python
-     "ja": {
-         "Hello": "こんにちは",
-         "Firebolt": "ファイアボルト",
-         # ...
-     }
-     ```
-
-2. **Translate Data Files (CSVs)**:
-   - Create a subfolder `dungeon/data/ja/`.
-   - Copy `boss_dialogues.csv` (and any other localized CSVs) there.
-   - Translate the text columns while keeping the IDs intact.
-
-3. **Register Language in Startup**:
-   - Update `ConsoleUI.show_language_selection()` in `dungeon/ui.py` to add "Japanese".
+Want to translate Dungeon Crawler into your language?
+Please check our detailed **[Translation Guide](docs/TRANSLATION_GUIDE.md)**.
    - Update `Start.py` to handle the new selection index and set `config.LANGUAGE = "ja"`.
 
 ## Keyboard Shortcuts
