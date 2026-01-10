@@ -1,0 +1,152 @@
+import subprocess
+import os
+import platform
+from .ecs import System
+from .events import Event, MessageEvent, SkillUseEvent, SoundEvent
+
+class SoundSystem(System):
+    """
+    게임 내 이벤트에 반응하여 '소리'를 시각적으로(로그) 표시하고, 
+    리눅스 표준인 aplay를 통해 실제 효과음을 비동기로 재생하는 시스템.
+    """
+    def process(self):
+        pass # 사운드 재생은 이벤트 기반으로 작동함
+    def __init__(self, world, ui=None):
+        super().__init__(world)
+        self.ui = ui
+        # 사운드 파일 경로 매핑 (sounds/ 디렉토리 기준)
+        self.sound_map = {
+            "ATTACK": "attack.wav",
+            "HIT": "hit.wav",
+            "MAGIC": "magic.wav",
+            "CRITICAL": "critical.wav",
+            "BASH": "bash.wav",
+            "SWING": "swing.wav",
+            "LEVEL_UP": "levelup.wav",
+            "STEP": "step.wav",
+            "MISS": "miss.wav",
+            "BLOCK": "block.wav",
+            "MAGIC_FIRE": "fire.wav",
+            "MAGIC_ICE": "ice.wav",
+            "MAGIC_BOLT": "bolt.wav",
+            "HEAL": "heal.wav",
+            "EXPLOSION": "explosion.wav",
+            "COIN": "coin.wav"
+        }
+        self.sound_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds")
+        
+        # [Fix] Sound Cooldowns to prevent overlap spam
+        self.last_played = {}
+        self.cooldowns = {
+            "STEP": 0.3,       # 발소리는 0.3초마다
+            "HIT": 0.1,        # 타격음은 0.1초
+            "ATTACK": 0.1,
+            "HEAL": 0.5,
+            "COIN": 0.1,
+            "LEVEL_UP": 2.0,   # 레벨업은 길게
+            "BGM_BOSS": 10.0,
+            "default": 0.1
+        }
+
+    def handle_sound_event(self, event):
+        self._play_sound(event.sound_type, event.message)
+        
+    def handle_skill_use_event(self, event):
+        # 1. 스킬의 플래그에서 소리 정보 탐색
+        skill = getattr(event, 'skill', None) or event.skill_name
+        
+        # 만약 skill이 이름(문자열)이라면 엔진에서 정의를 찾아옴
+        if isinstance(skill, str):
+            skill_defs = getattr(self.world.engine, 'skill_defs', {})
+            skill = skill_defs.get(skill)
+
+        sound_found = False
+        
+        if hasattr(skill, 'flags'):
+            for flag in skill.flags:
+                if flag.startswith("SOUND_"):
+                    self._play_sound(flag)
+                    sound_found = True
+                    break
+        
+        if sound_found:
+            return
+
+        # 2. 플래그가 없으면 기존 하드코딩 방식 유지 (하위 호환)
+        skill_name = skill.name if hasattr(skill, 'name') else str(skill)
+        if "파이어볼" in skill_name:
+            self._play_sound("MAGIC")
+        elif "휠 윈드" in skill_name:
+            self._play_sound("SWING")
+        elif "방패 밀치기" in skill_name:
+            self._play_sound("BASH")
+        else:
+            self._play_sound("MAGIC")
+
+    def _play_sound(self, sound_type, message=""):
+        """시각적 피드백 출력 및 실제 파일 재생 시도"""
+        import time
+        current_time = time.time()
+        
+        # [Fix] Check Cooldown
+        last_time = self.last_played.get(sound_type, 0)
+        cooldown = self.cooldowns.get(sound_type, self.cooldowns["default"])
+        
+        if current_time - last_time < cooldown:
+            return # Skip sound if triggered too recently
+            
+        self.last_played[sound_type] = current_time
+
+        # 1. 시각적 피드백 (로그)
+        if message:
+            sound_msg = f"[🔊] {message}"
+            self.world.event_manager.push(MessageEvent(sound_msg))
+
+        # 2. 실제 오디오 재생 (aplay 사용, 비동기)
+        # 기본 맵에서 찾기
+        file_name = self.sound_map.get(sound_type)
+        
+        # 맵에 없으면 다이내믹 플래그 확인 (SOUND_ID_X -> skill_X.wav, SOUND_NAME -> name.wav)
+        if not file_name:
+            if sound_type.startswith("SOUND_ID_"):
+                id_val = sound_type.replace("SOUND_ID_", "")
+                file_name = f"skill_{id_val}.wav"
+            elif sound_type.startswith("SOUND_"):
+                # SOUND_MAGIC_FIRE -> magic_fire.wav
+                file_name = f"{sound_type.replace('SOUND_', '').lower()}.wav"
+
+        if file_name:
+            file_path = os.path.join(self.sound_dir, file_name)
+            if os.path.exists(file_path):
+                try:
+                    # 운영체제별 재생 명령어 분기
+                    system_os = platform.system()
+                    if system_os == "Linux":
+                        # [Fix] Limit duration for short sounds to prevent long silence padding
+                        # Use self.cooldowns as a rough guide, or a specific max_duration dict
+                        # COIN sound was reported to be ~8s long. Force limit it.
+                        cmd = ["aplay", "-q", file_path]
+                        
+                        # Duration limits (in seconds)
+                        duration_limits = {
+                            "COIN": "1",
+                            "STEP": "0.5",
+                            "HIT": "0.5",
+                            "ATTACK": "0.5",
+                            "BLOCK": "0.5",
+                            "MISS": "0.5"
+                        }
+                        limit = duration_limits.get(sound_type)
+                        if limit:
+                            cmd = ["aplay", "-q", "-d", limit, file_path]
+                            
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif system_os == "Darwin": # macOS
+                        subprocess.Popen(["afplay", file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif system_os == "Windows":
+                        # Windows에서는 PowerShell의 MediaPlayer나 winsound 사용 가능
+                        # 여기서는 별도 프로세스로 비동기 실행하기 위해 PowerShell 호출
+                        ps_command = f"powershell -c \"(New-Object Media.SoundPlayer '{file_path}').PlaySync()\""
+                        subprocess.Popen(ps_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass # 명령어 부재나 오류 시 무시

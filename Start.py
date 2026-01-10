@@ -79,70 +79,80 @@ def main_menu():
     """메인 메뉴 표시 및 선택 처리"""
     ui = ConsoleUI()
     
-    while True:  # 메인 메뉴 루프
-        choice = ui.show_main_menu()  # Returns 0, 1, or 2
+    while True:
+        lang_choice = ui.show_language_selection()
+        if lang_choice == 2: # Exit
+             break
         
-        if choice == 0:  # 새 게임
-            # 직업 선택
-            from dungeon.data_manager import load_class_definitions
-            class_defs = load_class_definitions()
-            selected_class = ui.show_class_selection(class_defs)
-            if not selected_class:
-                continue  # 취소 시 메인 메뉴로
-            
-            # 이름 입력 루프
-            while True:
-                player_name = ui.get_player_name()
-                if not player_name:
-                    break  # 취소 시 메인 메뉴로 (inner loop break -> outer loop continue)
-                
-                # [Check Overwrite]
-                from dungeon.data_manager import list_save_files
-                existing_saves = list_save_files()
-                if player_name in existing_saves:
-                    confirm = ui.show_confirmation_dialog(f"'{player_name}' 파일이 이미 존재합니다. 덮어쓰시겠습니까?")
-                    if not confirm:
-                        continue # 다시 이름 입력 받음
-                
-                result = start_game(ui, player_name, new_game=True, class_data=selected_class)
-                if result == "QUIT":
-                    return # 프로그램 종료 (or set a flag to break outer)
-                
-                break # 메인 메뉴로 복귀 (start_game returned MENU or DEATH handled inside)
-            
-            if 'result' in locals() and result == "QUIT":
-                 break
+        from dungeon import config
+        config.LANGUAGE = "ko" if lang_choice == 0 else "en"
         
-        elif choice == 1:  # 이어하기
-            while True:
-                from dungeon.data_manager import list_save_files
-                save_files = list_save_files()
-                action, selected_name = ui.show_save_list(save_files)
+        while True:  # 메인 메뉴 루프
+            choice = ui.show_main_menu()  # Returns 0, 1, or 2
+            
+            if choice == 0:  # 새 게임
+                # 직업 선택
+                from dungeon.data_manager import load_class_definitions
+                class_defs = load_class_definitions()
+                selected_class = ui.show_class_selection(class_defs)
+                if not selected_class:
+                    continue  # 취소 시 메인 메뉴로
                 
-                if action == "LOAD":
-                    game_state_data = load_game_data(selected_name)
-                    if game_state_data:
-                        result = start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
-                        if result == "QUIT":
-                            return
-                        break # Main Menu (MENU, DEATH)
+                # 이름 입력 루프
+                while True:
+                    player_name = ui.get_player_name()
+                    if not player_name:
+                        break  # 취소 시 메인 메뉴로 (inner loop break -> outer loop continue)
+                    
+                    # [Check Overwrite]
+                    from dungeon.data_manager import list_save_files
+                    existing_saves = list_save_files()
+                    if player_name in existing_saves:
+                        confirm = ui.show_confirmation_dialog(f"'{player_name}' 파일이 이미 존재합니다. 덮어쓰시겠습니까?")
+                        if not confirm:
+                            continue # 다시 이름 입력 받음
+                    
+                    result = start_game(ui, player_name, new_game=True, class_data=selected_class)
+                    if result == "QUIT":
+                        # return # 전체 종료가 아니라 언어 선택 화면으로? 아니면 그냥 종료?
+                        # 보통 QUIT는 완전 종료
+                        return 
+                    
+                    break # 메인 메뉴로 복귀 (start_game returned MENU or DEATH handled inside)
+                
+                if 'result' in locals() and result == "QUIT":
+                     return
+
+            elif choice == 1:  # 이어하기
+                while True:
+                    from dungeon.data_manager import list_save_files
+                    save_files = list_save_files()
+                    action, selected_name = ui.show_save_list(save_files)
+                    
+                    if action == "LOAD":
+                        game_state_data = load_game_data(selected_name)
+                        if game_state_data:
+                            result = start_game(ui, selected_name, new_game=False, game_state_data=game_state_data)
+                            if result == "QUIT":
+                                return
+                            break # Main Menu (MENU, DEATH)
+                        else:
+                            ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
+                            ui._clear_screen()
+                            print(f"\n  [오류] {selected_name} 파일을 로드하는 중 문제가 발생했습니다.")
+                            print("  데이터가 손상되었거나 형식이 맞지 않습니다.")
+                            print("\n  아무 키나 눌러 목록으로 돌아갑니다.")
+                            ui.get_key_input()
+                    elif action == "DELETE":
+                        delete_save_data(selected_name)
+                        # Loop continues, refreshing list
                     else:
-                        ui.add_message(f"오류: {selected_name} 파일을 로드할 수 없습니다. (데이터 손상 가능성)")
-                        ui._clear_screen()
-                        print(f"\n  [오류] {selected_name} 파일을 로드하는 중 문제가 발생했습니다.")
-                        print("  데이터가 손상되었거나 형식이 맞지 않습니다.")
-                        print("\n  아무 키나 눌러 목록으로 돌아갑니다.")
-                        ui.get_key_input()
-                elif action == "DELETE":
-                    delete_save_data(selected_name)
-                    # Loop continues, refreshing list
-                else:
-                    break # Back to Main Menu
-        
-        elif choice == 2:  # 게임 종료
-            break
+                        break # Back to Main Menu
+            
+            elif choice == 2:  # 언어 선택으로 돌아가기 (이전엔 게임 종료였으나, 계층 구조상 위로 올라감)
+                break
     
-    del ui
+    # del ui
 
 if __name__ == "__main__":
     try:

@@ -4,35 +4,13 @@
 
 Diablo-like real-time roguelike engine for terminal
 
-![Gameplay Screenshot](dungeon/screenshots/gameplay_test.png)
+![Gameplay Screenshot](screenshots/gameplay_test.png)
 
 ### [Watch Gameplay Video](https://youtu.be/o8M7aBofsvQ)
 
 **Note**: This project was developed using Gemini as a pair programming assistant.
 
 **Status**: Currently undergoing balance testing.
-
-## Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/dogsinatas29/dungeon.git
-   cd dungeon
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install readchar
-   ```
-
-3. **Run the game**
-   ```bash
-   python3 Start.py
-   ```
-
-## Requirements
-- **Audio**: `ffmpeg` or `aplay` (ALSA) is required for sound effects and BGM.
-    - Ubuntu/Debian: `sudo apt install ffmpeg` or `sudo apt install alsa-utils`
 
 ## Features
 
@@ -87,6 +65,19 @@ Diablo-like real-time roguelike engine for terminal
 - **Sound System** - audio feedback for actions
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
+
+## Recent Updates (2026-01-10)
+
+### 1. English Localization
+- **Full Localization System**: Centralized `localization.py` handling all UI and system messages.
+- **Language Selection**: New startup sequence allows players to choose between English and Korean.
+- **Data Localization**: Translated all game data (items, monsters, skills, classes) into English.
+- **Localized Affixes**: Dynamic translations for item prefixes/suffixes based on active language.
+
+### 2. Project Restoration & Script Support
+- **Start.py Entry Point**: Reconstructed the main entry point for standard execution.
+- **Absolute Imports**: Converted relative imports to absolute across all core files to support direct Python script execution.
+- **Bug Fixes**: Resolved various syntax and import errors discovered during verification.
 
 ## Recent Updates (2026-01-02)
 
@@ -159,12 +150,7 @@ Diablo-like real-time roguelike engine for terminal
 - **Safe Zones**: Enhanced monster spawning to ensure a 20-tile safe zone around the player's starting position.
 - **Sandbox Features**: Added interactive Level Setting (`L`) and Floor Jumping (`J`) with terminal input handling.
 
-### 7. Stability & Bug Fixes (2026-01-03)
-- **Start Room Safety**: Guaranteed safe start by preventing traps in the starting room.
-- **Shop Fixes**: Fixed empty shop inventory bug and balanced starting shop items (Level <= 5).
-- **Map Persistence**: Implemented save/load logic for DungeonMap to prevent regeneration on load.
-- **Friendly Fire**: Fixed monsters attacking each other by adding faction checks.
-- **Sound**: Optimized sound effect duration for better audio experience.
+
 ## TODO List
 
 ### High Priority
@@ -186,20 +172,26 @@ Diablo-like real-time roguelike engine for terminal
     - [x] Apocalypse - screen-wide attack
 
 ### Medium Priority
-- [x] **Item Drop System Overhaul** (Loot tables, Affixes, MF)
-- [x] **Language Selection Menu** - choose Korean/English at startup
-    - Fully localized UI and system messages.
-    - Select language upon game launch.
+- [ ] **Item Drop System Overhaul**:
+  - [ ] Drop chance formula (15-25% for normal, 100% for boss)
+  - [ ] Rarity determination (Normal 85%, Magic 14.5%, Unique 0.5%)
+  - [ ] Monster level-based item restrictions
+  - [ ] Magic affix rolling (40% prefix, 40% suffix, 20% both)
+  - [ ] Magic Find (MF) system for accessories
+  - [ ] Boss-specific loot tables
+- [ ] **Language Selection Menu** - choose Korean/English at startup
+- [ ] **Dynamic Job System** - auto-change job based on highest skill level
 - [ ] **Player Action Cooldown** - enforce cooldown in input handling
 - [ ] **Balance Adjustments** - tune difficulty for real-time gameplay
 - [ ] **UI Improvements**:
-  - [ ] Cooldown indicators (Gauge next to skill names)
+  - [ ] Cooldown indicators
   - [ ] Real-time HP/MP bar animations
   - [ ] Monster action prediction
 
 ### Low Priority
-- [ ] **Boss Special Patterns** - unique boss behaviors (In Progress)
-- [x] **More Character Classes** - 4 classes implemented (Warrior, Rogue, Sorcerer, Barbarian)
+- [ ] **Boss Special Patterns** - unique boss behaviors
+- [ ] **More Character Classes** - expand beyond 4 classes
+- [ ] **Multiplayer Support** - co-op gameplay
 
 ## Keyboard Shortcuts
 
@@ -282,17 +274,6 @@ python3 sandbox_test.py
 - `L`: Set **Level** (Input required in terminal)
 - `Z`: Summon **Butcher** (Boss)
 - `W`: Get **Warrior Set** (Level 21 + Full Plate/Great Axe)
-
-### Balance Simulator (balance_simulator.py)
-For automated testing of item drop rates, boss balance, and general stability without UI rendering:
-```bash
-python3 -m dungeon.balance_simulator
-```
-**Features**:
-- **Headless Mode**: Runs simulation without graphic rendering for speed.
-- **Drop Rate Testing**: Verifies item drop probabilities, rarity distribution, and skill book rates.
-- **Boss Combat Simulation**: Tests various class builds against Bosses (Butcher, Leoric, etc.) to evaluate win rates and turn counts.
-- **Automated Logging**: Tracks key metrics like simulated turns, pot usage, and critical events.
 
 ### Game Mechanics
 

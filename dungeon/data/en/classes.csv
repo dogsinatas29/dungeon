@@ -1,0 +1,5 @@
+class_id,name,hp,mp,strength,mag,dex,vit,base_skill,description,hp_gain,mp_gain,vit_to_hp,mag_to_mp,starting_items,flags,crit_chance,crit_mult,move_type,action_delay,element
+WARRIOR,Warrior,30,10,30,10,20,25,REPAIR,Strong melee fighter specialized in physical combat.,2.0,1.0,2.0,1.0,Short Sword:1|Buckler:1|Rags:1,MELEE_SPECIALIST,0.05,1.5,WALK,1.0,EARTH
+ROGUE,Rogue,25,15,20,15,30,20,DISARM,Agile ranged attacker specialized in bows and traps.,1.5,1.5,1.5,1.5,Short Bow:1|Leather Armor:1|Healing Potion:2,RANGED_SPECIALIST,0.15,2.0,WALK,0.8,WOOD
+SORCERER,Sorcerer,20,30,15,35,15,15,RECHARGE,Powerful magic user specialized in spells and elements.,1.0,2.0,1.0,2.0,Short Staff:1|Robe:1|Mana Potion:3,CASTER_SPECIALIST,0.02,1.2,WALK,1.2,FIRE
+BARBARIAN,Barbarian,40,5,35,5,15,30,RAGE,Fierce warrior who relies on brute strength and two-handed weapons.,2.5,0.5,2.5,0.5,Large Axe:1|Rags:1,TWO_HANDED_SPECIALIST,0.1,1.5,WALK,1.2,FIRE

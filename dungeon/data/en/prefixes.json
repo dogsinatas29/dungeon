@@ -1,0 +1,227 @@
+{
+    "Sharp": {
+        "name_en": "Sharp",
+        "damage_percent_min": 20,
+        "damage_percent_max": 35,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 1
+    },
+    "Fine": {
+        "name_en": "Fine",
+        "to_hit_bonus_min": 20,
+        "to_hit_bonus_max": 30,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 1
+    },
+    "Warrior's": {
+        "name_en": "Warrior's",
+        "to_hit_bonus_min": 20,
+        "to_hit_bonus_max": 30,
+        "damage_percent_min": 40,
+        "damage_percent_max": 50,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 5
+    },
+    "Merciless": {
+        "name_en": "Merciless",
+        "damage_percent_min": 151,
+        "damage_percent_max": 175,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 12
+    },
+    "King's": {
+        "name_en": "King's",
+        "to_hit_bonus_min": 76,
+        "to_hit_bonus_max": 100,
+        "damage_percent_min": 151,
+        "damage_percent_max": 175,
+        "allowed_types": [
+            "WEAPON"
+        ],
+        "min_level": 15
+    },
+    "Hyena's": {
+        "name_en": "Hyena's",
+        "mp_bonus_min": 11,
+        "mp_bonus_max": 25,
+        "allowed_types": [
+            "WEAPON",
+            "STAFF",
+            "ACCESSORY"
+        ],
+        "min_level": 1
+    },
+    "Frog's": {
+        "name_en": "Frog's",
+        "mp_bonus_min": 26,
+        "mp_bonus_max": 40,
+        "allowed_types": [
+            "WEAPON",
+            "STAFF",
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Dragon's": {
+        "name_en": "Dragon's",
+        "mp_bonus_min": 81,
+        "mp_bonus_max": 100,
+        "allowed_types": [
+            "WEAPON",
+            "STAFF",
+            "ACCESSORY"
+        ],
+        "min_level": 12
+    },
+    "Wizard's": {
+        "name_en": "Wizard's",
+        "mp_bonus_min": 16,
+        "mp_bonus_max": 30,
+        "allowed_types": [
+            "STAFF"
+        ],
+        "min_level": 8
+    },
+    "Cobalt": {
+        "name_en": "Cobalt",
+        "res_lightning_min": 41,
+        "res_lightning_max": 50,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Garnet": {
+        "name_en": "Garnet",
+        "res_fire_min": 41,
+        "res_fire_max": 50,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Ruby": {
+        "name_en": "Ruby",
+        "res_fire_min": 51,
+        "res_fire_max": 60,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Obsidian": {
+        "name_en": "Obsidian",
+        "res_all_min": 31,
+        "res_all_max": 40,
+        "allowed_types": [
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 15
+    },
+    "Jade": {
+        "name_en": "Jade",
+        "res_all_min": 10,
+        "res_all_max": 20,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 8
+    },
+    "Silver": {
+        "name_en": "Silver",
+        "to_hit_bonus_min": 11,
+        "to_hit_bonus_max": 20,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 5
+    },
+    "Gold": {
+        "name_en": "Gold",
+        "to_hit_bonus_min": 21,
+        "to_hit_bonus_max": 30,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Sapphire": {
+        "name_en": "Sapphire",
+        "res_lightning_min": 51,
+        "res_lightning_max": 60,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Emerald": {
+        "name_en": "Emerald",
+        "res_poison_min": 51,
+        "res_poison_max": 60,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Blessed": {
+        "name_en": "Blessed",
+        "hp_bonus_min": 30,
+        "hp_bonus_max": 50,
+        "mp_bonus_min": 20,
+        "mp_bonus_max": 30,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Arcane": {
+        "name_en": "Arcane",
+        "mag_bonus_min": 10,
+        "mag_bonus_max": 20,
+        "mp_bonus_min": 30,
+        "mp_bonus_max": 50,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 8
+    },
+    "Glorious": {
+        "name_en": "Glorious",
+        "str_bonus_min": 5,
+        "str_bonus_max": 10,
+        "dex_bonus_min": 5,
+        "dex_bonus_max": 10,
+        "vit_bonus_min": 5,
+        "vit_bonus_max": 10,
+        "allowed_types": [
+            "ACCESSORY"
+        ],
+        "min_level": 10
+    },
+    "Cursed": {
+        "name_en": "Cursed",
+        "allowed_types": [
+            "WEAPON",
+            "ARMOR",
+            "SHIELD",
+            "ACCESSORY"
+        ],
+        "min_level": 1
+    }
+}
