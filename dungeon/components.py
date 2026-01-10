@@ -13,9 +13,10 @@ class PositionComponent(Component):
 
 class RenderComponent(Component):
     """콘솔에 표시될 문자 및 색상"""
-    def __init__(self, char: str, color: str = 'white'):
+    def __init__(self, char: str, color: str = 'white', priority: int = 0):
         self.char = char
         self.color = color
+        self.priority = priority
 
 class StatModifierComponent(Component):
     """일시적인 능력치 증감 (버프/디버프)"""

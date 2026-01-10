@@ -35,12 +35,6 @@ class PrefixDefinition:
         self.allowed_types = set(data.get("allowed_types", []))
         self.min_level = data.get("min_level", 1)
         
-    @property
-    def name(self):
-        from localization import config
-        lang = getattr(config, "LANGUAGE", "ko")
-        return self.name_en if lang == "en" else self.name_kr
-
         # Stats Ranges (Min, Max)
         self.to_hit_bonus_min = data.get("to_hit_bonus_min", 0)
         self.to_hit_bonus_max = data.get("to_hit_bonus_max", 0)
@@ -72,6 +66,12 @@ class PrefixDefinition:
         # Flags
         self.flags = set(data.get("flags", []))
 
+    @property
+    def name(self):
+        from localization import config
+        lang = getattr(config, "LANGUAGE", "ko")
+        return self.name_en if lang == "en" else self.name_kr
+
 def load_prefixes():
     import json
     from localization import get_data_path
@@ -98,12 +98,6 @@ class SuffixDefinition:
         
         # Stat Ranges
         self.str_bonus_min = data.get("str_bonus_min", 0)
-    @property
-    def name(self):
-        from localization import config
-        lang = getattr(config, "LANGUAGE", "ko")
-        return self.name_en if lang == "en" else self.name_kr
-
         self.str_bonus_max = data.get("str_bonus_max", 0)
         
         self.dex_bonus_min = data.get("dex_bonus_min", 0)
@@ -129,6 +123,12 @@ class SuffixDefinition:
         self.life_leech_max = data.get("life_leech_max", 0)
         
         self.attack_speed = data.get("attack_speed", 0)
+
+    @property
+    def name(self):
+        from localization import config
+        lang = getattr(config, "LANGUAGE", "ko")
+        return self.name_en if lang == "en" else self.name_kr
 
 def load_suffixes():
     import json

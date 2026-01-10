@@ -19,7 +19,8 @@ from components import (
     LevelComponent, MapComponent, MessageComponent, MonsterComponent, 
     AIComponent, LootComponent, CorpseComponent, ChestComponent, ShopComponent, ShrineComponent,
     StunComponent, SkillEffectComponent, HitFlashComponent, HiddenComponent, MimicComponent, TrapComponent,
-    SleepComponent, PoisonComponent, StatModifierComponent, BossComponent, PetrifiedComponent, BossGateComponent
+    SleepComponent, PoisonComponent, StatModifierComponent, BossComponent, PetrifiedComponent, BossGateComponent,
+    DoorComponent, SwitchComponent, InteractableComponent, KeyComponent, BlockMapComponent
 )
 from systems import (
     InputSystem, MovementSystem, RenderSystem, MonsterAISystem, CombatSystem, 
