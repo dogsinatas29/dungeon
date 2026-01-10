@@ -1,3 +1,0 @@
-# data/monster_stats.csv
-type_name,hp,max_hp,attack,defense,char,color
-Goblin,20,20,5,1,g,green
