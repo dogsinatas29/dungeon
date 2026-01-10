@@ -516,7 +516,7 @@ class Engine:
                         message_comp.add_message(f"[경고] {name}이(가) 나타났습니다!", "red")
                         
                 # 주변 호위병 몇 기
-                for _ in range(3):
+                for _i in range(3):
                     rx = dungeon_map.exit_x - random.randint(3, 6)
                     ry = dungeon_map.exit_y + random.randint(-3, 3)
                     self._spawn_monster_at(rx, ry, pool=attacker_pool)
