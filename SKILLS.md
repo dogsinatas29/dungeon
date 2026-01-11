@@ -27,16 +27,16 @@ All magic spells are divided into 4 tiers and can be learned by reading Skill Bo
 | 4 | **Golem** | 골렘 | Earth | 100 | Summons a powerful stone golem. / 강력한 돌 거인을 소환합니다. |
 | 4 | **Apocalypse** | 아포칼립스 | None | 150 | Massive explosive damage to all visible enemies. / 화면 내 모든 적 공습. |
 
-## 2. Utility Skills (공용 유틸리티)
+## 2. Class Specific Skills (직업 전용 스킬)
 
-These skills are available from Level 1 and provide essential support abilities.
+These skills are assigned based on the character's initial class and provide unique survival or utility functions.
 
-| Name (En) | 이름 (Ko) | MP | Description (En/Ko) |
-| :--- | :--- | :---: | :--- |
-| **Rage** | 레이지 | 10 | Boosts ATK/DEF and taunts nearby enemies. / 공방 증가 및 주변 적 도발. |
-| **Repair** | 수리 | 10 | Restores equipment durability. / 장비의 내구도를 회복합니다. |
-| **Disarm** | 함정 해제 | 10 | Removes nearby traps. / 주변의 함정을 제거합니다. |
-| **Recharge** | 충전 | 10 | Restores charges of the equipped staff. / 지팡이의 마력 횟수를 회복합니다. |
+| Name (En) | 이름 (Ko) | Class (En/Ko) | MP | Description (En/Ko) |
+| :--- | :--- | :--- | :---: | :--- |
+| **Rage** | 레이지 | Barbarian (바바리안) | 10 | Boosts ATK/DEF and taunts enemies. / 공방 증가 및 주변 적 도발. |
+| **Repair** | 수리 | Warrior (워리어) | 10 | Restores equipment durability. / 장비의 내구도를 회복합니다. |
+| **Disarm** | 함정 해제 | Rogue (도적) | 10 | Removes nearby traps. / 주변의 함정을 제거합니다. |
+| **Recharge** | 충전 | Sorcerer (소서러) | 10 | Restores charges of the equipped staff. / 지팡이의 마력 횟수를 회복합니다. |
 
 ---
 **[Back to README](README.md)**
