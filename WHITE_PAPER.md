@@ -24,6 +24,40 @@
 - **액션 딜레이 기반 동기화**: `stats.action_delay`와 `last_action_time` 매커니즘을 통해 상호 턴을 기다리지 않는 실시간 쿨다운 시스템을 완성했습니다. 이를 통해 플레이어와 몬스터가 각자의 속도로 독립적으로 행동합니다.
 - **20 FPS 고정 루프 ECS**: 매 프레임 모든 ECS 시스템을 갱신하는 고정 시간 간격 루프를 도입하여, 지속 시간 기반 스킬(휠윈드, 오라 등)과 환경 함정의 실시간 상호작용을 정밀하게 제어했습니다.
 
+#### 실시간 엔진 흐름도 (Real-time Engine Sequence Diagram)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant OS as OS Input Buffer
+    participant E as Engine Loop (20 FPS)
+    participant S as ECS Systems
+    participant R as Renderer (Screen)
+
+    U->>OS: Key Press (Asynchronous)
+    Note over E: Loop Start
+    E->>OS: _get_input() (Non-blocking)
+    OS-->>E: Action / None
+    
+    alt Action exists
+        E->>S: InputSystem.handle_input(Action)
+        S->>S: Check action_delay Cooldown
+        alt Cooldown Ready
+            S->>S: Process Action (Move/Attack)
+        else Cooldown Active
+            S-->>E: Ignore Input
+        end
+    end
+
+    Note over E: Real-time System Processing
+    E->>S: MonsterAISystem.process()
+    S->>S: Check individual AI Delay
+    E->>S: CombatSystem.process() (Aura Ticks)
+    
+    E->>R: _render()
+    R-->>U: Update Display
+    Note over E: Sleep until next Frame
+```
+
 ## 3. 개발 연혁 및 마일스톤
 
 ### 2025년 3월 ~ 11월: 초기 구상 및 프로토타이핑 (Gemini Web & CLI)
