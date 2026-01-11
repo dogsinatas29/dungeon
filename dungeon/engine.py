@@ -31,7 +31,7 @@ from .events import MessageEvent, DirectionalAttackEvent, MapTransitionEvent, Sh
 from .localization import _
 from .sound_system import SoundSystem
 from .renderer import Renderer
-from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes
+from .data_manager import load_item_definitions, load_monster_definitions, load_skill_definitions, load_class_definitions, load_prefixes, load_suffixes, save_ranking
 from .constants import (
     ELEMENT_NONE, ELEMENT_WATER, ELEMENT_FIRE, ELEMENT_WOOD, ELEMENT_EARTH, ELEMENT_POISON, ELEMENT_COLORS,
     RARITY_NORMAL, RARITY_MAGIC, RARITY_UNIQUE, RARITY_CURSED
@@ -136,7 +136,10 @@ class Engine:
             width = 120
             height = 60
             # 5의 배수 층 또는 마지막 99층은 보스전으로 설정
-            map_type = "BOSS" if (self.current_level % 5 == 0 or self.current_level == 99) else "NORMAL"
+            # [Boss Floor Logic]
+            # Bosses appear at 25, 50, 75, 99
+            is_boss_floor = self.current_level in [25, 50, 75, 99]
+            map_type = "BOSS" if is_boss_floor else "NORMAL"
         
         # DungeonMap 인스턴스 생성
         # [Themed Map Size] Override config based on floor tier
@@ -694,39 +697,42 @@ class Engine:
 
 
     def _spawn_boss_room_features(self, dungeon_map):
-        """보스 맵 전용 엔티티 스폰 (Lever, Door, Shrine, Boss)"""
-        # 1. Shrine (Antechamber)
-        sx, sy = dungeon_map.shrine_pos
-        self._spawn_shrine(sx, sy)
-        
-        # 2. Door (Blocking Boss Room)
-        dx, dy = dungeon_map.boss_door_pos
-        door = self.world.create_entity()
-        self.world.add_component(door.entity_id, PositionComponent(x=dx, y=dy))
-        self.world.add_component(door.entity_id, RenderComponent(char='+', color='brown', priority=5))
-        self.world.add_component(door.entity_id, DoorComponent(is_open=False, is_locked=True, key_id="BOSS_DOOR_KEY")) # Locked, opened by lever
-        self.world.add_component(door.entity_id, BlockMapComponent(blocks_movement=True, blocks_sight=True))
-        
-        # 3. Lever (Side Room) -> Spawns Trap on Use & Opens Door
+        """보스 방의 특징물(레버, 문, 보스 등)을 배치합니다."""
+        if not dungeon_map.map_type == "BOSS": return # Safety check
+
+        # 1. Spawn Lever (in Lever Room)
         lx, ly = dungeon_map.lever_pos
         lever = self.world.create_entity()
         self.world.add_component(lever.entity_id, PositionComponent(x=lx, y=ly))
-        self.world.add_component(lever.entity_id, RenderComponent(char='/', color='yellow', priority=5))
-        # Switch behavior handled in components/systems
-        # linked_trap_id can be used if we spawn a trap entity. 
-        # But for now, we want a trap EFFECT (100%). We can use a dummy trap ID or handle it via event.
-        # Let's use linked_door_pos to open the door remotely.
-        self.world.add_component(lever.entity_id, SwitchComponent(
-            is_open=False, 
-            locked=False,
-            linked_door_pos=(dx, dy), # Link to Boss Door
-            auto_reset=False
+        self.world.add_component(lever.entity_id, RenderComponent(char='&', color='yellow'))
+        # Lever toggles the door
+        self.world.add_component(lever.entity_id, InteractableComponent(
+            interaction_type="LEVER", 
+            data={"target_id": "BOSS_DOOR_KEY", "is_one_time": True}
         ))
-        self.world.add_component(lever.entity_id, BlockMapComponent(blocks_movement=False, blocks_sight=False))
         
-        # 4. Boss (Boss Room)
+        # 2. Spawn Door (Locked) - Created in map generation? 
+        # Actually dungeon_map.boss_door_pos is just a coordinate. We need to place a Door Entity there.
+        dx, dy = dungeon_map.boss_door_pos
+        door = self.world.create_entity()
+        self.world.add_component(door.entity_id, PositionComponent(x=dx, y=dy))
+        self.world.add_component(door.entity_id, RenderComponent(char='+', color='brown'))
+        self.world.add_component(door.entity_id, DoorComponent(is_open=False, is_locked=True, key_id="BOSS_DOOR_KEY")) # Locked, opened by lever
+        
+        # 3. Spawn Boss (Specific to Floor)
         bx, by = dungeon_map.boss_spawn_pos
-        self._spawn_boss(bx, by)
+        boss_pool = None
+        
+        if self.current_level == 25:
+            boss_pool = ["BUTCHER"]
+        elif self.current_level == 50:
+            boss_pool = ["LEORIC"]
+        elif self.current_level == 75:
+            boss_pool = ["LICH_KING"]
+        elif self.current_level == 99:
+            boss_pool = ["DIABLO"]
+            
+        self._spawn_boss(bx, by, pool=boss_pool)
 
     def _spawn_boss(self, x, y, pool=None, boss_name=None, is_summoned=False):
         """지정된 위치에 보스를 스폰합니다."""
@@ -764,7 +770,15 @@ class Engine:
         # 보스는 항상 앵그리 모드 (CHASE)
         self.world.add_component(boss.entity_id, AIComponent(behavior=AIComponent.CHASE, detection_range=15))
         
-        hp = int(boss_def.hp * 2.0) # [Balance] Boss Buff (200% Base Stats)
+        # [Balance] Boss HP Multiplier (Individual Tuning - Run 33)
+        # Butcher 18% (1.64x), Diablo 1.68x (+5% from 1.60x), Others 15% (1.70x)
+        hp_mul = 1.7 
+        if boss_def.ID == "BUTCHER":
+            hp_mul = 1.64
+        elif boss_def.ID == "DIABLO":
+            hp_mul = 1.68
+            
+        hp = int(boss_def.hp * hp_mul) 
         attack = int(boss_def.attack * 2.0)
         if is_summoned:
             # [Balance] Summoned Boss Scaling
@@ -1734,8 +1748,42 @@ class Engine:
             from .data_manager import delete_save_data
             if hasattr(self, 'player_name') and self.player_name:
                 delete_save_data(self.player_name)
+            self._record_ranking("DEATH")
             
         return game_result
+
+    def _record_ranking(self, outcome: str):
+        """현재 캐릭터의 기록을 랭킹에 저장합니다."""
+        player = self.world.get_player_entity() # EntityId
+        if player is None: return
+        
+        stats = self.world.get_component(player, StatsComponent)
+        lvl = self.world.get_component(player, LevelComponent)
+        inv = self.world.get_component(player, InventoryComponent)
+        
+        if not stats or not lvl: return
+        
+        # 보물 사냥꾼 특성상 잡은 보스들 기록 (임시)
+        bosses = []
+        if self.last_boss_id:
+            bosses.append(self.last_boss_id)
+            
+        entry = {
+            'name': self.player_name,
+            'class': lvl.job,
+            'level': lvl.level,
+            'floor': self.current_level,
+            'outcome': outcome,
+            'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'boss_kills': ", ".join(bosses),
+            'death_cause': getattr(self, 'last_death_cause', _("알 수 없음")),
+            'turns': self.turn_number,
+            'equipment': {slot: item.name for slot, item in inv.equipped.items() if item},
+            'skill_levels': inv.skill_levels
+        }
+        
+        from .data_manager import save_ranking
+        save_ranking(entry)
 
 
     def _get_entity_name(self, entity):
@@ -2832,16 +2880,32 @@ class Engine:
         stats.max_hp += int(stats.vit * hp_ratio)
         stats.max_mp += int(stats.mag * mp_ratio)
         
-        # 2. Defense (AC) from DEX (Every 5 DEX = +1 AC)
+        # 2. Defense (AC) from DEX (Every 5 DEX = +1 AC) + Class Base
         dex_ac_bonus = (stats.dex // 5)
-        stats.defense += dex_ac_bonus
-        stats.defense_min += dex_ac_bonus
-        stats.defense_max += dex_ac_bonus
+        base_ac = getattr(class_def, 'base_defense', 0)
         
-        # 3. Attack (Damage) from STR (Every 2 STR = +1 Min/Max Damage)
-        str_dmg_bonus = stats.str // 2
-        stats.attack_min += str_dmg_bonus
-        stats.attack_max += str_dmg_bonus
+        stats.defense += (dex_ac_bonus + base_ac)
+        stats.defense_min += (dex_ac_bonus + base_ac)
+        stats.defense_max += (dex_ac_bonus + base_ac)
+        
+        # 3. Attribute Scaling (Str/Dex) + Class Base Attack
+        base_atk = getattr(class_def, 'base_attack', 0)
+        # Check for Ranged Weapon
+        is_ranged = "RANGED" in stats.flags
+        
+        if is_ranged:
+            # Dex scaling for Bows
+            dex_dmg_bonus = stats.dex // 2
+            stats.attack_min += (dex_dmg_bonus + base_atk)
+            stats.attack_max += (dex_dmg_bonus + base_atk)
+            # print(f"DEBUG: Ranged Scaling (Dex {stats.dex} -> +{dex_dmg_bonus})")
+        else:
+            # Str scaling for Melee
+            str_dmg_bonus = stats.str // 2
+            stats.attack_min += (str_dmg_bonus + base_atk)
+            stats.attack_max += (str_dmg_bonus + base_atk)
+            # print(f"DEBUG: Melee Scaling (Str {stats.str} -> +{str_dmg_bonus})")
+            
         stats.attack = stats.attack_max
         
         # [Fix] Clamp Current HP/MP to calculated Max (Prevents bar from staying full if Max drops)

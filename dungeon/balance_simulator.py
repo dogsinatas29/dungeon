@@ -275,14 +275,37 @@ class HeadlessEngine(Engine):
         # 1. 생존 상시 체크: HP가 60% 이하일 때 포션 사용 시도 (보스전 대비)
         if stats.current_hp / stats.max_hp < 0.6:
             # Healing Potion 검색
-            if "체력 물약" in inv.items:
+            # [Fix] Search for any HP Potion (Tiered)
+            pot_names = ["상급 체력 물약", "중급 체력 물약", "하급 체력 물약", "체력 물약"]
+            target_pot = None
+            healing_amount = 0
+            
+            for pname in pot_names:
+                if pname in inv.items:
+                    target_pot = inv.items[pname]
+                    # Get healing amount from item def if possible, else defaults.
+                    if pname == "상급 체력 물약": healing_amount = 300
+                    elif pname == "중급 체력 물약": healing_amount = 100
+                    elif pname == "하급 체력 물약": healing_amount = 30
+                    else: healing_amount = 50 # Fallback
+                    break
+            
+            if target_pot:
                 self.metrics["potions_used"] += 1
-                pot = inv.items["체력 물약"]
-                # 효과 적용
-                stats.current_hp = min(stats.max_hp, stats.current_hp + 50) # 가정된 수치 or item lookup
-                pot['qty'] -= 1
-                if pot['qty'] <= 0: del inv.items["체력 물약"]
-                return None # 포션 사용은 턴 소모 없음? or 턴 소모? 여기선 return None -> loop continues? No, action required.
+                stats.current_hp = min(stats.max_hp, stats.current_hp + healing_amount)
+                
+                target_pot['qty'] -= 1
+                if target_pot['qty'] <= 0:
+                    # Search map items to find which key to delete? 
+                    # inv.items is dict {name: data}.
+                    # p_name key found loop
+                    if target_pot['qty'] <= 0:
+                         del inv.items[target_pot['item'].name] # Use item name from object or key? Key is safer.
+                    # Wait, 'target_pot' is the value. The key is 'pname'.
+                    pass
+                if target_pot['qty'] <= 0: del inv.items[pname]
+                
+                return '.' # Consume Turn
                 # If checking inside Agent, return special action code 'p'? 
                 # InputSystem doesn't handle 'p' usually.
                 # Actually, InputSystem handles '1'..'0'. Potion should be in quickslot?
@@ -368,10 +391,15 @@ def setup_player_for_test(engine, floor, level, class_id="WARRIOR"):
     if class_def:
         stats.base_max_hp = class_def.hp + (level * 20)
         stats.base_max_mp = class_def.mp + (level * 10)
-        stats.strength = class_def.str + (level * 2.0)
-        stats.vit = class_def.vit + (level * 2.0)
-        stats.mag = class_def.mag + (level * 1.5)
-        stats.dex = class_def.dex + (level * 2.0)
+        stats.base_str = int(class_def.str + (level * 2.0))
+        stats.base_vit = int(class_def.vit + (level * 2.0))
+        stats.base_mag = int(class_def.mag + (level * 1.5))
+        stats.base_dex = int(class_def.dex + (level * 2.0))
+        # Update current values too for immediate use (though recalc handles it)
+        stats.str = stats.base_str
+        stats.vit = stats.base_vit
+        stats.mag = stats.base_mag
+        stats.dex = stats.base_dex
         if hasattr(class_def, 'skills'):
             # 기본 스킬 지급 (CSV 구조에 따라 다를 수 있음)
             pass
@@ -393,29 +421,102 @@ def setup_player_for_test(engine, floor, level, class_id="WARRIOR"):
     for s in test_skills:
         if s not in inv.skills: inv.skills.append(s)
         
-    # [Fix] Give Potions for Survival
-    inv.add_item(engine.item_defs["체력 물약"], 10)
-    inv.add_item(engine.item_defs["마력 물약"], 10)
+    # [Fix] Give Potions for Survival (Tiered & Plentiful)
+    hp_pot_name = "하급 체력 물약"
+    mp_pot_name = "하급 마력 물약"
+    
+    if level >= 20:
+        hp_pot_name = "상급 체력 물약"
+        mp_pot_name = "상급 마력 물약"
+    elif level >= 10:
+        hp_pot_name = "중급 체력 물약"
+        mp_pot_name = "중급 마력 물약"
+        
+    if hp_pot_name in engine.item_defs:
+        inv.add_item(engine.item_defs[hp_pot_name], 20)
+    if mp_pot_name in engine.item_defs:
+        inv.add_item(engine.item_defs[mp_pot_name], 20)
 
     # Class Specific Assignment
     if floor >= 20:
         if class_id == "WARRIOR":
-            equip("브로드 소드", "손1")
+            equip("그레이트 소드", "손1")
+            inv.equipped["손2"] = "(양손 점유)"
             equip("체인 메일", "몸통")
+            if "REPAIR" not in inv.skills: inv.skills.append("REPAIR")
+            
         elif class_id == "ROGUE":
-            equip("단궁", "손1")
+            equip("장기 워 보우", "손1")
             inv.equipped["손2"] = "(양손 점유)"
             equip("가죽 갑옷", "몸통")
+            if "DISARM" not in inv.skills: inv.skills.append("DISARM")
+            
         elif class_id == "SORCERER":
-            equip("긴 지팡이", "손1")
+            equip("워 스태프", "손1")
             inv.equipped["손2"] = "(양손 점유)"
             equip("로브", "몸통")
             if "FIREBALL" not in inv.skills: inv.skills.append("FIREBALL")
+            inv.skill_slots[0] = "FIREBALL" # Assign to Quickslot
+            
         elif class_id == "BARBARIAN":
-            equip("배틀 액스", "손1")
+            equip("그레이트 액스", "손1")
             inv.equipped["손2"] = "(양손 점유)"
             equip("스플린트 메일", "몸통")
             if "RAGE" not in inv.skills: inv.skills.append("RAGE")
+            inv.skill_slots[0] = "RAGE" # Assign to Quickslot
+
+    # Assign Test Skills to Slots if empty
+    if not inv.skill_slots[0] and inv.skills:
+        inv.skill_slots[0] = inv.skills[0]
+        
+    # [Enhancement Simulation]
+    # Simulate realistic gear progression based on floor depth.
+    # Floor 25 (Butcher) -> Avg +3
+    # Floor 50 (Leoric) -> Avg +6
+    # Floor 75 (Lich) -> Avg +8
+    # Floor 99 (Diablo) -> Avg +9 (Max safe is +9 usually)
+    target_enhancement = 0
+    if floor >= 25: target_enhancement = 3
+    if floor >= 50: target_enhancement = 6
+    if floor >= 75: target_enhancement = 8
+    if floor >= 99: target_enhancement = 9
+    
+    import random
+    
+    def apply_enhancement(item, level):
+        if not item: return
+        item.enhancement_level = level
+        item.name = f"+{level} {item.name}"
+        
+        # Stat Boost Logic (Simplified from shrine_methods)
+        # 1. Base Attack/Defense Boost (approx 10% per level? - No, usually linear or constant)
+        # Actually shrine methods boost random stats. Here we will boost MAIN stats to be reliable.
+        
+        # Boost Damage if Weapon
+        if hasattr(item, 'attack_min'):
+            item.attack_min += int(item.attack_min * (0.1 * level)) + level
+            item.attack_max += int(item.attack_max * (0.1 * level)) + level
+            
+        # Boost Defense if Armor
+        if hasattr(item, 'defense'):
+            item.defense += int(item.defense * (0.1 * level)) + level
+            
+        # Boost Bonuses (Str/Dex/Mag)
+        for stat in ['str_bonus', 'dex_bonus', 'mag_bonus', 'dt_bonus']:
+            val = getattr(item, stat, 0)
+            if val > 0:
+                setattr(item, stat, val + int(val * 0.1 * level) + 1)
+
+    # Apply to all equipped
+    for slot, item in inv.equipped.items():
+        if item and not isinstance(item, str):
+            # Variance: Randomize +/- 1 level
+            actual_level = max(0, target_enhancement + random.randint(-1, 1))
+            if actual_level > 0:
+                apply_enhancement(item, actual_level)
+
+    # [Fix] Recalculate Stats to apply Str/Dex bonuses from new gear
+    engine._recalculate_stats()
             
     # Assign skills to slots (Slot 0 -> Key '6')
     # Prioritize class specific skills
@@ -457,6 +558,48 @@ def setup_player_for_test(engine, floor, level, class_id="WARRIOR"):
         if "APOCALYPSE" not in inv.skills: inv.skills.append("APOCALYPSE")
         if "MANA_SHIELD" not in inv.skills: inv.skills.append("MANA_SHIELD")
 
+    # [Oil Simulation]
+    # Simulate usage of enhancement oils (Sharpness/Hardening)
+    # 50% chance to have oils applied at high levels
+    if floor >= 20:
+        # Weapn Oil (Sharpness) -> Attack + (Level * 1)
+        weapon = inv.equipped.get("손1")
+        if weapon and random.random() < 0.5:
+             # Logic from engine.py (approx)
+             # Actually engine checks flags "OIL_SHARPNESS"
+             # So we just add the flag and the stat bonus manually
+             if not hasattr(weapon, 'flags'): weapon.flags = []
+             # Handle list or set or string
+             if isinstance(weapon.flags, str):
+                 if "OIL_SHARPNESS" not in weapon.flags:
+                     weapon.flags += ",OIL_SHARPNESS"
+             elif isinstance(weapon.flags, list):
+                 if "OIL_SHARPNESS" not in weapon.flags:
+                     weapon.flags.append("OIL_SHARPNESS")
+             elif isinstance(weapon.flags, set):
+                 weapon.flags.add("OIL_SHARPNESS")
+                 
+                 # Apply bonus: +10% Damage
+                 if hasattr(weapon, 'attack_min'):
+                     weapon.attack_min = int(weapon.attack_min * 1.1)
+                     weapon.attack_max = int(weapon.attack_max * 1.1)
+
+        # Armor Oil (Hardening) -> Def + (Level * 1)
+        armor = inv.equipped.get("몸통")
+        if armor and random.random() < 0.5:
+             if not hasattr(armor, 'flags'): armor.flags = []
+             if isinstance(armor.flags, str):
+                 if "OIL_HARDENING" not in armor.flags:
+                     armor.flags += ",OIL_HARDENING"
+             elif isinstance(armor.flags, list):
+                 if "OIL_HARDENING" not in armor.flags:
+                     armor.flags.append("OIL_HARDENING")
+             elif isinstance(armor.flags, set):
+                 armor.flags.add("OIL_HARDENING")
+                 
+                 if hasattr(armor, 'defense'):
+                     armor.defense = int(armor.defense * 1.1)
+
     # 스탯 재계산
     if hasattr(engine, '_recalculate_stats'):
         engine._recalculate_stats()
@@ -464,6 +607,8 @@ def setup_player_for_test(engine, floor, level, class_id="WARRIOR"):
     # HP/MP 회복
     stats.current_hp = stats.max_hp
     stats.current_mp = stats.max_mp
+    if hasattr(stats, 'max_stamina'):
+        stats.current_stamina = stats.max_stamina
 
 def run_test_scenario(floor: int, player_level: int, iterations: int = 5):
     print(f"\n[Scenario] Floor {floor} (Lv {player_level}) - {iterations} trials per class")

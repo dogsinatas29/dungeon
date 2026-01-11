@@ -19,9 +19,10 @@ from dungeon.player import Player
 from dungeon.map import DungeonMap
 from dungeon.data_manager import (
     load_item_definitions, get_item_definition, load_skill_definitions,
-    save_game_data, load_game_data, delete_save_data
+    save_game_data, load_game_data, delete_save_data, load_rankings
 )
 from dungeon.ui import ConsoleUI
+from dungeon.localization import _
 
 # --- 데이터 로드 ---
 ITEM_DEFINITIONS = load_item_definitions()
@@ -149,7 +150,17 @@ def main_menu():
                     else:
                         break # Back to Main Menu
             
-            elif choice == 2:  # 언어 선택으로 돌아가기 (이전엔 게임 종료였으나, 계층 구조상 위로 올라감)
+            elif choice == 3:  # 명예의 전당 (Hall of Fame)
+                all_rankings = load_rankings()
+                fame_entries = [r for r in all_rankings if r.get('outcome') == 'WIN']
+                ui.show_rankings(_("Hall of Fame"), fame_entries)
+
+            elif choice == 4:  # 불명예의 전당 (Hall of Dishonor)
+                all_rankings = load_rankings()
+                dishonor_entries = [r for r in all_rankings if r.get('outcome') == 'DEATH']
+                ui.show_rankings(_("Hall of Dishonor"), dishonor_entries)
+
+            elif choice == 2:  # 언어 선택으로 돌아가기
                 break
     
     # del ui

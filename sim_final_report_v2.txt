@@ -1,0 +1,62 @@
+[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3JStarting Dungeon Crawler Integrated Balance Simulation...
+
+[Enhancement Test] Simulating 1000 enhancement attempts per level
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: No candidates for floor 1. ItemDef count: 111
+DEBUG: No candidates for floor 1. ItemDef count: 111
+  Max Level (+10) Reached: 57 / 1000 (5.7%)
+  Level | Success | Fail(Dur) | Fail(Brk) | Fail(Dest)
+  ------+---------+-----------+-----------+-----------
+   +0  |   88.7% |    11.3%   |     0.0%   |     0.0%
+   +1  |   80.6% |    19.4%   |     0.0%   |     0.0%
+   +2  |   70.9% |    29.1%   |     0.0%   |     0.0%
+   +3  |   58.4% |    41.6%   |     0.0%   |     0.0%
+   +4  |   49.5% |     0.0%   |    50.5%   |     0.0%
+   +5  |   44.6% |     0.0%   |    55.4%   |     0.0%
+   +6  |   25.8% |     0.0%   |    74.2%   |     0.0%
+   +7  |  100.0% |     0.0%   |     0.0%   |     0.0%
+   +8  |  100.0% |     0.0%   |     0.0%   |     0.0%
+   +9  |  100.0% |     0.0%   |     0.0%   |     0.0%
+
+[Drop Rate Test] Floor 1 - 100 monster kills
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: No candidates for floor 1. ItemDef count: 111
+DEBUG: No candidates for floor 1. ItemDef count: 111
+  Total Items: 54 (Avg 0.54 per kill)
+  Avg Gold: 23.1
+  Zero Loot Kills: 0
+  Gold Only Kills: 79
+  Rarity: {'NORMAL': 54, 'MAGIC': 0, 'UNIQUE': 0}
+  Ratios: N 100.0% | M 0.0% | U 0.0%
+  Item Count Dist: {0: 79, 1: 5, 2: 4, 3: 9, 4: 1, 5: 2}
+
+[Drop Rate Test] Floor 30 - 100 monster kills
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: No candidates for floor 1. ItemDef count: 111
+DEBUG: No candidates for floor 1. ItemDef count: 111
+DEBUG: No candidates for floor 30. ItemDef count: 111
+DEBUG: No candidates for floor 30. ItemDef count: 111
+DEBUG: No candidates for floor 30. ItemDef count: 111
+  Total Items: 38 (Avg 0.38 per kill)
+  Avg Gold: 22.6
+  Zero Loot Kills: 0
+  Gold Only Kills: 82
+  Rarity: {'NORMAL': 38, 'MAGIC': 0, 'UNIQUE': 0}
+  Ratios: N 100.0% | M 0.0% | U 0.0%
+  Item Count Dist: {0: 82, 1: 5, 2: 7, 3: 5, 4: 1}
+
+[Drop Rate Test] Floor 70 - 100 monster kills
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: No candidates for floor 1. ItemDef count: 111
+DEBUG: No candidates for floor 70. ItemDef count: 111
+DEBUG: No candidates for floor 70. ItemDef count: 111
+DEBUG: No candidates for floor 70. ItemDef count: 111
+DEBUG: No candidates for floor 70. ItemDef count: 111
+  Total Items: 60 (Avg 0.60 per kill)
+  Avg Gold: 22.5
+  Zero Loot Kills: 0
+  Gold Only Kills: 74
+  Rarity: {'NORMAL': 60, 'MAGIC': 0, 'UNIQUE': 0}
+  Ratios: N 100.0% | M 0.0% | U 0.0%
+  Item Count Dist: {0: 74, 1: 9, 2: 5, 3: 9, 4: 1, 5: 2}
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m

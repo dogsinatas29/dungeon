@@ -17,7 +17,7 @@ MANA_SHIELD,마나 실드,버프,13,마력,MP,33,없음,데미지를 HP 대신 M
 NOVA,노바,공격,13,번개,MP,60,없음,시전자 중심으로 퍼져나가는 원형 번개 파동,40-80,ATTACK,SELF,0,없음,"AURA,NOVA,SCALABLE,SOUND_MAGIC_BOLT",0,0,0,0,0
 GOLEM,골렘,소환,13,대지,MP,100,없음,강력한 돌 거인을 소환합니다,0,SUMMON,SELF,0,없음,"SUMMON_GOLEM,SOUND_MAGIC_BOLT",0,0,0,0,0
 APOCALYPSE,아포칼립스,공격,13,무속성,MP,150,없음,화면 내 모든 적에게 폭발 피해를 입힙니다,60-120,ATTACK,SELF,0,없음,"SCREEN_WIDE,EXPLOSION,SCALABLE,SOUND_EXPLOSION",0,0,0,0,0
-RAGE,레이지,버프,1,무속성,MP,10,없음,일시적으로 공격력/방어력을 증가시키고 주변 적을 도발합니다,0,BUFF,SELF,0,없음,"BUFF,RAGE,SOUND_ROAR",0,0,0,0,5
+RAGE,레이지,버프,1,무속성,MP,10,없음,일시적으로 공격력/방어력을 증가시키고 주변 적을 도발합니다,0,BUFF,SELF,0,없음,"BUFF,RAGE,SOUND_ROAR",0,0,0,0,10
 REPAIR,수리,보조,1,무속성,MP,10,없음,장비의 내구도를 회복합니다,0,RECOVERY,SELF,0,없음,SOUND_REPAIR,0,0,0,0,0
 DISARM,함정 해제,보조,1,무속성,MP,10,없음,주변의 함정을 제거합니다,0,RECOVERY,SELF,0,없음,SOUND_UNLOCK,0,0,0,0,0
 RECHARGE,충전,보조,1,무속성,MP,10,없음,지팡이의 마력 횟수를 회복합니다,0,RECOVERY,SELF,0,없음,SOUND_CHARGE,0,0,0,0,0

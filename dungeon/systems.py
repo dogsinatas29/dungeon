@@ -1027,6 +1027,11 @@ class CombatSystem(System):
             d_max = getattr(skill, 'damage_max', getattr(skill, 'damage', 10))
             base_damage = random.randint(max(1, d_min), max(1, d_max))
             attack_element = getattr(skill, 'element', ELEMENT_NONE)
+            
+            # [Fix] Apply Magic Scaling for Scalable Skills
+            if hasattr(skill, 'flags') and "SCALABLE" in skill.flags:
+                mag_bonus = a_stats.mag // 2
+                base_damage += mag_bonus
         else:
             d_min = getattr(a_stats, 'attack_min', a_stats.attack)
             d_max = getattr(a_stats, 'attack_max', a_stats.attack)
@@ -1247,7 +1252,7 @@ class CombatSystem(System):
             a_monster_id = getattr(attacker.get_component(MonsterComponent), 'monster_id', None) if attacker.has_component(MonsterComponent) else None
             # print(f"DEBUG: a_monster_id={a_monster_id}, distance={distance}, final_damage={final_damage}")
             if a_monster_id == "LEORIC" and distance <= 1:
-                leech_percent = 30
+                leech_percent = 25 # [Balance Run 33] 30% -> 25%
             
             if leech_percent > 0 and final_damage > 0:
                 print(f"DEBUG: Leeching {leech_percent}%")
@@ -1485,6 +1490,7 @@ class CombatSystem(System):
                                     region = boss_gate.next_region_name
                                     if region == "승리":
                                             self.event_manager.push(MessageEvent(_("!!! 던전을 정복했습니다 !!!"), "gold"))
+                                            self.world.engine._record_ranking("WIN")
                                     else:
                                             self.event_manager.push(MessageEvent(_("!!! {}(으)로 가는 계단이 나타났습니다 !!!").format(region), "light_cyan"))
                                     
@@ -1501,6 +1507,18 @@ class CombatSystem(System):
                 # 5. 아이템 드랍 (Loot)
                 if not target.has_component(LootComponent):
                     loot_items = []
+                    
+                    # [Balance Run 33] Potion Drop Buff on Pre-Boss floors (24, 49, 74, 98)
+                    pre_boss_floors = [24, 49, 74, 98]
+                    current_floor = getattr(self.world.engine, 'current_level', 1)
+                    
+                    is_pre_boss = current_floor in pre_boss_floors
+                    
+                    # 몬스터 등급 기반 드랍율
+                    drop_chance = 0.2 # 기본 20%
+                    if is_pre_boss:
+                        drop_chance = 0.5 # 보스 전 층은 50%
+                    
                     dungeon = getattr(self.world.engine, 'dungeon', None)
                     if dungeon:
                         floor = dungeon.dungeon_level_tuple[0]
@@ -1516,6 +1534,11 @@ class CombatSystem(System):
                         if floor <= limit:
                             drop_chance = random.uniform(min_c, max_c)
                             break
+                    
+                    # [Balance Run 33] Pre-Boss Potion Buff (F24, F49, F74, F98)
+                    pre_boss_floors = [24, 49, 74, 98]
+                    if floor in pre_boss_floors:
+                        drop_chance = max(drop_chance, 0.5) # Minimum 50% drop rate
                     
                     is_boss = (m_def and 'BOSS' in m_def.flags) or boss_comp is not None
                     if is_boss:
@@ -1962,6 +1985,12 @@ class CombatSystem(System):
                 from .data_manager import ItemDefinition
                 if isinstance(weapon, ItemDefinition) and "RANGED" in getattr(weapon, 'flags', []):
                     effective_skill.range += 3
+        
+        # [Class Bonus] Sorcerer Range Bonus (User Request)
+        if level_comp and level_comp.job in ["소서러", "SORCERER"]:
+             # 원소 마법 사거리 증가
+             effective_skill.range += 3
+
         effective_skill.duration = scaled_duration
         
         # [Cooldown Set]
@@ -2435,7 +2464,8 @@ class CombatSystem(System):
                 
                 # 2. Add Buff (Stat Modifier)
                 mod = StatModifierComponent(duration=duration, source=skill.name)
-                mod.attack_multiplier = 1.5
+                # [Buff] Revert to 2.0 (User Request) and 10s duration
+                mod.attack_multiplier = 2.0
                 mod.defense_multiplier = 1.5
                 attacker.add_component(mod)
                 
@@ -3589,7 +3619,106 @@ class BossSystem(System):
         pos = boss_ent.get_component(PositionComponent)
         stats = boss_ent.get_component(StatsComponent)
         pattern = self.patterns.get(boss.boss_id)
+        current_time = time.time()
+        
+        # [Cooldown] Boss breathing room (User Request: Skill Cooldown 1.5x~2x)
+        # Butcher skills now share a 2.5s cooldown
+        if current_time - getattr(boss, 'last_skill_time', 0) < 2.5:
+            return False
 
+        # 1. 훅 (Hook): 거리가 벌어졌을 때 (3~6 타일)
+        if 3 <= dist <= 6 and random.random() < 0.25:
+            boss.last_skill_time = current_time
+            bark = pattern.get("on_skill_hook", "Come here!")
+            self._trigger_bark(boss_ent, bark)
+            self._announce_skill(f"'{bark}'", "red") # Center Alert
+            self.event_manager.push(MessageEvent(_("!!! 도살자가 피 묻은 갈고리를 던집니다! !!!"), "red"))
+            
+            # 플레이어를 보스 바로 앞으로 끌어당김
+            player_ent = self.world.get_player_entity()
+            p_pos_comp = player_ent.get_component(PositionComponent)
+            
+            # 방향 계산
+            dx = 1 if p_pos.x > pos.x else (-1 if p_pos.x < pos.x else 0)
+            dy = 1 if p_pos.y > pos.y else (-1 if p_pos.y < pos.y else 0)
+            
+            target_x, target_y = pos.x + dx, pos.y + dy
+            if map_comp.tiles[target_y][target_x] == '.':
+                p_pos_comp.x, p_pos_comp.y = target_x, target_y
+                # 짧은 기절 부여 (nerf_factor 반영)
+                from .components import StunComponent
+                player_ent.add_component(StunComponent(duration=1.0 * nerf_factor))
+                self.event_manager.push(MessageEvent(_("갈고리에 끌려가 기절했습니다!"), "yellow"))
+            return True
+        
+        # 2. 슬램 (Slam): 인접했을 때
+        if dist <= 1 and random.random() < 0.3:
+            boss.last_skill_time = current_time
+            bark = pattern.get("on_skill_slam", "Fresh Meat!")
+            self._trigger_bark(boss_ent, bark)
+            self._announce_skill(f"'{bark}'", "red") # Center Alert
+            self.event_manager.push(MessageEvent(_("!!! 도살자의 강력한 내려치기! !!!"), "red"))
+            
+            player_ent = self.world.get_player_entity()
+            # 넉백 처리
+            self._apply_manual_knockback(boss_ent, player_ent, map_comp)
+            # 데미지 부여
+            p_stats = player_ent.get_component(StatsComponent)
+            if p_stats:
+                damage = int(stats.attack * 1.5 * nerf_factor)
+                p_stats.current_hp -= max(1, damage - p_stats.defense)
+            return True
+
+        # 3. 분노의 돌진 (Frenzy Charge): 직선상에 있을 때
+        is_linear = (p_pos.x == pos.x or p_pos.y == pos.y)
+        if is_linear and dist >= 2 and random.random() < 0.15:
+            boss.last_skill_time = current_time
+            bark = pattern.get("on_skill_charge", "RRRRAAAARRRRGH!")
+            self._trigger_bark(boss_ent, bark)
+            self._announce_skill(f"'{bark}'", "red") # Center Alert
+            self.event_manager.push(MessageEvent(_("!!! 도살자가 미친 듯이 돌진합니다! !!!"), "red"))
+            
+            dx = 1 if p_pos.x > pos.x else (-1 if p_pos.x < pos.x else 0)
+            dy = 1 if p_pos.y > pos.y else (-1 if p_pos.y < pos.y else 0)
+            
+            # 직선 돌진 로직
+            curr_x, curr_y = pos.x, pos.y
+            hit_wall = False
+            hit_player = False
+            
+            # 최대 10칸 돌진
+            for _i in range(10):
+                nx, ny = curr_x + dx, curr_y + dy
+                if map_comp.tiles[ny][nx] == '#':
+                    hit_wall = True
+                    break
+                
+                # 플레이어 충돌 체크
+                if nx == p_pos.x and ny == p_pos.y:
+                    hit_player = True
+                    # 플레이어 위치 업데이트 (치여서 밀려남)
+                    p_pos.x += dx
+                    p_pos.y += dy
+                    break
+                
+                curr_x, curr_y = nx, ny
+            
+            pos.x, pos.y = curr_x, curr_y
+            
+            if hit_player:
+                self.event_manager.push(MessageEvent(_("도살자의 돌진에 치여 큰 피해를 입었습니다!"), "red"))
+                player_ent = self.world.get_player_entity()
+                p_stats = player_ent.get_component(StatsComponent) if player_ent else None
+                if p_stats:
+                    p_stats.current_hp -= int(stats.attack * 2.0 * nerf_factor)
+            
+            if hit_wall:
+                self.event_manager.push(MessageEvent(_("도살자가 벽에 들이받고 기절했습니다!"), "yellow"))
+                from .components import StunComponent
+                boss_ent.add_component(StunComponent(duration=2.0))
+            return True
+        
+        return False
         # 1. 훅 (Hook): 거리가 벌어졌을 때 (3~6 타일)
         if 3 <= dist <= 6 and random.random() < 0.25:
             bark = pattern.get("on_skill_hook", "Come here!")
@@ -3703,8 +3832,8 @@ class BossSystem(System):
         skeletons = [m for m in all_monsters if m.get_component(MonsterComponent).monster_id == "SKELETON"]
         
         if hp_percent > 0.5 and len(skeletons) < 15 and random.random() < 0.3:
-            # 소환 대사 (쿨다운 10초)
-            if current_time - getattr(boss, 'last_swarm_time', 0) > 10.0:
+            # 소환 대사 (쿨다운 15초)
+            if current_time - getattr(boss, 'last_swarm_time', 0) > 15.0:
                 bark = pattern.get("on_skill_swarm")
                 if bark:
                     self._trigger_bark(boss_ent, bark)
@@ -3727,8 +3856,8 @@ class BossSystem(System):
         if len(skeletons) >= 15 and random.random() < 0.3:
             player = self.world.get_player_entity()
             if player and dist <= 10:
-                # 쿨다운 15초
-                if current_time - getattr(boss, 'last_petrify_time', 0) > 15.0:
+                # 쿨다운 25초
+                if current_time - getattr(boss, 'last_petrify_time', 0) > 25.0:
                     bark = pattern.get("on_skill_petrify")
                     if bark:
                         self._trigger_bark(boss_ent, bark)
@@ -3743,6 +3872,14 @@ class BossSystem(System):
                             self.world.engine.trigger_shake(5)
                     return True
 
+        # [NEW] Leoric Summons Butcher Phantom (HP < 50%)
+        if hp_percent < 0.5 and not getattr(boss, 'summoned_phantom_butcher', False):
+             boss.summoned_phantom_butcher = True
+             self.event_manager.push(MessageEvent(_("!!! 레오닉이 도살자의 영혼을 소환합니다! !!!"), "red"))
+             tx, ty = self._find_spawn_pos(pos.x, pos.y)
+             self.world.engine._spawn_monster_at(tx, ty, pool=["BUTCHER"])
+             return True
+
         return False
 
     def _process_lich_king_logic(self, boss_ent, p_pos, dist, map_comp):
@@ -3752,7 +3889,7 @@ class BossSystem(System):
         pattern = self.patterns.get(boss.boss_id)
         current_time = time.time()
         
-        player = self.world.get_player_entity()
+        player = self.world.get_player_entity() 
         if not player: return False
 
         # HP 20% 이하 (분노 상태) -> 쿨다운 감소
@@ -3760,8 +3897,18 @@ class BossSystem(System):
         is_enraged = hp_percent <= 0.2
         cooldown_mod = 0.5 if is_enraged else 1.0
 
+        # [NEW] Lich King Summons Leoric Phantom (HP < 50%)
+        if hp_percent < 0.5 and not getattr(boss, 'summoned_phantom_leoric', False):
+             boss.summoned_phantom_leoric = True
+             self.event_manager.push(MessageEvent(_("!!! 리치 왕이 해골 왕 레오닉을 되살려냅니다! !!!"), "red"))
+             # Find spawn near Boss
+             pos = boss_ent.get_component(PositionComponent)
+             tx, ty = self._find_spawn_pos(pos.x, pos.y)
+             self.world.engine._spawn_monster_at(tx, ty, pool=["LEORIC"])
+             return True
+
         # 1. 메두사의 시선 (석화 스택) - 사거리 8
-        gaze_cd = 12.0 * cooldown_mod
+        gaze_cd = 16.0 * cooldown_mod
         if dist <= 8 and random.random() < 0.2:
             if current_time - getattr(boss, 'last_gaze_time', 0) > gaze_cd:
                 boss.last_gaze_time = current_time
@@ -3786,21 +3933,16 @@ class BossSystem(System):
                 return True
 
         # 2. 대지의 저주 (Root/속박) - 사거리 10
-        curse_cd = 15.0 * cooldown_mod
+        curse_cd = 20.0 * cooldown_mod
         if dist <= 10 and random.random() < 0.15:
             from .components import StatModifierComponent
             # 이동 불가 디버프 (여기서는 간단히 Action Delay를 매우 크게 늘리거나 Root 컴포넌트 사용)
-            # 일단 Action Delay를 대폭 늘리는 StatModifier로 구현
             if current_time - getattr(boss, 'last_curse_time', 0) > curse_cd:
                 boss.last_curse_time = current_time
                 bark = pattern.get("on_skill_curse")
                 if bark: self._trigger_bark(boss_ent, bark)
                 
                 # 'Root' 효과: 지속시간 동안 아무것도 못하거나 이동만 못함 using StunComponent is easiest for "Stop Movement"
-                # But request says "Root" (tied feet).
-                # For simplicity in V9, let's treat it as a heavy Slow or Root if implemented.
-                # Actually, let's use a specialized modifier to increase action delay massively?
-                # Request: "Play's feet tied". Let's instantiate a Stun for 1.5s
                 if not player.has_component(StunComponent):
                     self._announce_skill("대지가 너를 삼키리라...", "brown")
                     player.add_component(StunComponent(duration=2.0))
@@ -3822,13 +3964,46 @@ class BossSystem(System):
                 m_comp = m_ent.get_component(MonsterComponent)
                 if m_comp.is_summoned: # 소환된 환영/졸개들
                     m_stats = m_ent.get_component(StatsComponent)
-                    # 이미 버프된 상태인지 확인하는 플래그가 없으므로
-                    # action_delay를 체크하거나, 매직 넘버 사용. 
-                    # 안전하게: 0.3 이하면 더 줄이지 않음 (기본 0.6 -> 0.3)
                     if getattr(m_stats, 'action_delay', 0.6) > 0.3:
                          m_stats.action_delay = 0.3
-                         # 이펙트 메시지는 너무 자주 뜨면 안되므로 생략하거나 1회성으로 처리해야 함
+
+        # [NEW] Boss Summoning (Phantom Bosses)
+        # Diablo summons previous bosses at specific HP thresholds
+        # 75% -> Butcher
+        # 50% -> Leoric
+        # 25% -> Lich King
+        hp_pct = stats.current_hp / stats.max_hp
+        summon_id = None
         
+        if hp_pct <= 0.75 and not getattr(boss, 'summoned_butcher', False):
+            boss.summoned_butcher = True
+            summon_id = "BUTCHER"
+            msg = "도살자의 영혼이여, 나를 섬겨라!"
+            
+        elif hp_pct <= 0.50 and not getattr(boss, 'summoned_leoric', False):
+            boss.summoned_leoric = True
+            summon_id = "LEORIC"
+            msg = "해골 왕이여, 다시 일어나라!"
+            
+        elif hp_pct <= 0.25 and not getattr(boss, 'summoned_lich', False):
+            boss.summoned_lich = True
+            summon_id = "LICH_KING"
+            msg = "리치 왕이여, 겨울을 불러오라!"
+
+        if summon_id:
+            msg_event = f"[{boss.boss_id}] \"{msg}\""
+            self.event_manager.push(MessageEvent(msg_event, "red"))
+            
+            # Spawn the Boss Phantom
+            # Use _spawn_monster_at but we need to find a valid pos
+            tx, ty = self._find_spawn_pos(boss_ent.get_component(PositionComponent).x, boss_ent.get_component(PositionComponent).y)
+            if self.world.engine._spawn_monster_at(tx, ty, pool=[summon_id]):
+                self.event_manager.push(MessageEvent(_("!!! 디아블로가 {}의 환영을 소환했습니다! !!!").format(summon_id), "red"))
+                # [Balance] Phantoms should probably be weaker? Or Full Power?
+                # User asked "Summon ghosts of previous bosses".
+                # Let's keep them as normal spawns for maximum chaos.
+                # Mark them as summoned so Enrage buffs them
+                
         return False
 
     def _apply_manual_knockback(self, attacker, target, map_comp):

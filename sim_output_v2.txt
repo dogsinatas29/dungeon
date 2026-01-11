@@ -1,0 +1,7 @@
+[H[2J[3JStarting Dungeon Crawler Integrated Balance Simulation...
+
+[Enhancement Test] Simulating 1000 enhancement attempts per level
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m

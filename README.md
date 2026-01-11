@@ -1,6 +1,6 @@
 ![Dungeon Crawl Title Screen](assets/title_screen.png)
 
-**English** | [한국어](README.ko.md)
+**English** | [한국어](README.ko.md) | [Controls](CONTROLS.md)
 
 Diablo-like real-time roguelike engine for terminal
 
@@ -8,9 +8,10 @@ Diablo-like real-time roguelike engine for terminal
 
 ### [Watch Gameplay Video](https://youtu.be/o8M7aBofsvQ)
 
+**Version**: v1.0 (Release)
 **Note**: This project was developed using Gemini as a pair programming assistant.
 
-**Status**: Currently undergoing balance testing.
+**Status**: Stable Release
 
 ## Installation
 
@@ -87,6 +88,18 @@ Diablo-like real-time roguelike engine for terminal
 - **Sound System** - audio feedback for actions
 - **Double-buffered UI** - smooth terminal rendering with ANSI colors
 - **Save/Load System** - persistent game state
+
+## Release History
+
+### Version 1.0 (2026-01-11)
+- **Official Release**: All core systems for Dungeon Crawler are now stable.
+- **Ranking System**: Implemented "Hall of Fame" and "Hall of Dishonor" with local data persistence.
+- **Detailed Character Views**: View equipment and skill levels of your past heroes with smooth scrolling and high-fidelity UI.
+- **Full Spellbook**: All 18 Diablo 1 spells are fully implemented with their unique logic and scaling.
+- **Advanced Boss Gameplay**: Final boss Diablo encounter on Floor 99 with custom map and mechanics.
+- **Bilingual Interface**: Seamless switching between English and Korean throughout the game.
+
+---
 
 ## Recent Updates (2026-01-02)
 
@@ -222,29 +235,9 @@ Want to translate Dungeon Crawler into your language?
 Please check our detailed **[Translation Guide](docs/TRANSLATION_GUIDE.md)**.
    - Update `Start.py` to handle the new selection index and set `config.LANGUAGE = "ja"`.
 
-## Keyboard Shortcuts
+## Controls & Keyboard Shortcuts
 
-### General Controls
-- **Movement**: `Arrow Keys` or `W`, `A`, `S`, `D`
-- **Wait / Pass Turn**: `.`, `X`, `Z`, or `5`
-- **Interact / Pick Up / Use Stairs**: `ENTER`
-- **Attack Mode (Toggle)**: `SPACE` (Once active, press a direction key to attack)
-- **Quick Slots**: `1` through `0` (Use bound skills or items)
-- **Character Sheet**: `C` (View stats and allocate bonus points)
-- **Inventory**: `I` (Open/Close inventory)
-- **Quit Game**: `Q`
-
-### Inventory & Menus
-- **Navigate**: `Arrow Keys` or `W`, `S`
-- **Switch Tabs**: `Left` / `Right` Arrow keys (Inside Inventory)
-- **Use / Equip**: `E` or `ENTER`
-- **Drop Item**: `X`
-- **Close Menu**: `ESC`, `Q`, or the menu's toggle key (`I`, `C`)
-
-### Character Sheet (Stat Point Allocation)
-- **Select Stat**: `UP` / `DOWN` Arrow keys or `W`, `S`
-- **Allocate Point**: `RIGHT` Arrow key, `D`, `+`, `=`, or `ENTER`
-- **Close**: `C`, `ESC`, or `Q`
+Complete documentation for game controls and shortcuts can be found in **[CONTROLS.md](CONTROLS.md)**.
 
 ## Requirements
 ```bash

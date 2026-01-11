@@ -1,0 +1,862 @@
+[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3JDungeon Floor Progression Simulation (Clearance Time & Levels)
+================================================================================
+Class        | Floor | Level | Avg Turns  | Status
+--------------------------------------------------------------------------------
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+WARRIOR      | 1     | 1     | 250.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+WARRIOR      | 10    | 8     | 304.8      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+WARRIOR      | 20    | 15    | 303.8      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+WARRIOR      | 30    | 22    | 365.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+WARRIOR      | 40    | 28    | 389.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+WARRIOR      | 50    | 35    | 370.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+WARRIOR      | 60    | 42    | 333.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+WARRIOR      | 70    | 50    | 351.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[?25h[0m[?25h[0mDEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+WARRIOR      | 80    | 60    | 320.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+WARRIOR      | 90    | 75    | 347.8      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+WARRIOR      | 99    | 85    | 345.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+ROGUE        | 1     | 1     | 235.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+ROGUE        | 10    | 8     | 298.2      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+ROGUE        | 20    | 15    | 275.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+ROGUE        | 30    | 22    | 350.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+ROGUE        | 40    | 28    | 314.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+ROGUE        | 50    | 35    | 301.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+[?25l[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+ROGUE        | 60    | 42    | 306.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+ROGUE        | 70    | 50    | 318.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+ROGUE        | 80    | 60    | 361.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+ROGUE        | 90    | 75    | 246.8      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+ROGUE        | 99    | 85    | 285.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+SORCERER     | 1     | 1     | 239.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+SORCERER     | 10    | 8     | 312.5      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+SORCERER     | 20    | 15    | 262.2      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+SORCERER     | 30    | 22    | 352.0      | [READY][H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+SORCERER     | 40    | 28    | 349.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+SORCERER     | 50    | 35    | 400.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+SORCERER     | 60    | 42    | 351.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+SORCERER     | 70    | 50    | 374.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+SORCERER     | 80    | 60    | 326.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+SORCERER     | 90    | 75    | 308.2      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+SORCERER     | 99    | 85    | 320.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+BARBARIAN    | 1     | 1     | 250.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3J
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+BARBARIAN    | 10    | 8     | 275.8      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25l[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+BARBARIAN    | 20    | 15    | 275.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+BARBARIAN    | 30    | 22    | 335.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+DEBUG: Chest Candidates: 5
+BARBARIAN    | 40    | 28    | 350.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+BARBARIAN    | 50    | 35    | 337.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+BARBARIAN    | 60    | 42    | 296.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+DEBUG: Chest Candidates: 4
+BARBARIAN    | 70    | 50    | 303.0      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0mDEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+BARBARIAN    | 80    | 60    | 311.7      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv[H[2J[3J[H[2J[3J[H[2J[3J
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+BARBARIAN    | 90    | 75    | 357.3      | [READY]
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+[?25lWARNING: Data file not found at /home/dogsinatas/python_project/dungeon/data/Boss.csv
+Loaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+BARBARIAN    | 99    | 85    | 306.0      | [READY]
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m[?25h[0m

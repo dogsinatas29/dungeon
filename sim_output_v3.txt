@@ -1,0 +1,56 @@
+[H[2J[3J[H[2J[3J[H[2J[3J[H[2J[3JStarting Dungeon Crawler Integrated Balance Simulation...
+
+[Enhancement Test] Simulating 1000 enhancement attempts per level
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+  Max Level (+10) Reached: 54 / 1000 (5.4%)
+  Level | Success | Fail(Dur) | Fail(Brk) | Fail(Dest)
+  ------+---------+-----------+-----------+-----------
+   +0  |   90.7% |     9.3%   |     0.0%   |     0.0%
+   +1  |   77.8% |    22.2%   |     0.0%   |     0.0%
+   +2  |   70.5% |    29.5%   |     0.0%   |     0.0%
+   +3  |   60.2% |    39.8%   |     0.0%   |     0.0%
+   +4  |   49.4% |     0.0%   |    50.6%   |     0.0%
+   +5  |   40.5% |     0.0%   |    59.5%   |     0.0%
+   +6  |   27.0% |     0.0%   |    73.0%   |     0.0%
+   +7  |  100.0% |     0.0%   |     0.0%   |     0.0%
+   +8  |  100.0% |     0.0%   |     0.0%   |     0.0%
+   +9  |  100.0% |     0.0%   |     0.0%   |     0.0%
+
+[Drop Rate Test] Floor 1 - 100 monster kills
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+  Total Items: 53 (Avg 0.53 per kill)
+  Avg Gold: 140.9
+  Rarity: {'NORMAL': 53, 'MAGIC': 0, 'UNIQUE': 0}
+  Ratios: N 100.0% | M 0.0% | U 0.0%
+  Drops per kill: {0: 78, 1: 7, 2: 3, 3: 9, 4: 2, 5: 1}
+
+[Drop Rate Test] Floor 30 - 100 monster kills
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+DEBUG: Chest Candidates: 3
+  Total Items: 29 (Avg 0.29 per kill)
+  Avg Gold: 144.9
+  Rarity: {'NORMAL': 29, 'MAGIC': 0, 'UNIQUE': 0}
+  Ratios: N 100.0% | M 0.0% | U 0.0%
+  Drops per kill: {0: 87, 1: 4, 2: 3, 3: 5, 4: 1}
+
+[Drop Rate Test] Floor 70 - 100 monster kills
+[?25lLoaded 14 trap definitions from /home/dogsinatas/python_project/dungeon/data/traps.csv
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+DEBUG: Chest Candidates: 2
+  Total Items: 43 (Avg 0.43 per kill)
+  Avg Gold: 158.5
+  Rarity: {'NORMAL': 43, 'MAGIC': 0, 'UNIQUE': 0}
+  Ratios: N 100.0% | M 0.0% | U 0.0%
+  Drops per kill: {0: 80, 1: 8, 2: 5, 3: 5, 5: 2}
+[?25h[0m[?25h[0m[?25h[0m[?25h[0m

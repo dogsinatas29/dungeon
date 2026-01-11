@@ -33,6 +33,12 @@ TRANSLATIONS = {
         "Equipment/Req": "공격력/장비착용", "Max MP": "최대 마력(MP)", "AC/Hit": "방어력(AC)/명중", "Max HP": "최대 체력(HP)",
         "Dungeon Map": "던전 맵", "Player Condition": "플레이어 상태",
         "STR (Str)": "STR (힘)", "MAG (Mag)": "MAG (마력)", "DEX (Dex)": "DEX (민첩)", "VIT (Vit)": "VIT (활력)",
+        "Hall of Fame": "명예의 전당", "Hall of Dishonor": "불명예의 전당",
+        "Legendary {} {}": "전설의 {} {}", "Forgotten {} {}": "잊혀진 {} {}",
+        "Defeated Diablo and saved the world": "디아블로를 물리치고 세상을 구원함",
+        "Final Location: Floor {}": "최후의 장소: {}층", "Cause of Death: {}": "사망 원인: {}",
+        "Total Turns: {}": "총 전투 턴 수: {}", "Date: {}": "날짜: {}", "No Records": "기록 없음",
+        "[1st]": "[1위]", "[2nd]": "[2위]", "[3rd]": "[3위]",
         
         # Combat Messages
         "Attack!": "공격!", "Defend!": "방어!", "Miss!": "빗나감!", "Critical!": "크리티컬!",
@@ -254,6 +260,12 @@ TRANSLATIONS = {
         "Equipment/Req": "Equipment/Req", "Max MP": "Max MP", "AC/Hit": "AC/Hit", "Max HP": "Max HP",
         "Dungeon Map": "Dungeon Map", "Player Condition": "Player Condition",
         "STR (Str)": "STR (Str)", "MAG (Mag)": "MAG (Mag)", "DEX (Dex)": "DEX (Dex)", "VIT (Vit)": "VIT (Vit)",
+        "Hall of Fame": "Hall of Fame", "Hall of Dishonor": "Hall of Dishonor",
+        "Legendary {} {}": "Legendary {} {}", "Forgotten {} {}": "Forgotten {} {}",
+        "Defeated Diablo and saved the world": "Defeated Diablo and saved the world",
+        "Final Location: Floor {}": "Final Location: Floor {}", "Cause of Death: {}": "Cause of Death: {}",
+        "Total Turns: {}": "Total Turns: {}", "Date: {}": "Date: {}", "No Records": "No Records",
+        "[1st]": "[1st]", "[2nd]": "[2nd]", "[3rd]": "[3rd]",
         
         "Attack!": "Attack!", "Defend!": "Defend!", "Miss!": "Miss!", "Critical!": "Critical!",
         "You died...": "You died...", "Victory!": "Victory!",

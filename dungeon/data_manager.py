@@ -1,5 +1,7 @@
 import csv
 import os
+import json
+from datetime import datetime
 
 # -----------------------------------------------------------------------
 # ItemDefinition 클래스 정의 (기존 내용 유지)
@@ -349,6 +351,10 @@ class ClassDefinition:
         # [New] 스탯 변환 비율
         self.vit_to_hp = float(kwargs.get('vit_to_hp', 2.0))
         self.mag_to_mp = float(kwargs.get('mag_to_mp', 1.0))
+        
+        # [New] 기본 스탯 보너스 (Base Defense/Attack)
+        self.base_defense = int(kwargs.get('base_defense', 0))
+        self.base_attack = int(kwargs.get('base_attack', 0))
 
         # [New] 초기 지급 아이템 파싱 (Format: "Item1:1|Item2:5|Gold:100")
         self.starting_items = []
@@ -544,7 +550,7 @@ def list_save_files():
     if not os.path.exists(save_dir) or not os.path.isdir(save_dir):
         return []
     
-    files = [f.replace('.json', '') for f in os.listdir(save_dir) if f.endswith('.json')]
+    files = [f.replace('.json', '') for f in os.listdir(save_dir) if f.endswith('.json') and f != 'rankings.json']
     return sorted(files)
 
 def load_boss_patterns(data_path=None):
@@ -567,7 +573,6 @@ def load_boss_patterns(data_path=None):
     # 2. CSV 대사 로드 및 병합
     from .localization import get_data_path
     
-    # [Localization] Use get_data_path to load localized dialogues if available
     csv_path = get_data_path("boss_dialogues.csv", data_path)
     
     if os.path.exists(csv_path):
@@ -584,7 +589,6 @@ def load_boss_patterns(data_path=None):
                         patterns[boss_id] = {}
                     
                     if trigger == "phase_bark":
-                        # 페이즈 대사: Value(hp_threshold)와 일치하는 페이즈 찾기
                         try:
                             threshold = float(value)
                             phases = patterns[boss_id].get('phases', [])
@@ -595,12 +599,45 @@ def load_boss_patterns(data_path=None):
                         except ValueError:
                             pass
                     else:
-                        # 일반 대사 (루트 레벨)
                         patterns[boss_id][trigger] = dialogue
         except Exception as e:
             print(f"Failed to load boss dialogues CSV: {e}")
             
-            
     return patterns
 
+RANKINGS_FILE = os.path.join("game_data", "rankings.json")
 
+def save_ranking(entry: dict):
+    """
+    entry: {
+        'class': str,
+        'level': int,
+        'floor': int,
+        'outcome': str ('WIN' or 'DEATH'),
+        'date': str,
+        'boss_kills': str, (쉼표로 구분된 보스 목록)
+        'death_cause': str, (사전 등)
+        'turns': int
+    }
+    """
+    rankings = load_rankings()
+    rankings.append(entry)
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(RANKINGS_FILE), exist_ok=True)
+    
+    try:
+        with open(RANKINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(rankings, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Failed to save rankings: {e}")
+
+def load_rankings():
+    if not os.path.exists(RANKINGS_FILE):
+        return []
+    try:
+        with open(RANKINGS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Failed to load rankings: {e}")
+        return []

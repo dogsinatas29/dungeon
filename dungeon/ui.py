@@ -5,6 +5,7 @@ import sys
 import logging
 import readchar # readchar 임포트 추가
 import shutil
+import time
 from .localization import _
 
 # 터미널 색상 코드를 사용한 렌더링을 위한 딕셔너리
@@ -361,7 +362,9 @@ class ConsoleUI:
             "═" * 40,
             "  1. " + _("New Game"),
             "  2. " + _("Continue"),
-            "  3. " + _("Exit Game"),
+            "  3. " + _("Hall of Fame"),
+            "  4. " + _("Hall of Dishonor"),
+            "  5. " + _("Exit Game"),
             "═" * 40,
             ""
         ]
@@ -370,7 +373,7 @@ class ConsoleUI:
             padding = (terminal_width - len(line)) // 2
             print(f"{' ' * padding}{line}")
         
-        print(f"{COLOR_MAP['green']}[{_('Select')}] 1, 2, 3...{COLOR_MAP['reset']}", end='', flush=True)
+        print(f"{COLOR_MAP['green']}[{_('Select')}] 1, 2, 3, 4, 5...{COLOR_MAP['reset']}", end='', flush=True)
 
         while True:
             choice = self.get_key_input()
@@ -379,9 +382,12 @@ class ConsoleUI:
             elif choice == '2':
                 return 1 # Load game
             elif choice == '3':
+                return 3 # Hall of Fame
+            elif choice == '4':
+                return 4 # Hall of Dishonor
+            elif choice == '5':
                 return 2 # Exit game
             else:
-                # 잘못된 입력 시 메시지 표시 또는 무시 (여기서는 무시)
                 pass
 
     def show_game_over_screen(self, message):
@@ -867,6 +873,7 @@ class ConsoleUI:
 
     def show_center_dialogue(self, message, color='red'):
         """화면 중앙에 메시지를 타이핑 효과로 출력합니다. (Boss Skill Alert)"""
+        import time
         terminal_width = shutil.get_terminal_size().columns
         terminal_height = shutil.get_terminal_size().lines
         
@@ -875,39 +882,194 @@ class ConsoleUI:
         
         # Box Styling
         padding = 4
-        msg_len = 0
-        # Calculate max length (ignoring ANSI) - simplified here assuming no ANSI in input msg
-        # If input has ANSI, len() will be wrong. We assume clean text input.
         msg_len = len(message)
         box_width = msg_len + (padding * 2) + 2
         
         # Draw Box (Overlay)
-        # Using ANSI cursor positioning
         start_x = (terminal_width - box_width) // 2
         
         # Top Border
         print(f"\033[{start_y - 1};{start_x}H{COLOR_MAP['white']}" + "╔" + "═" * (box_width - 2) + "╗" + f"{COLOR_MAP['reset']}")
-        
-        # Middle (Empty for now)
+        # Middle
         print(f"\033[{start_y};{start_x}H{COLOR_MAP['white']}║{' ' * (box_width - 2)}║{COLOR_MAP['reset']}")
-        
         # Bottom Border
         print(f"\033[{start_y + 1};{start_x}H{COLOR_MAP['white']}" + "╚" + "═" * (box_width - 2) + "╝" + f"{COLOR_MAP['reset']}")
         
-        # Typewriter Effect
-        import time
         eff_color = COLOR_MAP.get(color, COLOR_MAP['red'])
-        
-        # Position cursor for text
         text_start_x = start_x + 1 + padding
         print(f"\033[{start_y};{text_start_x}H{eff_color}", end="", flush=True)
         
         for char in message:
             sys.stdout.write(char)
             sys.stdout.flush()
-            time.sleep(0.05) # "Papapak" speed
+            time.sleep(0.05)
             
         print(f"{COLOR_MAP['reset']}", flush=True)
+        time.sleep(1.0) # Hold for a moment
+
+    def show_ranking_details(self, entry):
+        """랭킹 항목의 상세 정보를 표시합니다."""
+        self._clear_screen()
+        terminal_width = shutil.get_terminal_size().columns
         
-        # Hold for a moment
-        time.sleep(0.8)
+        def print_c(text, color=COLOR_MAP['white']):
+            # KR chars approximation for centering
+            visible_width = len(text) + (text.count(' ') // 2) # Very rough
+            p = max(0, (terminal_width - (len(text) + 15)) // 2)
+            print(f"{' ' * p}{color}{text}{COLOR_MAP['reset']}")
+
+        # Header
+        title = _("Character Details")
+        print(f"\n{COLOR_MAP['yellow']}{'=' * terminal_width}{COLOR_MAP['reset']}")
+        print_c(title.upper(), COLOR_MAP['gold'])
+        print(f"{COLOR_MAP['yellow']}{'=' * terminal_width}{COLOR_MAP['reset']}\n")
+        
+        # Basic Info
+        name = entry.get('name', _('Unknown'))
+        job = entry.get('class', _('Hero'))
+        level = entry.get('level', 1)
+        floor = entry.get('floor', 1)
+        outcome = entry.get('outcome', 'DEATH')
+        date = entry.get('date', 'N/A')
+        turns = entry.get('turns', 0)
+        
+        print_c(_("이름") + f" : {name} ({_(job)})")
+        print_c(_("Level") + f" : {level}")
+        print_c(_("Final Floor") + f" : {floor}F ({outcome})")
+        print_c(_("Total Turns") + f" : {turns}")
+        print_c(_("Date") + f" : {date}")
+        print("")
+        
+        # Equipment
+        print_c("--- " + _("Equipment") + " ---", COLOR_MAP['cyan'])
+        equipment = entry.get('equipment', {})
+        if equipment:
+            slot_order = ["Head", "Neck", "Body", "Hand1", "Hand2", "Gloves", "Ring1", "Ring2", "Boots"]
+            for slot in slot_order:
+                if slot in equipment:
+                    print_c(f"{_(slot)}: {equipment[slot]}")
+            # Other slots
+            for slot, item_name in equipment.items():
+                if slot not in slot_order:
+                    print_c(f"{_(slot)}: {item_name}")
+        else:
+            print_c(_("No equipment data"))
+        
+        print("")
+        
+        # Skills
+        print_c("--- " + _("Skills") + " ---", COLOR_MAP['green'])
+        skills = entry.get('skill_levels', {})
+        if skills:
+            for s_name, s_lv in skills.items():
+                print_c(f"{s_name}: Lv.{s_lv}")
+        else:
+            print_c(_("No skill data"))
+            
+        print(f"\n{COLOR_MAP['yellow']}{'-' * 40:^{terminal_width}}{COLOR_MAP['reset']}")
+        print_c(_("Press any key to return to list."), COLOR_MAP['yellow'])
+        self.get_key_input()
+
+    def show_rankings(self, title, entries):
+        """랭킹 목록을 표시합니다."""
+        selected_index = 0
+        scroll_offset = 0
+        max_visible = 5 # 한 번에 표시할 상위 요약 개수
+        
+        while True:
+            self._clear_screen()
+            terminal_width = shutil.get_terminal_size().columns
+            terminal_height = shutil.get_terminal_size().lines
+            
+            # Header
+            print(f"\n{COLOR_MAP['yellow']}{'=' * terminal_width}{COLOR_MAP['reset']}")
+            padding = (terminal_width - len(title)) // 2
+            print(f"{' ' * max(0, padding)}{COLOR_MAP['gold']}{title.upper()}{COLOR_MAP['reset']}")
+            print(f"{COLOR_MAP['yellow']}{'=' * terminal_width}{COLOR_MAP['reset']}\n")
+            
+            if not entries:
+                msg = _("No Records")
+                p = max(0, (terminal_width - 10) // 2)
+                print(f"{' ' * p}{msg}")
+            else:
+                # Viewport calculation
+                visible_entries = entries[scroll_offset:scroll_offset + max_visible]
+                
+                for i, entry in enumerate(visible_entries):
+                    current_idx = scroll_offset + i
+                    is_selected = (current_idx == selected_index)
+                    
+                    is_fame = entry.get('outcome') == 'WIN'
+                    rank = current_idx + 1
+                    
+                    # Top 3 Styling
+                    rank_prefix = f"[{rank}]"
+                    rank_color = COLOR_MAP['cyan']
+                    crown = ""
+                    
+                    if rank == 1:
+                        rank_color = COLOR_MAP['gold']
+                        crown = "👑 "
+                        rank_prefix = _("[1st]")
+                    elif rank == 2:
+                        rank_color = COLOR_MAP['white']
+                        crown = "👑 "
+                        rank_prefix = _("[2nd]")
+                    elif rank == 3:
+                        rank_color = COLOR_MAP['brown']
+                        crown = "👑 "
+                        rank_prefix = _("[3rd]")
+
+                    # Selection Highlight
+                    prefix = ">> " if is_selected else "   "
+                    bg_color = "\033[44m" if is_selected else "" # Blue BG for selected
+                    reset = COLOR_MAP['reset']
+                    
+                    char_name = entry.get('name', _('Hero'))
+                    if is_fame:
+                         line1 = f"{prefix}{crown}{rank_prefix} " + _("Legendary {} {} {}").format(char_name, _(entry.get('class', 'Hero')), entry.get('level', 1))
+                         line2 = _("Defeated Diablo and saved the world")
+                    else:
+                         line1 = f"{prefix}{crown}{rank_prefix} " + _("Forgotten {} {} {}").format(char_name, _(entry.get('class', 'Hero')), entry.get('level', 1))
+                         line2 = _("Final Location: Floor {}").format(entry.get('floor', 1))
+                         line2 += f" | " + _("Cause of Death: {}").format(entry.get('death_cause', _('Unknown')))
+                    
+                    line3 = _("Total Turns: {}").format(entry.get('turns', 0))
+                    line3 += f" | " + _("Date: {}").format(entry.get('date', 'N/A'))
+                    
+                    def print_centered_custom(text, color, is_sel):
+                        p = max(0, (terminal_width - (len(text) + 20)) // 2)
+                        print(f"{' ' * p}{color}{text}{COLOR_MAP['reset']}")
+
+                    print_centered_custom(line1, bg_color + rank_color if is_selected else rank_color, is_selected)
+                    print_centered_custom(line2, bg_color + COLOR_MAP['white'] if is_selected else COLOR_MAP['white'], is_selected)
+                    print_centered_custom(line3, bg_color + COLOR_MAP['dark_grey'] if is_selected else COLOR_MAP['dark_grey'], is_selected)
+                    
+                    sep = "-" * 50
+                    sep_padding = (terminal_width - len(sep)) // 2
+                    print(f"{' ' * sep_padding}{COLOR_MAP['dark_grey']}{sep}{COLOR_MAP['reset']}")
+            
+            # Footer
+            footer_msg = _("[↑/↓] Move | [ENTER] Details | [B] Back")
+            f_padding = (terminal_width - len(footer_msg) - 10) // 2
+            print(f"\n{' ' * max(0, f_padding)}{COLOR_MAP['green']}{footer_msg}{COLOR_MAP['reset']}")
+            
+            key = self.get_key_input()
+            
+            if key in [readchar.key.UP, 'w', 'W', '\x1b[A']:
+                if selected_index > 0:
+                    selected_index -= 1
+                    if selected_index < scroll_offset:
+                        scroll_offset = selected_index
+            elif key in [readchar.key.DOWN, 's', 'S', '\x1b[B']:
+                if selected_index < len(entries) - 1:
+                    selected_index += 1
+                    if selected_index >= scroll_offset + max_visible:
+                        scroll_offset = selected_index - max_visible + 1
+            elif key in ['\r', '\n', readchar.key.ENTER]:
+                if entries:
+                    self.show_ranking_details(entries[selected_index])
+            elif key.lower() == 'b':
+                break
+            
+        time.sleep(0.1)
