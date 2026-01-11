@@ -625,11 +625,41 @@ class MonsterAISystem(System):
                     continue
 
             if ai.behavior == AIComponent.CHASE:
-                # 타겟 방향으로 이동 결정
-                if target_pos.x > pos.x: dx = 1
-                elif target_pos.x < pos.x: dx = -1
-                elif target_pos.y > pos.y: dy = 1
-                elif target_pos.y < pos.y: dy = -1
+                # [Fix] Smart Pathfinding (Axis Sliding)
+                # Instead of blindly choosing the primary axis, check if it's blocked.
+                # If blocked, try the secondary axis.
+                
+                diff_x = target_pos.x - pos.x
+                diff_y = target_pos.y - pos.y
+                
+                # Retrieve map for collision check
+                map_ent = self.world.get_entities_with_components({MapComponent})
+                mc = map_ent[0].get_component(MapComponent) if map_ent else None
+                
+                def is_walkable(tx, ty):
+                    if not mc: return True # Assume walkable if no map (fallback)
+                    if tx < 0 or tx >= mc.width or ty < 0 or ty >= mc.height: return False
+                    return mc.tiles[ty][tx] != '#'
+
+                # Determine Primary and Secondary moves
+                move_x = 1 if diff_x > 0 else -1
+                move_y = 1 if diff_y > 0 else -1
+                
+                moved = False
+                
+                # Prioritize larger distance axis
+                if abs(diff_x) >= abs(diff_y):
+                    # Try X first
+                    if diff_x != 0 and is_walkable(pos.x + move_x, pos.y):
+                        dx = move_x
+                    elif diff_y != 0 and is_walkable(pos.x, pos.y + move_y): # Slide Y
+                        dy = move_y
+                else:
+                    # Try Y first
+                    if diff_y != 0 and is_walkable(pos.x, pos.y + move_y):
+                        dy = move_y
+                    elif diff_x != 0 and is_walkable(pos.x + move_x, pos.y): # Slide X
+                        dx = move_x
                 
             elif ai.behavior == AIComponent.FLEE:
                 # 타겟 반대 방향으로 이동 결정
@@ -1985,8 +2015,9 @@ class CombatSystem(System):
             positions = []
             if "SPLIT" in skill.flags: # 갈라지는 탄환
                 if dist < skill.range:
-                    if dx != 0: positions = [(tx, ty - 1), (tx, ty + 1)]
-                    else: positions = [(tx - 1, ty), (tx + 1, ty)]
+                    # [Fix] 좁은 곳에서도 중앙 줄기는 나가도록 (tx, ty) 포함
+                    if dx != 0: positions = [(tx, ty - 1), (tx, ty), (tx, ty + 1)]
+                    else: positions = [(tx - 1, ty), (tx, ty), (tx + 1, ty)]
                 else: positions = [(tx, ty)]
             elif "CONVERGE" in skill.flags: # 모여드는 탄환
                 # (생략: 갈래 로직은 동일하게 구현하거나 각기 다르게 처리 가능)
