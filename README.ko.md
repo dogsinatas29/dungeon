@@ -1,7 +1,7 @@
 # 던전 크롤 (Dungeon Crawl)
 ![Dungeon Crawl Title Screen](assets/title_screen.png)
 
-[English](README.md) | **한국어** | [조작법](CONTROLS.md) | [스킬 목록](SKILLS.md) | [백서](WHITE_PAPER.md)
+[English](README.md) | **한국어** | [조작법](CONTROLS.md) | [스킬 목록](SKILLS.md) | [백서](WHITE_PAPER.ko.md)
 
 Diablo like real time rogue for terminal
 
