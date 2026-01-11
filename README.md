@@ -1,6 +1,6 @@
 ![Dungeon Crawl Title Screen](assets/title_screen.png)
 
-**English** | [한국어](README.ko.md) | [Controls](CONTROLS.md)
+**English** | [한국어](README.ko.md) | [Controls](CONTROLS.md) | [White Paper](WHITE_PAPER.md)
 
 Diablo-like real-time roguelike engine for terminal
 
