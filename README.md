@@ -213,7 +213,7 @@ Based on an average player speed of **1.2 seconds per turn**.
     - [x] **Final Boss: Diablo** (Epic encounter on Floor 99)
     - [x] Other Unique Bosses (Butcher, Leoric, Diablo)
     - [x] Boss dialogue/bark system ("Ah... Fresh Meat!")
-    - [ ] Guaranteed unique item drops per boss
+    - [x] Guaranteed unique/magic item drops per boss
     - [x] Hand-crafted boss maps (Reached goal for Floor 99)
 - [x] **Skill System Implementation (Phase 1-3)**:
     - [x] Utility skills (Repair, Disarm, Recharge)
@@ -230,15 +230,15 @@ Based on an average player speed of **1.2 seconds per turn**.
     - ✅ **Fully localized UI and system messages** (English/Korean)
     - ✅ **Complete message translation** for all game events, combat, bosses, and traps
     - Select language upon game launch
-- [ ] **Player Action Cooldown** - enforce cooldown in input handling
-- [ ] **Balance Adjustments** - tune difficulty for real-time gameplay
+- [x] **Player Action Cooldown** - enforce cooldown in input handling
+- [x] **Balance Adjustments** - tune difficulty for real-time gameplay
 - [ ] **UI Improvements**:
-  - [ ] Cooldown indicators (Gauge next to skill names)
+  - [x] Cooldown indicators (Text next to skill names)
   - [ ] Real-time HP/MP bar animations
   - [ ] Monster action prediction
 
 ### Low Priority
-- [ ] **Boss Special Patterns** - unique boss behaviors (In Progress)
+- [x] **Boss Special Patterns** - unique boss behaviors (Completed)
 - [x] **More Character Classes** - 4 classes implemented (Warrior, Rogue, Sorcerer, Barbarian)
 - [x] **Localization System Completion** - 100% of user-facing strings externalized
 
@@ -420,7 +420,7 @@ This project is open source and available for educational purposes.
 **Developed with Gemini AI as a pair programming assistant**
 **참고**: 이 프로젝트는 Gemini를 페어 프로그래밍 도우미로 사용하여 개발되었습니다.
 
-**상태**: 현재 밸런스 테스트 진행 중...
+**상태**: 정식 출시 (Stable Release)
 
 ### Unimplemented Skills (Known Issues)
 All original Diablo 1 spells are now fully implemented with system logic!
