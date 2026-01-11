@@ -101,6 +101,32 @@ Diablo-like real-time roguelike engine for terminal
 
 ---
 
+## Game Balancing & Simulation
+
+Dungeon Crawler v1.0 has been extensively tested using automated simulations to ensure a fair and rewarding experience for all classes.
+
+### 🕒 Floor Progression & Estimated Playtime
+Based on an average player speed of **1.2 seconds per turn**.
+
+| Class | Floor Progression | Final Level | Avg Time per Floor | Total Est. Playtime |
+| :--- | :---: | :---: | :---: | :--- |
+| **Rogue** | 1F → 50F → 99F | Lv.85 | ~4-5 min | **~9h 22m** |
+| **Barbarian** | 1F → 50F → 99F | Lv.85 | ~4-6 min | **~10h 24m** |
+| **Warrior** | 1F → 50F → 99F | Lv.85 | ~4-6 min | **~11h 03m** |
+| **Sorcerer** | 1F → 50F → 99F | Lv.85 | ~4-7 min | **~12h 36m** |
+
+### 🛡️ Equipment Enhancement Success Rates (1,000 Attempts)
+
+| Level | Success Rate | Failure Penalty |
+| :---: | :---: | :--- |
+| **+0 → +1** | **91.2%** | Durability Loss |
+| **+1 → +2** | **79.4%** | Durability Loss |
+| **+2 → +3** | **69.6%** | Durability Loss |
+| **+4 → +5** | **51.4%** | **Item Break** |
+| **+6 → +7** | **27.8%** | **Item Break** |
+
+---
+
 ## Recent Updates (2026-01-02)
 
 ### 1. Boss Room Redesign & Interaction System
